@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alfred - Asistente Personal</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Barra superior -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <circle cx="16" cy="16" r="14" fill="#4a9eff" opacity="0.2"/>
+                    <path d="M16 8L20 14H12L16 8Z" fill="#4a9eff"/>
+                    <circle cx="16" cy="18" r="3" fill="#4a9eff"/>
+                    <path d="M16 21V26" stroke="#4a9eff" stroke-width="2"/>
+                </svg>
+                <h1>Alfred</h1>
+            </div>
+            <div class="status" id="status">
+                <span class="status-dot"></span>
+                <span class="status-text">Conectando...</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <button class="icon-button" id="historyBtn" title="Ver historial">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 3a7 7 0 100 14 7 7 0 000-14zm0 12a5 5 0 110-10 5 5 0 010 10zm1-8H9v4l3.5 2.1.7-1.2-2.2-1.3V7z"/>
+                </svg>
+            </button>
+            <button class="icon-button" id="statsBtn" title="Estadísticas">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M3 17h14v-2H3v2zm0-4h14v-2H3v2zm0-6v2h14V7H3z"/>
+                </svg>
+            </button>
+            <button class="icon-button" id="settingsBtn" title="Configuración">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M17.43 10.98c.04-.32.07-.64.07-.98 0-.34-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C12.46 2.18 12.25 2 12 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98 0 .33.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM10 13c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Contenedor principal -->
+    <div class="container">
+        <!-- Área de chat -->
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="welcome-message">
+                    <div class="welcome-icon">🤖</div>
+                    <h2>¡Hola! Soy Alfred</h2>
+                    <p>Tu asistente personal inteligente</p>
+                    <p class="welcome-subtitle">Pregúntame cualquier cosa sobre tus documentos</p>
+                </div>
+            </div>
+
+            <!-- Indicador de escritura -->
+            <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <span>Alfred está escribiendo...</span>
+            </div>
+
+            <!-- Input de mensaje -->
+            <div class="input-container">
+                <textarea 
+                    id="messageInput" 
+                    placeholder="Escribe tu mensaje aquí..."
+                    rows="1"
+                ></textarea>
+                <button id="sendBtn" class="send-button" disabled>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel lateral (oculto por defecto) -->
+        <div class="sidebar" id="sidebar" style="display: none;">
+            <div class="sidebar-header">
+                <h3 id="sidebarTitle">Panel</h3>
+                <button class="icon-button" id="closeSidebar">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M15.898 4.045c-.269-.27-.706-.27-.975 0l-4.923 4.923-4.923-4.923c-.27-.27-.706-.27-.975 0s-.27.706 0 .975l4.923 4.923-4.923 4.923c-.27.27-.27.706 0 .975.135.135.312.203.488.203s.353-.068.488-.203l4.923-4.923 4.923 4.923c.135.135.312.203.488.203s.353-.068.488-.203c.27-.269.27-.706 0-.975l-4.923-4.923 4.923-4.923c.27-.269.27-.706 0-.975z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="sidebar-content" id="sidebarContent">
+                <!-- El contenido se llenará dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de configuración -->
+    <div class="modal" id="settingsModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Configuración</h2>
+                <button class="icon-button" id="closeSettings">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M15.898 4.045c-.269-.27-.706-.27-.975 0l-4.923 4.923-4.923-4.923c-.27-.27-.706-.27-.975 0s-.27.706 0 .975l4.923 4.923-4.923 4.923c-.27.27-.27.706 0 .975.135.135.312.203.488.203s.353-.068.488-.203l4.923-4.923 4.923 4.923c.135.135.312.203.488.203s.353-.068.488-.203c.27-.269.27-.706 0-.975l-4.923-4.923 4.923-4.923c.27-.269.27-.706 0-.975z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label for="serverUrl">URL del servidor Alfred</label>
+                    <input type="text" id="serverUrl" value="http://localhost:8000" />
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="autoSave" checked />
+                        Guardar conversaciones automáticamente
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="useHistory" checked />
+                        Buscar en historial primero
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="soundEnabled" />
+                        Habilitar sonidos
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="button secondary" id="cancelSettings">Cancelar</button>
+                <button class="button primary" id="saveSettings">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
