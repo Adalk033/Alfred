@@ -25,6 +25,14 @@
             </div>
         </div>
         <div class="topbar-right">
+            <div class="model-selector">
+                <label for="modelSelect">Modelo:</label>
+                <select id="modelSelect" class="model-select">
+                    <option value="gemma2:9b">Gemma2 9B</option>
+                    <option value="gpt-oss:20b">GPT-OSS 20B</option>
+                    <option value="deepseek-r1:8b">DeepSeek R1 8B</option>
+                </select>
+            </div>
             <button class="icon-button" id="historyBtn" title="Ver historial">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M10 3a7 7 0 100 14 7 7 0 000-14zm0 12a5 5 0 110-10 5 5 0 010 10zm1-8H9v4l3.5 2.1.7-1.2-2.2-1.3V7z"/>
@@ -72,13 +80,13 @@
                     rows="1"
                 ></textarea>
                 <div class="input-actions">
-                    <button id="searchDocsBtn" class="mode-toggle-btn active" title="Buscar en documentos">
+                    <button id="searchDocsBtn" class="mode-toggle-btn" title="Buscar en documentos">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
                         </svg>
                         <span>Documentos</span>
                     </button>
-                    <button id="promptOnlyBtn" class="mode-toggle-btn" title="Solo usar el prompt">
+                    <button id="promptOnlyBtn" class="mode-toggle-btn active" title="Solo usar el prompt">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
                         </svg>

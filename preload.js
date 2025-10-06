@@ -7,5 +7,7 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   getStats: () => ipcRenderer.invoke('get-stats'),
   sendQuery: (question, searchDocuments) => ipcRenderer.invoke('send-query', question, searchDocuments),
   getHistory: (limit) => ipcRenderer.invoke('get-history', limit),
-  saveToHistory: (data) => ipcRenderer.invoke('save-to-history', data)
+  saveToHistory: (data) => ipcRenderer.invoke('save-to-history', data),
+  getModel: () => ipcRenderer.invoke('get-model'),
+  changeModel: (modelName) => ipcRenderer.invoke('change-model', modelName)
 });

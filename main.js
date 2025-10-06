@@ -176,3 +176,35 @@ ipcMain.handle('save-to-history', async (event, data) => {
         return { success: false, error: error.message };
     }
 });
+
+ipcMain.handle('get-model', async () => {
+    try {
+        console.log('[MAIN] Obteniendo modelo actual desde http://127.0.0.1:8000/model');
+        const result = await makeRequest('http://127.0.0.1:8000/model');
+        console.log('[MAIN] Modelo actual:', result.data);
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al obtener modelo:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('change-model', async (event, modelName) => {
+    try {
+        console.log('[MAIN] Cambiando modelo a:', modelName);
+        const result = await makeRequest('http://127.0.0.1:8000/model', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(JSON.stringify({ model_name: modelName }))
+            },
+            body: JSON.stringify({ model_name: modelName })
+        });
+
+        console.log('[MAIN] Resultado del cambio de modelo:', result.data);
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al cambiar modelo:', error);
+        return { success: false, error: error.message };
+    }
+});

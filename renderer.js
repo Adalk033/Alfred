@@ -9,11 +9,7 @@ let settings = {
 };
 
 // Estado del modo de búsqueda
-let searchMode = 'documents'; // 'documents' o 'prompt'
-
-// Estructura para rastrear pares de pregunta-respuesta
-let lastUserQuestion = null;
-let lastBotResponse = null;
+let searchMode = 'prompt'; // 'documents' o 'prompt'
 
 // Elementos del DOM
 const messagesContainer = document.getElementById('messages');
@@ -35,6 +31,9 @@ const closeSidebar = document.getElementById('closeSidebar');
 const searchDocsBtn = document.getElementById('searchDocsBtn');
 const promptOnlyBtn = document.getElementById('promptOnlyBtn');
 
+// Selector de modelo
+const modelSelect = document.getElementById('modelSelect');
+
 // Modal de configuración
 const settingsModal = document.getElementById('settingsModal');
 const closeSettings = document.getElementById('closeSettings');
@@ -46,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkServerStatus();
     setupEventListeners();
     loadSettings();
+    await loadCurrentModel();
 
     // Auto-ajustar altura del textarea
     messageInput.addEventListener('input', () => {
@@ -89,6 +89,9 @@ function setupEventListeners() {
     closeSettings.addEventListener('click', () => settingsModal.style.display = 'none');
     cancelSettings.addEventListener('click', () => settingsModal.style.display = 'none');
     saveSettings.addEventListener('click', saveSettingsHandler);
+    
+    // Event listener para cambio de modelo
+    modelSelect.addEventListener('change', changeModel);
 }
 
 // Verificar estado del servidor
@@ -138,9 +141,6 @@ async function sendMessage() {
         welcomeMsg.remove();
     }
 
-    // Guardar la pregunta del usuario
-    lastUserQuestion = message;
-
     // Agregar mensaje del usuario
     addMessage(message, 'user');
     conversationHistory.push({ role: 'user', content: message });
@@ -165,14 +165,9 @@ async function sendMessage() {
             // Ocultar indicador de escritura
             typingIndicator.style.display = 'none';
 
-            // Guardar respuesta del bot
-            lastBotResponse = {
-                answer: response.answer,
-                metadata: response
-            };
-
             // Agregar respuesta de Alfred con efecto de escritura
-            await addMessageWithTyping(response.answer, 'assistant', response);
+            // Pasar la pregunta actual para que el botón de guardar tenga la referencia correcta
+            await addMessageWithTyping(response.answer, 'assistant', response, message);
 
             conversationHistory.push({
                 role: 'assistant',
@@ -191,13 +186,19 @@ async function sendMessage() {
 }
 
 // Agregar mensaje al chat
-function addMessage(content, role, metadata = null) {
+function addMessage(content, role, metadata = null, userQuestion = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    avatar.textContent = role === 'user' ? '👤' : '🤖';
+    
+    // Asignar avatar según el rol
+    if (role === 'system') {
+        avatar.textContent = '⚙️';
+    } else {
+        avatar.textContent = role === 'user' ? '👤' : '🤖';
+    }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
@@ -261,8 +262,8 @@ function addMessage(content, role, metadata = null) {
     }
 
     // Agregar botón de guardar si es mensaje del asistente
-    if (role === 'assistant') {
-        const actionsDiv = createSaveButton(content, metadata);
+    if (role === 'assistant' && userQuestion) {
+        const actionsDiv = createSaveButton(userQuestion, content, metadata);
         contentDiv.appendChild(actionsDiv);
     }
 
@@ -274,7 +275,7 @@ function addMessage(content, role, metadata = null) {
 }
 
 // Agregar mensaje con efecto de escritura
-async function addMessageWithTyping(content, role, metadata = null) {
+async function addMessageWithTyping(content, role, metadata = null, userQuestion = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
@@ -356,8 +357,8 @@ async function addMessageWithTyping(content, role, metadata = null) {
                 }
 
                 // Agregar botón de guardar si es mensaje del asistente
-                if (role === 'assistant') {
-                    const actionsDiv = createSaveButton(content, metadata);
+                if (role === 'assistant' && userQuestion) {
+                    const actionsDiv = createSaveButton(userQuestion, content, metadata);
                     contentDiv.appendChild(actionsDiv);
                 }
             }
@@ -368,7 +369,7 @@ async function addMessageWithTyping(content, role, metadata = null) {
 }
 
 // Crear botón de guardar para mensajes del asistente
-function createSaveButton(answer, metadata) {
+function createSaveButton(userQuestion, answer, metadata) {
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'message-actions';
 
@@ -385,7 +386,7 @@ function createSaveButton(answer, metadata) {
         if (saveBtn.classList.contains('saved')) return;
 
         try {
-            await saveConversation(lastUserQuestion, answer, metadata);
+            await saveConversation(userQuestion, answer, metadata);
             saveBtn.classList.add('saved');
             saveBtn.innerHTML = `
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -567,5 +568,55 @@ function showNotification(message, type = 'info') {
     // Actualizar status si es error de conexión
     if (type === 'error' && message.includes('conexión')) {
         updateStatus('error', 'Error de conexión');
+    }
+}
+
+// Cargar el modelo actual
+async function loadCurrentModel() {
+    try {
+        const result = await window.alfredAPI.getModel();
+        
+        if (result.success && result.data) {
+            const currentModel = result.data.model_name;
+            modelSelect.value = currentModel;
+            console.log('Modelo actual cargado:', currentModel);
+        }
+    } catch (error) {
+        console.error('Error al cargar el modelo actual:', error);
+    }
+}
+
+// Cambiar modelo
+async function changeModel() {
+    const newModel = modelSelect.value;
+    const previousModel = modelSelect.options[modelSelect.selectedIndex === 0 ? 1 : 0].value;
+    
+    try {
+        // Mostrar indicador de cambio
+        modelSelect.disabled = true;
+        updateStatus('warning', 'Cambiando modelo...');
+        
+        const result = await window.alfredAPI.changeModel(newModel);
+        
+        if (result.success) {
+            showNotification(`Modelo cambiado exitosamente a ${newModel}`, 'success');
+            updateStatus('connected', 'Conectado');
+            
+            // Agregar mensaje informativo en el chat
+            addMessage(`🔄 Modelo cambiado a ${newModel}`, 'system');
+        } else {
+            showNotification('Error al cambiar el modelo', 'error');
+            // Revertir al modelo anterior
+            modelSelect.value = previousModel;
+            updateStatus('connected', 'Conectado');
+        }
+    } catch (error) {
+        console.error('Error al cambiar modelo:', error);
+        showNotification('Error al cambiar el modelo', 'error');
+        // Revertir al modelo anterior
+        modelSelect.value = previousModel;
+        updateStatus('connected', 'Conectado');
+    } finally {
+        modelSelect.disabled = false;
     }
 }
