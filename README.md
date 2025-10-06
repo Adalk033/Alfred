@@ -18,12 +18,15 @@ Aplicación de escritorio moderna para interactuar con Alfred usando Electron.
 - 📄 **Información de fuentes** - Ve qué documentos se usaron
 - 💾 **Guardado automático** - Tus conversaciones se guardan automáticamente
 - 🖥️ **Multiplataforma** - Windows, Mac y Linux
+- 🚀 **Inicio automático del backend** - ¡Ya no necesitas abrir terminal! (NUEVO)
+- 🔄 **Reinicio del servidor** - Reinicia el backend con un clic (NUEVO)
 
 ## 📋 Requisitos previos
 
 1. **Node.js 18 o superior** - [Descargar](https://nodejs.org/)
 2. **npm** (incluido con Node.js)
-3. **Servidor de Alfred** ejecutándose en `http://localhost:8000`
+3. **Python** (para el backend de Alfred)
+4. ~~**Servidor de Alfred** ejecutándose~~ - ¡Ya no necesitas iniciarlo manualmente! 🎉
 
 ## 🚀 Inicio rápido
 
@@ -49,6 +52,12 @@ npm install
 # 2. Iniciar la aplicación
 npm start
 ```
+
+> **🎉 NUEVO**: El backend de Alfred ahora se inicia automáticamente. ¡Ya no necesitas abrir una terminal separada!
+> 
+> Si prefieres iniciarlo manualmente, simplemente ejecútalo antes de abrir AlfredElectron y la app lo detectará.
+> 
+> **Documentación:** [QUICK_START_AUTO_BACKEND.md](QUICK_START_AUTO_BACKEND.md)
 
 ## 📸 Capturas de pantalla
 
@@ -152,6 +161,17 @@ AlfredElectron/
    - Modelo de IA utilizado
    - Rutas de archivos
 
+### Reiniciar el servidor (NUEVO)
+
+1. Haz clic en el icono 🔄 en la barra superior
+2. El backend se reiniciará automáticamente
+3. Verás notificaciones del progreso
+
+**Útil cuando:**
+- Pierdes conexión con el servidor
+- El servidor deja de responder
+- Has actualizado el código del backend
+
 ### Configuración
 
 1. Haz clic en el icono ⚙️ en la barra superior
@@ -189,7 +209,67 @@ npm run build
 
 Los ejecutables se generarán en la carpeta `dist/`.
 
-## 🛠️ Personalización
+## � Inicio Automático del Backend (NUEVO)
+
+### ¿Cómo funciona?
+
+AlfredElectron ahora puede gestionar automáticamente el backend de Alfred:
+
+1. **Al iniciar**: Verifica si el backend está corriendo
+2. **Si no está activo**: Lo inicia automáticamente
+3. **Notificaciones**: Te muestra el progreso en tiempo real
+4. **Al cerrar**: Detiene el backend limpiamente
+
+### Características
+
+✅ **Sin configuración manual** - Todo automático  
+✅ **Notificaciones visuales** - Sabes qué está pasando  
+✅ **Botón de reinicio** - Soluciona problemas con un clic  
+✅ **Detección inteligente** - Detecta backends externos  
+✅ **Logs integrados** - Ve los logs en DevTools  
+
+### Uso básico
+
+```powershell
+# Solo necesitas esto:
+npm start
+
+# El backend se inicia automáticamente
+# No necesitas otra terminal
+```
+
+### Verificar instalación
+
+```powershell
+# Ejecuta el script de diagnóstico:
+.\test-auto-backend.ps1
+```
+
+### Documentación completa
+
+- 📘 [Guía rápida](QUICK_START_AUTO_BACKEND.md)
+- 📗 [Documentación completa](AUTO_BACKEND_START.md)
+- 📙 [Resumen técnico](IMPLEMENTATION_SUMMARY.md)
+
+### Solución de problemas
+
+#### El backend no inicia
+```powershell
+# Verifica Python:
+python --version
+
+# Si falla, agrega Python al PATH
+```
+
+#### Ver logs del backend
+1. Abre DevTools: `View > Toggle Developer Tools`
+2. Ve a la pestaña `Console`
+3. Busca mensajes con `[Backend]`
+
+#### Reiniciar manualmente
+- Haz clic en el botón 🔄 en la barra superior
+
+## �🛠️ Personalización
 
 ### Cambiar colores
 
