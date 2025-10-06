@@ -83,13 +83,13 @@ function setupEventListeners() {
 
     historyBtn.addEventListener('click', showHistory);
     statsBtn.addEventListener('click', showStats);
-    settingsBtn.addEventListener('click', () => settingsModal.style.display = 'flex');
-    closeSidebar.addEventListener('click', () => sidebar.style.display = 'none');
+    settingsBtn.addEventListener('click', () => settingsModal.classList.remove('none'));
+    closeSidebar.addEventListener('click', () => sidebar.classList.add('none'));
 
-    closeSettings.addEventListener('click', () => settingsModal.style.display = 'none');
-    cancelSettings.addEventListener('click', () => settingsModal.style.display = 'none');
+    closeSettings.addEventListener('click', () => settingsModal.classList.add('none'));
+    cancelSettings.addEventListener('click', () => settingsModal.classList.add('none'));
     saveSettings.addEventListener('click', saveSettingsHandler);
-    
+
     // Event listener para cambio de modelo
     modelSelect.addEventListener('change', changeModel);
 }
@@ -192,7 +192,7 @@ function addMessage(content, role, metadata = null, userQuestion = null) {
 
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    
+
     // Asignar avatar según el rol
     if (role === 'system') {
         avatar.textContent = '⚙️';
@@ -431,6 +431,11 @@ function scrollToBottom() {
 
 // Mostrar historial
 async function showHistory() {
+
+    if (checkSidebar()) {
+        sidebar.classList.add('none');
+        return;
+    }
     try {
         const result = await window.alfredAPI.getHistory(20);
 
@@ -465,7 +470,7 @@ async function showHistory() {
                 });
             }
 
-            sidebar.style.display = 'flex';
+            sidebar.classList.remove('none');
         }
     } catch (error) {
         showNotification('Error al cargar el historial', 'error');
@@ -490,8 +495,18 @@ function loadHistoryItem(item) {
     sidebar.style.display = 'none';
 }
 
+function checkSidebar() {
+    if (sidebar.classList.contains('none')) { return false; }
+    return true;
+}
+
 // Mostrar estadísticas
-async function showStats() {
+async function showStats(changeVisibility = true) {
+    if (checkSidebar() && changeVisibility) {
+        sidebar.classList.add('none');
+        return;
+    }
+
     try {
         const result = await window.alfredAPI.getStats();
 
@@ -526,7 +541,7 @@ async function showStats() {
                 </div>
             `;
 
-            sidebar.style.display = 'flex';
+            sidebar.classList.remove('none');
         }
     } catch (error) {
         showNotification('Error al cargar las estadísticas', 'error');
@@ -555,7 +570,7 @@ function saveSettingsHandler() {
     settings.soundEnabled = document.getElementById('soundEnabled').checked;
 
     localStorage.setItem('alfred-settings', JSON.stringify(settings));
-    settingsModal.style.display = 'none';
+    settingsModal.classList.add('none');
 
     showNotification('Configuración guardada', 'success');
 }
@@ -575,7 +590,7 @@ function showNotification(message, type = 'info') {
 async function loadCurrentModel() {
     try {
         const result = await window.alfredAPI.getModel();
-        
+
         if (result.success && result.data) {
             const currentModel = result.data.model_name;
             modelSelect.value = currentModel;
@@ -590,20 +605,21 @@ async function loadCurrentModel() {
 async function changeModel() {
     const newModel = modelSelect.value;
     const previousModel = modelSelect.options[modelSelect.selectedIndex === 0 ? 1 : 0].value;
-    
+
     try {
         // Mostrar indicador de cambio
         modelSelect.disabled = true;
         updateStatus('warning', 'Cambiando modelo...');
-        
+
         const result = await window.alfredAPI.changeModel(newModel);
-        
+
         if (result.success) {
             showNotification(`Modelo cambiado exitosamente a ${newModel}`, 'success');
             updateStatus('connected', 'Conectado');
-            
+
             // Agregar mensaje informativo en el chat
             addMessage(`🔄 Modelo cambiado a ${newModel}`, 'system');
+            if (checkSidebar()) { showStats(false); }
         } else {
             showNotification('Error al cambiar el modelo', 'error');
             // Revertir al modelo anterior
