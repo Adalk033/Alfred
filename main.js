@@ -1,5 +1,5 @@
 // main.js - Proceso principal de Electron
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const http = require('http');
 const https = require('https');
@@ -477,3 +477,77 @@ ipcMain.handle('stop-ollama', async () => {
         return { success: false, error: error.message };
     }
 });
+
+// Handler para seleccionar foto de perfil
+ipcMain.handle('select-profile-picture', async () => {
+    try {
+        console.log('[MAIN] Abriendo selector de foto de perfil...');
+        
+        const result = await dialog.showOpenDialog(mainWindow, {
+            title: 'Seleccionar foto de perfil',
+            properties: ['openFile'],
+            filters: [
+                { name: 'Imágenes', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }
+            ]
+        });
+
+        if (result.canceled || result.filePaths.length === 0) {
+            console.log('[MAIN] Selección cancelada');
+            return { success: false, error: 'Selección cancelada' };
+        }
+
+        const filePath = result.filePaths[0];
+        console.log('[MAIN] Archivo seleccionado:', filePath);
+
+        // Verificar tamaño del archivo antes de leerlo
+        const stats = fs.statSync(filePath);
+        const fileSizeInBytes = stats.size;
+        const fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+        
+        console.log('[MAIN] Tamaño del archivo:', fileSizeInMB.toFixed(2), 'MB');
+        
+        // Rechazar archivos muy grandes (más de 2MB)
+        if (fileSizeInMB > 2) {
+            console.log('[MAIN] Archivo demasiado grande');
+            return { 
+                success: false, 
+                error: `La imagen es demasiado grande (${fileSizeInMB.toFixed(2)} MB). Por favor, usa una imagen menor a 2MB.` 
+            };
+        }
+
+        // Leer el archivo y convertirlo a Base64
+        const imageBuffer = fs.readFileSync(filePath);
+        const base64Image = imageBuffer.toString('base64');
+        
+        // Detectar el tipo MIME basado en la extensión
+        const ext = path.extname(filePath).toLowerCase();
+        let mimeType = 'image/jpeg';
+        
+        switch (ext) {
+            case '.png':
+                mimeType = 'image/png';
+                break;
+            case '.gif':
+                mimeType = 'image/gif';
+                break;
+            case '.webp':
+                mimeType = 'image/webp';
+                break;
+            case '.jpg':
+            case '.jpeg':
+                mimeType = 'image/jpeg';
+                break;
+        }
+
+        const dataUrl = `data:${mimeType};base64,${base64Image}`;
+        
+        console.log('[MAIN] Imagen convertida a Base64, tamaño:', dataUrl.length, 'caracteres');
+        console.log('[MAIN] ✅ Imagen procesada correctamente');
+        
+        return { success: true, data: dataUrl };
+    } catch (error) {
+        console.error('[MAIN] Error al seleccionar foto de perfil:', error);
+        return { success: false, error: error.message };
+    }
+});
+

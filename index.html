@@ -142,6 +142,38 @@
                 </button>
             </div>
             <div class="modal-body">
+                <!-- Sección de foto de perfil -->
+                <div class="setting-group profile-section">
+                    <label>Foto de perfil</label>
+                    <div class="profile-picture-container">
+                        <div class="current-profile-picture" id="currentProfilePicture">
+                            <span class="default-avatar">👤</span>
+                        </div>
+                        <div class="profile-actions">
+                            <button class="button secondary" id="changeProfilePictureBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                                </svg>
+                                Cambiar foto
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Historial de fotos de perfil -->
+                    <div class="profile-history-section">
+                        <div class="profile-history-header">
+                            <h4>Historial de fotos</h4>
+                            <span class="profile-history-count" id="profileHistoryCount">0 fotos</span>
+                        </div>
+                        <div class="profile-history-gallery" id="profileHistoryGallery">
+                            <div class="no-history-message">
+                                No hay fotos en el historial
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuraciones existentes -->
                 <div class="setting-group">
                     <label for="serverUrl">URL del servidor Alfred</label>
                     <input type="text" id="serverUrl" value="http://127.0.0.1:8000" />

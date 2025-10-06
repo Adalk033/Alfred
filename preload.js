@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   getModel: () => ipcRenderer.invoke('get-model'),
   changeModel: (modelName) => ipcRenderer.invoke('change-model', modelName),
   stopOllama: () => ipcRenderer.invoke('stop-ollama'),
+  selectProfilePicture: () => ipcRenderer.invoke('select-profile-picture'),
   
   // Escuchar notificaciones del backend
   onBackendNotification: (callback) => {
@@ -21,3 +22,4 @@ contextBridge.exposeInMainWorld('alfredAPI', {
     ipcRenderer.on('backend-status', (event, data) => callback(data));
   }
 });
+

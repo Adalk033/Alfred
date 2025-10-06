@@ -5,7 +5,9 @@ let settings = {
     serverUrl: 'http://127.0.0.1:8000',
     autoSave: true,
     useHistory: true,
-    soundEnabled: false
+    soundEnabled: false,
+    profilePicture: null, // URL de la foto de perfil actual
+    profilePictureHistory: [] // Array de fotos anteriores
 };
 
 // Estado del modo de búsqueda
@@ -14,10 +16,10 @@ let searchMode = 'prompt'; // 'documents' o 'prompt'
 // Escuchar notificaciones del backend
 window.alfredAPI.onBackendNotification((data) => {
     const { type, message } = data;
-    
+
     // Mostrar notificación visual
     showNotification(type, message);
-    
+
     // Actualizar estado de conexión
     if (type === 'success') {
         updateConnectionStatus(true);
@@ -61,12 +63,19 @@ const closeSettings = document.getElementById('closeSettings');
 const cancelSettings = document.getElementById('cancelSettings');
 const saveSettings = document.getElementById('saveSettings');
 
+// Elementos de foto de perfil
+const changeProfilePictureBtn = document.getElementById('changeProfilePictureBtn');
+const currentProfilePicture = document.getElementById('currentProfilePicture');
+const profileHistoryGallery = document.getElementById('profileHistoryGallery');
+const profileHistoryCount = document.getElementById('profileHistoryCount');
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     await checkServerStatus();
     setupEventListeners();
     loadSettings();
     await loadCurrentModel();
+    loadProfilePicture();
 
     // Auto-ajustar altura del textarea
     messageInput.addEventListener('input', () => {
@@ -113,6 +122,9 @@ function setupEventListeners() {
 
     // Event listener para cambio de modelo
     modelSelect.addEventListener('change', changeModel);
+
+    // Event listener para cambiar foto de perfil
+    changeProfilePictureBtn.addEventListener('click', changeProfilePicture);
 }
 
 // Verificar estado del servidor
@@ -179,9 +191,9 @@ async function sendMessage() {
         // Enviar consulta a Alfred con el modo de búsqueda seleccionado
         const searchDocuments = searchMode === 'documents';
         console.log('📤 Enviando consulta:', { message, searchDocuments });
-        
+
         const result = await window.alfredAPI.sendQuery(message, searchDocuments);
-        
+
         console.log('📥 Respuesta recibida:', result);
 
         if (result.success) {
@@ -225,8 +237,18 @@ function addMessage(content, role, metadata = null, userQuestion = null) {
     // Asignar avatar según el rol
     if (role === 'system') {
         avatar.textContent = '⚙️';
+    } else if (role === 'user') {
+        // Usar foto de perfil si existe, sino usar emoji por defecto
+        if (settings.profilePicture) {
+            const img = document.createElement('img');
+            img.src = settings.profilePicture;
+            img.alt = 'Avatar de usuario';
+            avatar.appendChild(img);
+        } else {
+            avatar.textContent = '👤';
+        }
     } else {
-        avatar.textContent = role === 'user' ? '👤' : '🤖';
+        avatar.textContent = '🤖';
     }
 
     const contentDiv = document.createElement('div');
@@ -585,6 +607,14 @@ function loadSettings() {
         settings = JSON.parse(saved);
     }
 
+    // Asegurar que las propiedades de foto de perfil existan
+    if (!settings.profilePicture) {
+        settings.profilePicture = null;
+    }
+    if (!settings.profilePictureHistory) {
+        settings.profilePictureHistory = [];
+    }
+
     document.getElementById('serverUrl').value = settings.serverUrl;
     document.getElementById('autoSave').checked = settings.autoSave;
     document.getElementById('useHistory').checked = settings.useHistory;
@@ -606,22 +636,63 @@ function saveSettingsHandler() {
 
 // Mostrar notificación
 function showNotification(type, message) {
+    // Crear contenedor de notificaciones si no existe
+    let notificationContainer = document.getElementById('notification-container');
+    if (!notificationContainer) {
+        notificationContainer = document.createElement('div');
+        notificationContainer.id = 'notification-container';
+        document.body.appendChild(notificationContainer);
+    }
+
     // Crear elemento de notificación
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
-    notification.textContent = message;
-    
-    // Agregar al DOM
-    document.body.appendChild(notification);
-    
-    // Animar entrada
-    setTimeout(() => notification.classList.add('show'), 10);
-    
-    // Remover después de 4 segundos
-    setTimeout(() => {
+
+    // Crear contenedor de mensaje
+    const messageSpan = document.createElement('span');
+    messageSpan.className = 'notification-message';
+    messageSpan.textContent = message;
+
+    // Crear botón de cerrar
+    const closeButton = document.createElement('button');
+    closeButton.className = 'notification-close';
+    closeButton.innerHTML = '×';
+    closeButton.setAttribute('aria-label', 'Cerrar notificación');
+
+    // Función para cerrar la notificación
+    const closeNotification = () => {
         notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-    }, 4000);
+        setTimeout(() => {
+            notification.remove();
+            // Si no hay más notificaciones, remover el contenedor
+            if (notificationContainer.children.length === 0) {
+                notificationContainer.remove();
+            }
+        }, 300);
+    };
+
+    // Agregar evento al botón de cerrar
+    closeButton.addEventListener('click', closeNotification);
+
+    // Agregar elementos a la notificación
+    notification.appendChild(messageSpan);
+    notification.appendChild(closeButton);
+
+    // Agregar al contenedor
+    notificationContainer.appendChild(notification);
+
+    // Animar entrada
+    setTimeout(() => notification.classList.add('show'), 12);
+
+    // Remover después de 10 segundos
+    const autoCloseTimeout = setTimeout(() => {
+        closeNotification();
+    }, 10000);
+
+    // Cancelar el cierre automático si el usuario cierra manualmente
+    closeButton.addEventListener('click', () => {
+        clearTimeout(autoCloseTimeout);
+    }, { once: true });
 
     // Actualizar status si es error de conexión
     if (type === 'error' && message.includes('conexión')) {
@@ -685,7 +756,7 @@ async function restartBackend() {
     try {
         showNotification('info', 'Reiniciando servidor...');
         const result = await window.alfredAPI.restartBackend();
-        
+
         if (result.success) {
             showNotification('success', 'Servidor reiniciado correctamente');
             await checkServerStatus();
@@ -703,7 +774,7 @@ function stopOllama() {
     // Mostrar mensaje inmediatamente sin confirmación bloqueante
     showNotification('info', 'Deteniendo Ollama en segundo plano...');
     addMessage('🛑 Deteniendo Ollama para liberar recursos...', 'system');
-    
+
     // Ejecutar en segundo plano sin await
     window.alfredAPI.stopOllama()
         .then(result => {
@@ -734,7 +805,7 @@ function stopOllama() {
                 lastSystemMsg.querySelector('.message-bubble').textContent = '❌ Error al detener Ollama.';
             }
         });
-    
+
     // Retornar inmediatamente para no bloquear la UI
 }
 
@@ -746,3 +817,196 @@ function updateConnectionStatus(connected) {
         updateStatus('error', 'Desconectado');
     }
 }
+
+// ==================== FUNCIONES DE FOTO DE PERFIL ====================
+
+// Cargar foto de perfil y actualizar UI
+function loadProfilePicture() {
+    if (settings.profilePicture) {
+        updateProfilePictureDisplay(settings.profilePicture);
+    }
+    updateProfileHistory();
+}
+
+// Actualizar visualización de foto de perfil
+function updateProfilePictureDisplay(imageDataUrl) {
+    currentProfilePicture.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = imageDataUrl;
+    img.alt = 'Foto de perfil';
+    currentProfilePicture.appendChild(img);
+}
+
+// Cambiar foto de perfil
+async function changeProfilePicture() {
+    try {
+        console.log('🖼️ Iniciando selección de foto de perfil...');
+        
+        // Asegurar que el historial existe
+        if (!settings.profilePictureHistory) {
+            settings.profilePictureHistory = [];
+        }
+        
+        const result = await window.alfredAPI.selectProfilePicture();
+        
+        console.log('📥 Resultado de selección:', { 
+            success: result.success, 
+            hasData: !!result.data,
+            dataLength: result.data?.length,
+            error: result.error 
+        });
+        
+        if (!result.success) {
+            if (result.error !== 'Selección cancelada') {
+                showNotification('error', `Error: ${result.error}`);
+            }
+            return;
+        }
+        
+        if (result.success && result.data) {
+            const newImageData = result.data;
+            
+            // Validar tamaño de la imagen (localStorage tiene límite ~5-10MB)
+            const imageSizeKB = Math.round(newImageData.length / 1024);
+            console.log(`📊 Tamaño de imagen: ${imageSizeKB} KB`);
+            
+            if (imageSizeKB > 5000) {
+                showNotification('error', 'La imagen es demasiado grande (máx 5MB). Por favor, usa una imagen más pequeña.');
+                return;
+            }
+            
+            // Guardar la foto actual al historial antes de cambiarla
+            if (settings.profilePicture && !settings.profilePictureHistory.includes(settings.profilePicture)) {
+                settings.profilePictureHistory.unshift(settings.profilePicture);
+                // Limitar el historial a 20 fotos
+                if (settings.profilePictureHistory.length > 20) {
+                    settings.profilePictureHistory.pop();
+                }
+            }
+            
+            // Establecer nueva foto de perfil
+            settings.profilePicture = newImageData;
+            
+            // Actualizar UI
+            updateProfilePictureDisplay(newImageData);
+            updateProfileHistory();
+            
+            // Guardar en localStorage con manejo de errores
+            try {
+                localStorage.setItem('alfred-settings', JSON.stringify(settings));
+                console.log('✅ Configuración guardada correctamente');
+                showNotification('success', 'Foto de perfil actualizada correctamente');
+            } catch (storageError) {
+                console.error('❌ Error al guardar en localStorage:', storageError);
+                // Revertir cambios
+                settings.profilePicture = settings.profilePictureHistory[0] || null;
+                if (settings.profilePictureHistory.length > 0) {
+                    settings.profilePictureHistory.shift();
+                }
+                showNotification('error', 'La imagen es demasiado grande para guardar. Por favor, usa una imagen más pequeña.');
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error al cambiar foto de perfil:', error);
+        showNotification('error', `Error al seleccionar la foto: ${error.message}`);
+    }
+}
+
+// Actualizar galería de historial
+function updateProfileHistory() {
+    profileHistoryGallery.innerHTML = '';
+    
+    // Asegurar que el historial existe
+    if (!settings.profilePictureHistory) {
+        settings.profilePictureHistory = [];
+    }
+    
+    if (settings.profilePictureHistory.length === 0) {
+        profileHistoryGallery.innerHTML = '<div class="no-history-message">No hay fotos en el historial</div>';
+        profileHistoryCount.textContent = '0 fotos';
+        return;
+    }
+    
+    profileHistoryCount.textContent = `${settings.profilePictureHistory.length} foto${settings.profilePictureHistory.length !== 1 ? 's' : ''}`;
+    
+    settings.profilePictureHistory.forEach((imageData, index) => {
+        const item = document.createElement('div');
+        item.className = 'profile-history-item';
+        
+        // Marcar como activa si es la foto actual
+        if (imageData === settings.profilePicture) {
+            item.classList.add('active');
+        }
+        
+        const img = document.createElement('img');
+        img.src = imageData;
+        img.alt = `Foto histórica ${index + 1}`;
+        
+        // Click para restaurar foto
+        img.addEventListener('click', () => restoreProfilePicture(imageData, index));
+        
+        // Botón de eliminar
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.title = 'Eliminar esta foto';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteProfilePicture(index);
+        });
+        
+        item.appendChild(img);
+        item.appendChild(deleteBtn);
+        profileHistoryGallery.appendChild(item);
+    });
+}
+
+// Restaurar foto de perfil del historial
+function restoreProfilePicture(imageData, index) {
+    // Guardar la foto actual al historial si no está ya
+    if (settings.profilePicture && settings.profilePicture !== imageData) {
+        // Remover la imagen que vamos a restaurar del historial
+        settings.profilePictureHistory.splice(index, 1);
+        
+        // Agregar la foto actual al principio del historial
+        settings.profilePictureHistory.unshift(settings.profilePicture);
+    } else {
+        // Solo remover la imagen del historial si ya es la actual
+        settings.profilePictureHistory.splice(index, 1);
+    }
+    
+    // Establecer como foto actual
+    settings.profilePicture = imageData;
+    
+    // Actualizar UI
+    updateProfilePictureDisplay(imageData);
+    updateProfileHistory();
+    
+    // Guardar
+    localStorage.setItem('alfred-settings', JSON.stringify(settings));
+    
+    showNotification('success', 'Foto de perfil restaurada');
+}
+
+// Eliminar foto del historial
+function deleteProfilePicture(index) {
+    const imageToDelete = settings.profilePictureHistory[index];
+    
+    // Si es la foto actual, resetear a default
+    if (imageToDelete === settings.profilePicture) {
+        settings.profilePicture = null;
+        currentProfilePicture.innerHTML = '<span class="default-avatar">👤</span>';
+    }
+    
+    // Eliminar del historial
+    settings.profilePictureHistory.splice(index, 1);
+    
+    // Actualizar UI
+    updateProfileHistory();
+    
+    // Guardar
+    localStorage.setItem('alfred-settings', JSON.stringify(settings));
+    
+    showNotification('success', 'Foto eliminada del historial');
+}
+
