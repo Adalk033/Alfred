@@ -296,7 +296,7 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
 
     // Efecto de escritura
     let index = 0;
-    const speed = 20; // ms por carácter
+    const speed = 10; // ms por carácter
 
     function typeChar() {
         if (index < content.length) {
