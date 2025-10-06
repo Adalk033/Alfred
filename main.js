@@ -3,8 +3,23 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const { spawn } = require('child_process');
+const fs = require('fs');
 
 let mainWindow;
+let backendProcess = null;
+let isBackendStartedByElectron = false;
+
+// Configuración del backend
+const BACKEND_CONFIG = {
+    host: '127.0.0.1',
+    port: 8000,
+    path: path.join(__dirname, '..', 'Alfred'), // Ruta al proyecto Alfred
+    script: 'alfred_backend.py',
+    maxRetries: 3,
+    retryDelay: 2000,
+    startupTimeout: 30000
+};
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -28,7 +43,10 @@ function createWindow() {
 
     // Mostrar cuando esté listo
     mainWindow.once('ready-to-show', () => {
+        console.log('✅ Ventana principal lista');
         mainWindow.show();
+        // Verificar/iniciar backend después de mostrar la ventana
+        checkAndStartBackend();
     });
 
     // Abrir DevTools en desarrollo
@@ -54,10 +72,188 @@ app.whenReady().then(() => {
 
 // Cerrar cuando todas las ventanas estén cerradas
 app.on('window-all-closed', () => {
+    // Detener el backend si lo iniciamos nosotros
+    stopBackend();
+
     if (process.platform !== 'darwin') {
         app.quit();
     }
 });
+
+// Asegurar que el backend se detenga al cerrar la app
+app.on('before-quit', () => {
+    stopBackend();
+});
+
+// Verificar si el backend está corriendo
+async function isBackendRunning() {
+    return new Promise((resolve) => {
+        const req = http.request({
+            hostname: BACKEND_CONFIG.host,
+            port: BACKEND_CONFIG.port,
+            path: '/health',
+            method: 'GET',
+            timeout: 3000
+        }, (res) => {
+            resolve(res.statusCode === 200);
+        });
+
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => {
+            req.destroy();
+            resolve(false);
+        });
+
+        req.end();
+    });
+}
+
+// Esperar a que el backend esté disponible
+async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+        if (await isBackendRunning()) {
+            console.log('✅ Backend está disponible');
+            return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('⏳ Esperando al backend...');
+    }
+
+    return false;
+}
+
+// Iniciar el proceso del backend
+async function startBackend() {
+    console.log('🔍 Verificando si el backend ya está iniciado...');
+    if (backendProcess) {
+        console.log('⚠️ El backend ya está iniciado');
+        return true;
+    }
+
+    console.log('🚀 Iniciando backend de Alfred...');
+
+    // Verificar que el directorio existe
+    if (!fs.existsSync(BACKEND_CONFIG.path)) {
+        console.error('❌ No se encontró el directorio del backend:', BACKEND_CONFIG.path);
+        notifyUser('error', 'No se encontró el directorio del backend de Alfred');
+        return false;
+    }
+
+    // Verificar que el script existe
+    const scriptPath = path.join(BACKEND_CONFIG.path, BACKEND_CONFIG.script);
+    if (!fs.existsSync(scriptPath)) {
+        console.error('❌ No se encontró el script del backend:', scriptPath);
+        notifyUser('error', 'No se encontró alfred_backend.py');
+        return false;
+    }
+
+    try {
+        // Iniciar el proceso de Python
+        backendProcess = spawn('python', [BACKEND_CONFIG.script], {
+            cwd: BACKEND_CONFIG.path,
+            env: { ...process.env },
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        isBackendStartedByElectron = true;
+
+        // Capturar salida estándar
+        backendProcess.stdout.on('data', (data) => {
+            console.log(`[Backend] ${data.toString().trim()}`);
+        });
+
+        // Capturar errores
+        backendProcess.stderr.on('data', (data) => {
+            console.error(`[Backend Error] ${data.toString().trim()}`);
+        });
+
+        // Manejar cierre del proceso
+        backendProcess.on('close', (code) => {
+            console.log(`[Backend] Proceso terminado con código ${code}`);
+            backendProcess = null;
+            isBackendStartedByElectron = false;
+
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('backend-status', { status: 'disconnected' });
+            }
+        });
+
+        // Manejar errores del proceso
+        backendProcess.on('error', (error) => {
+            console.error('❌ Error al iniciar el backend:', error);
+            backendProcess = null;
+            isBackendStartedByElectron = false;
+            notifyUser('error', `Error al iniciar el backend: ${error.message}`);
+        });
+
+        // Esperar a que el backend esté listo
+        notifyUser('info', 'Iniciando servidor de Alfred...');
+        const isReady = await waitForBackend();
+
+        if (isReady) {
+            console.log('✅ Backend iniciado correctamente');
+            notifyUser('success', 'Servidor de Alfred iniciado correctamente');
+            return true;
+        } else {
+            console.error('❌ El backend no respondió a tiempo');
+            stopBackend();
+            notifyUser('error', 'El servidor no respondió. Verifica los logs.');
+            return false;
+        }
+
+    } catch (error) {
+        console.error('❌ Error al iniciar el backend:', error);
+        notifyUser('error', `Error al iniciar el backend: ${error.message}`);
+        return false;
+    }
+}
+
+// Detener el proceso del backend
+function stopBackend() {
+    if (backendProcess && isBackendStartedByElectron) {
+        console.log('🛑 Deteniendo backend...');
+
+        // Intentar detener gracefully
+        backendProcess.kill('SIGTERM');
+
+        // Si no se detiene en 5 segundos, forzar
+        setTimeout(() => {
+            if (backendProcess) {
+                console.log('⚠️ Forzando detención del backend');
+                backendProcess.kill('SIGKILL');
+            }
+        }, 5000);
+
+        backendProcess = null;
+        isBackendStartedByElectron = false;
+    }
+}
+
+// Verificar y, si es necesario, iniciar el backend
+async function checkAndStartBackend() {
+    console.log('🔍 Verificando estado del backend...');
+
+    const isRunning = await isBackendRunning();
+
+    if (isRunning) {
+        console.log('✅ El backend ya está corriendo');
+        notifyUser('success', 'Conectado al servidor de Alfred');
+        return true;
+    }
+
+    console.log('⚠️ El backend no está corriendo. Intentando iniciar...');
+    return await startBackend();
+}
+
+// Notificar al usuario
+function notifyUser(type, message) {
+    console.log(`[NOTIFY] (${type}): ${message}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backend-notification', { type, message });
+    }
+}
 
 // Helper function para hacer requests HTTP
 function makeRequest(url, options = {}) {
@@ -106,11 +302,27 @@ function makeRequest(url, options = {}) {
 ipcMain.handle('check-server', async () => {
     try {
         console.log('[MAIN] Verificando servidor Alfred en http://127.0.0.1:8000/health');
-        const result = await makeRequest('http://127.0.0.1:8000/health');
-        console.log('[MAIN] Respuesta del servidor:', result);
-        return { success: true, data: result.data };
+        const isRunning = await isBackendRunning();
+        console.log(`[MAIN] Servidor está ${isRunning ? 'conectado' : 'no disponible'}`);
+        return {
+            connected: isRunning,
+            message: isRunning ? 'Servidor conectado' : 'Servidor no disponible'
+        };
     } catch (error) {
-        console.error('[MAIN] Error al conectar con el servidor:', error);
+        console.error('[MAIN] Error al verificar servidor:', error);
+        return { connected: false, message: 'Error al verificar conexión' };
+    }
+});
+
+ipcMain.handle('restart-backend', async () => {
+    try {
+        notifyUser('info', 'Reiniciando servidor...');
+        stopBackend();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const started = await startBackend();
+        return { success: started };
+    } catch (error) {
+        console.error('Error al reiniciar backend:', error);
         return { success: false, error: error.message };
     }
 });

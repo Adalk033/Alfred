@@ -11,6 +11,27 @@ let settings = {
 // Estado del modo de búsqueda
 let searchMode = 'prompt'; // 'documents' o 'prompt'
 
+// Escuchar notificaciones del backend
+window.alfredAPI.onBackendNotification((data) => {
+    const { type, message } = data;
+    
+    // Mostrar notificación visual
+    showNotification(type, message);
+    
+    // Actualizar estado de conexión
+    if (type === 'success') {
+        updateConnectionStatus(true);
+    } else if (type === 'error') {
+        updateConnectionStatus(false);
+    }
+});
+
+// Escuchar cambios de estado del backend
+window.alfredAPI.onBackendStatus((data) => {
+    const { status } = data;
+    updateConnectionStatus(status === 'connected');
+});
+
 // Elementos del DOM
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
@@ -576,9 +597,23 @@ function saveSettingsHandler() {
 }
 
 // Mostrar notificación
-function showNotification(message, type = 'info') {
-    // Crear notificación toast (puede mejorarse con una librería)
-    console.log(`[${type.toUpperCase()}] ${message}`);
+function showNotification(type, message) {
+    // Crear elemento de notificación
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    // Agregar al DOM
+    document.body.appendChild(notification);
+    
+    // Animar entrada
+    setTimeout(() => notification.classList.add('show'), 10);
+    
+    // Remover después de 4 segundos
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
 
     // Actualizar status si es error de conexión
     if (type === 'error' && message.includes('conexión')) {
@@ -634,5 +669,32 @@ async function changeModel() {
         updateStatus('connected', 'Conectado');
     } finally {
         modelSelect.disabled = false;
+    }
+}
+
+// Función para reiniciar backend manualmente
+async function restartBackend() {
+    try {
+        showNotification('info', 'Reiniciando servidor...');
+        const result = await window.alfredAPI.restartBackend();
+        
+        if (result.success) {
+            showNotification('success', 'Servidor reiniciado correctamente');
+            await checkServerStatus();
+        } else {
+            showNotification('error', 'Error al reiniciar el servidor');
+        }
+    } catch (error) {
+        console.error('Error al reiniciar backend:', error);
+        showNotification('error', 'Error al reiniciar el servidor');
+    }
+}
+
+// Función auxiliar para actualizar estado de conexión
+function updateConnectionStatus(connected) {
+    if (connected) {
+        updateStatus('connected', 'Conectado');
+    } else {
+        updateStatus('error', 'Desconectado');
     }
 }
