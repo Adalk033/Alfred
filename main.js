@@ -9,6 +9,7 @@ const fs = require('fs');
 let mainWindow;
 let backendProcess = null;
 let isBackendStartedByElectron = false;
+let isCheckingBackend = false; // Flag para evitar chequeos simultáneos
 
 // Configuración del backend
 const BACKEND_CONFIG = {
@@ -47,6 +48,18 @@ function createWindow() {
         mainWindow.show();
         // Verificar/iniciar backend después de mostrar la ventana
         checkAndStartBackend();
+    });
+
+    // Manejar recarga de la página (Ctrl+R)
+    mainWindow.webContents.on('did-finish-load', () => {
+        console.log('🔄 Página cargada/recargada');
+        // Solo verificar conexión si ya pasó el ready-to-show inicial
+        if (mainWindow.isVisible()) {
+            // Dar tiempo a que el renderer se inicialice
+            setTimeout(() => {
+                checkAndStartBackend();
+            }, 500);
+        }
     });
 
     // Abrir DevTools en desarrollo
@@ -233,18 +246,30 @@ function stopBackend() {
 
 // Verificar y, si es necesario, iniciar el backend
 async function checkAndStartBackend() {
-    console.log('🔍 Verificando estado del backend...');
-
-    const isRunning = await isBackendRunning();
-
-    if (isRunning) {
-        console.log('✅ El backend ya está corriendo');
-        notifyUser('success', 'Conectado al servidor de Alfred');
-        return true;
+    // Evitar chequeos simultáneos
+    if (isCheckingBackend) {
+        console.log('⏳ Ya hay un chequeo en progreso...');
+        return;
     }
+    
+    isCheckingBackend = true;
+    
+    try {
+        console.log('🔍 Verificando estado del backend...');
 
-    console.log('⚠️ El backend no está corriendo. Intentando iniciar...');
-    return await startBackend();
+        const isRunning = await isBackendRunning();
+
+        if (isRunning) {
+            console.log('✅ El backend ya está corriendo');
+            notifyUser('success', 'Conectado al servidor de Alfred');
+            return true;
+        }
+
+        console.log('⚠️ El backend no está corriendo. Intentando iniciar...');
+        return await startBackend();
+    } finally {
+        isCheckingBackend = false;
+    }
 }
 
 // Notificar al usuario
