@@ -1,6 +1,8 @@
 // main.js - Proceso principal de Electron
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 
 let mainWindow;
 
@@ -27,6 +29,8 @@ function createWindow() {
   // Mostrar cuando esté listo
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    // Abrir DevTools automáticamente para debugging
+    mainWindow.webContents.openDevTools();
   });
 
   // Abrir DevTools en desarrollo
@@ -57,22 +61,66 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Helper function para hacer requests HTTP
+function makeRequest(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const protocol = urlObj.protocol === 'https:' ? https : http;
+    
+    const requestOptions = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+      path: urlObj.pathname + urlObj.search,
+      method: options.method || 'GET',
+      headers: options.headers || {}
+    };
+
+    const req = protocol.request(requestOptions, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const jsonData = JSON.parse(data);
+          resolve({ success: true, data: jsonData, statusCode: res.statusCode });
+        } catch (error) {
+          resolve({ success: true, data: data, statusCode: res.statusCode });
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    if (options.body) {
+      req.write(options.body);
+    }
+
+    req.end();
+  });
+}
+
 // IPC handlers para comunicación con el renderer
 ipcMain.handle('check-server', async () => {
   try {
-    const response = await fetch('http://localhost:8000/health');
-    const data = await response.json();
-    return { success: true, data };
+    console.log('[MAIN] Verificando servidor Alfred en http://127.0.0.1:8000/health');
+    const result = await makeRequest('http://127.0.0.1:8000/health');
+    console.log('[MAIN] Respuesta del servidor:', result);
+    return { success: true, data: result.data };
   } catch (error) {
+    console.error('[MAIN] Error al conectar con el servidor:', error);
     return { success: false, error: error.message };
   }
 });
 
 ipcMain.handle('get-stats', async () => {
   try {
-    const response = await fetch('http://localhost:8000/stats');
-    const data = await response.json();
-    return { success: true, data };
+    const result = await makeRequest('http://127.0.0.1:8000/stats');
+    return { success: true, data: result.data };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -80,10 +128,15 @@ ipcMain.handle('get-stats', async () => {
 
 ipcMain.handle('send-query', async (event, question) => {
   try {
-    const response = await fetch('http://localhost:8000/query', {
+    const result = await makeRequest('http://127.0.0.1:8000/query', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(JSON.stringify({
+          question: question,
+          use_history: true,
+          save_response: true
+        }))
       },
       body: JSON.stringify({
         question: question,
@@ -92,8 +145,7 @@ ipcMain.handle('send-query', async (event, question) => {
       })
     });
     
-    const data = await response.json();
-    return { success: true, data };
+    return { success: true, data: result.data };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -101,9 +153,8 @@ ipcMain.handle('send-query', async (event, question) => {
 
 ipcMain.handle('get-history', async (event, limit = 10) => {
   try {
-    const response = await fetch(`http://localhost:8000/history?limit=${limit}`);
-    const data = await response.json();
-    return { success: true, data };
+    const result = await makeRequest(`http://127.0.0.1:8000/history?limit=${limit}`);
+    return { success: true, data: result.data };
   } catch (error) {
     return { success: false, error: error.message };
   }

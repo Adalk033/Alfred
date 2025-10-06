@@ -2,7 +2,7 @@
 
 let conversationHistory = [];
 let settings = {
-    serverUrl: 'http://localhost:8000',
+    serverUrl: 'http://127.0.0.1:8000',
     autoSave: true,
     useHistory: true,
     soundEnabled: false
@@ -70,15 +70,21 @@ function setupEventListeners() {
 // Verificar estado del servidor
 async function checkServerStatus() {
     try {
+        console.log('[RENDERER] Verificando servidor...');
         const result = await window.alfredAPI.checkServer();
+        console.log('[RENDERER] Resultado completo:', result);
+        
         if (result.success) {
+            console.log('[RENDERER] ✅ Servidor conectado!');
             updateStatus('connected', 'Conectado');
             await loadInitialStats();
         } else {
+            console.error('[RENDERER] ❌ Error al conectar:', result.error);
             updateStatus('error', 'Desconectado');
-            showNotification('No se pudo conectar con el servidor de Alfred', 'error');
+            showNotification('No se pudo conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.', 'error');
         }
     } catch (error) {
+        console.error('[RENDERER] ❌ Excepción al verificar servidor:', error);
         updateStatus('error', 'Error de conexión');
         showNotification('Error al verificar el servidor', 'error');
     }
