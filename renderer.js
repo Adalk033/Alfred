@@ -8,6 +8,13 @@ let settings = {
     soundEnabled: false
 };
 
+// Estado del modo de búsqueda
+let searchMode = 'documents'; // 'documents' o 'prompt'
+
+// Estructura para rastrear pares de pregunta-respuesta
+let lastUserQuestion = null;
+let lastBotResponse = null;
+
 // Elementos del DOM
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
@@ -24,6 +31,10 @@ const statsBtn = document.getElementById('statsBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const closeSidebar = document.getElementById('closeSidebar');
 
+// Botones de modo de búsqueda
+const searchDocsBtn = document.getElementById('searchDocsBtn');
+const promptOnlyBtn = document.getElementById('promptOnlyBtn');
+
 // Modal de configuración
 const settingsModal = document.getElementById('settingsModal');
 const closeSettings = document.getElementById('closeSettings');
@@ -35,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkServerStatus();
     setupEventListeners();
     loadSettings();
-    
+
     // Auto-ajustar altura del textarea
     messageInput.addEventListener('input', () => {
         messageInput.style.height = 'auto';
@@ -57,11 +68,24 @@ function setupEventListeners() {
         sendBtn.disabled = !messageInput.value.trim();
     });
 
+    // Event listeners para botones de modo
+    searchDocsBtn.addEventListener('click', () => {
+        searchMode = 'documents';
+        searchDocsBtn.classList.add('active');
+        promptOnlyBtn.classList.remove('active');
+    });
+
+    promptOnlyBtn.addEventListener('click', () => {
+        searchMode = 'prompt';
+        promptOnlyBtn.classList.add('active');
+        searchDocsBtn.classList.remove('active');
+    });
+
     historyBtn.addEventListener('click', showHistory);
     statsBtn.addEventListener('click', showStats);
     settingsBtn.addEventListener('click', () => settingsModal.style.display = 'flex');
     closeSidebar.addEventListener('click', () => sidebar.style.display = 'none');
-    
+
     closeSettings.addEventListener('click', () => settingsModal.style.display = 'none');
     cancelSettings.addEventListener('click', () => settingsModal.style.display = 'none');
     saveSettings.addEventListener('click', saveSettingsHandler);
@@ -70,21 +94,16 @@ function setupEventListeners() {
 // Verificar estado del servidor
 async function checkServerStatus() {
     try {
-        console.log('[RENDERER] Verificando servidor...');
         const result = await window.alfredAPI.checkServer();
-        console.log('[RENDERER] Resultado completo:', result);
-        
+
         if (result.success) {
-            console.log('[RENDERER] ✅ Servidor conectado!');
             updateStatus('connected', 'Conectado');
             await loadInitialStats();
         } else {
-            console.error('[RENDERER] ❌ Error al conectar:', result.error);
             updateStatus('error', 'Desconectado');
             showNotification('No se pudo conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.', 'error');
         }
     } catch (error) {
-        console.error('[RENDERER] ❌ Excepción al verificar servidor:', error);
         updateStatus('error', 'Error de conexión');
         showNotification('Error al verificar el servidor', 'error');
     }
@@ -102,7 +121,6 @@ async function loadInitialStats() {
         const result = await window.alfredAPI.getStats();
         if (result.success) {
             const stats = result.data;
-            console.log('Estadísticas:', stats);
         }
     } catch (error) {
         console.error('Error al cargar estadísticas:', error);
@@ -120,6 +138,9 @@ async function sendMessage() {
         welcomeMsg.remove();
     }
 
+    // Guardar la pregunta del usuario
+    lastUserQuestion = message;
+
     // Agregar mensaje del usuario
     addMessage(message, 'user');
     conversationHistory.push({ role: 'user', content: message });
@@ -134,20 +155,27 @@ async function sendMessage() {
     scrollToBottom();
 
     try {
-        // Enviar consulta a Alfred
-        const result = await window.alfredAPI.sendQuery(message);
-        
+        // Enviar consulta a Alfred con el modo de búsqueda seleccionado
+        const searchDocuments = searchMode === 'documents';
+        const result = await window.alfredAPI.sendQuery(message, searchDocuments);
+
         if (result.success) {
             const response = result.data;
-            
+
             // Ocultar indicador de escritura
             typingIndicator.style.display = 'none';
-            
+
+            // Guardar respuesta del bot
+            lastBotResponse = {
+                answer: response.answer,
+                metadata: response
+            };
+
             // Agregar respuesta de Alfred con efecto de escritura
             await addMessageWithTyping(response.answer, 'assistant', response);
-            
-            conversationHistory.push({ 
-                role: 'assistant', 
+
+            conversationHistory.push({
+                role: 'assistant',
                 content: response.answer,
                 metadata: response
             });
@@ -166,76 +194,82 @@ async function sendMessage() {
 function addMessage(content, role, metadata = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
-    
+
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
     avatar.textContent = role === 'user' ? '👤' : '🤖';
-    
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    
+
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
     bubble.textContent = content;
-    
+
     contentDiv.appendChild(bubble);
-    
+
     // Agregar metadata si existe
     if (metadata) {
         const meta = document.createElement('div');
         meta.className = 'message-meta';
-        
+
         if (metadata.from_history) {
             const tag = document.createElement('span');
             tag.className = 'message-tag';
             tag.textContent = `📚 Del historial (${Math.round(metadata.history_score * 100)}%)`;
             meta.appendChild(tag);
         }
-        
+
         if (metadata.context_count > 0) {
             const tag = document.createElement('span');
             tag.className = 'message-tag';
             tag.textContent = `🔍 ${metadata.context_count} fragmentos`;
             meta.appendChild(tag);
         }
-        
+
         contentDiv.appendChild(meta);
-        
+
         // Mostrar fuentes si existen
         if (metadata.sources && metadata.sources.length > 0) {
             const sourcesDiv = document.createElement('div');
             sourcesDiv.className = 'message-sources';
-            
+
             const title = document.createElement('div');
             title.className = 'message-sources-title';
             title.textContent = '📄 Fuentes:';
-            
+
             const list = document.createElement('ul');
             list.className = 'message-sources-list';
-            
+
             metadata.sources.slice(0, 3).forEach(source => {
                 const li = document.createElement('li');
                 const fileName = source.split(/[\\/]/).pop();
                 li.textContent = fileName;
                 list.appendChild(li);
             });
-            
+
             if (metadata.sources.length > 3) {
                 const li = document.createElement('li');
                 li.textContent = `+${metadata.sources.length - 3} más...`;
                 list.appendChild(li);
             }
-            
+
             sourcesDiv.appendChild(title);
             sourcesDiv.appendChild(list);
             contentDiv.appendChild(sourcesDiv);
         }
     }
-    
+
+    // Agregar botón de guardar si es mensaje del asistente
+    if (role === 'assistant') {
+        const actionsDiv = createSaveButton(content, metadata);
+        contentDiv.appendChild(actionsDiv);
+    }
+
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
     messagesContainer.appendChild(messageDiv);
-    
+
     scrollToBottom();
 }
 
@@ -243,26 +277,26 @@ function addMessage(content, role, metadata = null) {
 async function addMessageWithTyping(content, role, metadata = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
-    
+
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
     avatar.textContent = role === 'user' ? '👤' : '🤖';
-    
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    
+
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-    
+
     contentDiv.appendChild(bubble);
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
     messagesContainer.appendChild(messageDiv);
-    
+
     // Efecto de escritura
     let index = 0;
     const speed = 20; // ms por carácter
-    
+
     function typeChar() {
         if (index < content.length) {
             bubble.textContent += content.charAt(index);
@@ -274,57 +308,119 @@ async function addMessageWithTyping(content, role, metadata = null) {
             if (metadata) {
                 const meta = document.createElement('div');
                 meta.className = 'message-meta';
-                
+
                 if (metadata.from_history) {
                     const tag = document.createElement('span');
                     tag.className = 'message-tag';
                     tag.textContent = `📚 Del historial (${Math.round(metadata.history_score * 100)}%)`;
                     meta.appendChild(tag);
                 }
-                
+
                 if (metadata.context_count > 0) {
                     const tag = document.createElement('span');
                     tag.className = 'message-tag';
                     tag.textContent = `🔍 ${metadata.context_count} fragmentos`;
                     meta.appendChild(tag);
                 }
-                
+
                 contentDiv.appendChild(meta);
-                
+
                 // Mostrar fuentes si existen
                 if (metadata.sources && metadata.sources.length > 0) {
                     const sourcesDiv = document.createElement('div');
                     sourcesDiv.className = 'message-sources';
-                    
+
                     const title = document.createElement('div');
                     title.className = 'message-sources-title';
                     title.textContent = '📄 Fuentes:';
-                    
+
                     const list = document.createElement('ul');
                     list.className = 'message-sources-list';
-                    
+
                     metadata.sources.slice(0, 3).forEach(source => {
                         const li = document.createElement('li');
                         const fileName = source.split(/[\\/]/).pop();
                         li.textContent = fileName;
                         list.appendChild(li);
                     });
-                    
+
                     if (metadata.sources.length > 3) {
                         const li = document.createElement('li');
                         li.textContent = `+${metadata.sources.length - 3} más...`;
                         list.appendChild(li);
                     }
-                    
+
                     sourcesDiv.appendChild(title);
                     sourcesDiv.appendChild(list);
                     contentDiv.appendChild(sourcesDiv);
                 }
+
+                // Agregar botón de guardar si es mensaje del asistente
+                if (role === 'assistant') {
+                    const actionsDiv = createSaveButton(content, metadata);
+                    contentDiv.appendChild(actionsDiv);
+                }
             }
         }
     }
-    
+
     typeChar();
+}
+
+// Crear botón de guardar para mensajes del asistente
+function createSaveButton(answer, metadata) {
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'message-actions';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'save-btn';
+    saveBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+        </svg>
+        <span>Guardar</span>
+    `;
+
+    saveBtn.addEventListener('click', async () => {
+        if (saveBtn.classList.contains('saved')) return;
+
+        try {
+            await saveConversation(lastUserQuestion, answer, metadata);
+            saveBtn.classList.add('saved');
+            saveBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <span>Guardado</span>
+            `;
+            showNotification('Conversación guardada en el historial', 'success');
+        } catch (error) {
+            showNotification('Error al guardar la conversación', 'error');
+        }
+    });
+
+    actionsDiv.appendChild(saveBtn);
+    return actionsDiv;
+}
+
+// Guardar conversación en el historial
+async function saveConversation(question, answer, metadata) {
+    if (!question || !answer) {
+        throw new Error('Faltan datos para guardar');
+    }
+
+    const result = await window.alfredAPI.saveToHistory({
+        question: question,
+        answer: answer,
+        personal_data: metadata?.personal_data || null,
+        sources: metadata?.sources || []
+    });
+
+    if (!result.success) {
+        throw new Error(result.error || 'Error al guardar');
+    }
+
+    return result;
 }
 
 // Scroll al final
@@ -336,11 +432,11 @@ function scrollToBottom() {
 async function showHistory() {
     try {
         const result = await window.alfredAPI.getHistory(20);
-        
+
         if (result.success) {
             sidebarTitle.textContent = 'Historial de conversaciones';
             sidebarContent.innerHTML = '';
-            
+
             if (result.data.length === 0) {
                 sidebarContent.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No hay conversaciones guardadas</p>';
             } else {
@@ -348,26 +444,26 @@ async function showHistory() {
                     const historyItem = document.createElement('div');
                     historyItem.className = 'history-item';
                     historyItem.onclick = () => loadHistoryItem(item);
-                    
+
                     const question = document.createElement('div');
                     question.className = 'history-question';
                     question.textContent = item.question;
-                    
+
                     const answer = document.createElement('div');
                     answer.className = 'history-answer';
                     answer.textContent = item.answer;
-                    
+
                     const time = document.createElement('div');
                     time.className = 'history-time';
                     time.textContent = new Date(item.timestamp).toLocaleString('es-ES');
-                    
+
                     historyItem.appendChild(question);
                     historyItem.appendChild(answer);
                     historyItem.appendChild(time);
                     sidebarContent.appendChild(historyItem);
                 });
             }
-            
+
             sidebar.style.display = 'flex';
         }
     } catch (error) {
@@ -383,13 +479,13 @@ function loadHistoryItem(item) {
     if (welcomeMsg) {
         welcomeMsg.remove();
     }
-    
+
     addMessage(item.question, 'user');
     addMessage(item.answer, 'assistant', {
         from_history: true,
         sources: item.sources || []
     });
-    
+
     sidebar.style.display = 'none';
 }
 
@@ -397,10 +493,10 @@ function loadHistoryItem(item) {
 async function showStats() {
     try {
         const result = await window.alfredAPI.getStats();
-        
+
         if (result.success) {
             const stats = result.data;
-            
+
             sidebarTitle.textContent = 'Estadísticas del sistema';
             sidebarContent.innerHTML = `
                 <div class="stat-card">
@@ -428,7 +524,7 @@ async function showStats() {
                     <div class="stat-value" style="font-size: 16px; color: var(--success-color);">${stats.status}</div>
                 </div>
             `;
-            
+
             sidebar.style.display = 'flex';
         }
     } catch (error) {
@@ -443,7 +539,7 @@ function loadSettings() {
     if (saved) {
         settings = JSON.parse(saved);
     }
-    
+
     document.getElementById('serverUrl').value = settings.serverUrl;
     document.getElementById('autoSave').checked = settings.autoSave;
     document.getElementById('useHistory').checked = settings.useHistory;
@@ -456,10 +552,10 @@ function saveSettingsHandler() {
     settings.autoSave = document.getElementById('autoSave').checked;
     settings.useHistory = document.getElementById('useHistory').checked;
     settings.soundEnabled = document.getElementById('soundEnabled').checked;
-    
+
     localStorage.setItem('alfred-settings', JSON.stringify(settings));
     settingsModal.style.display = 'none';
-    
+
     showNotification('Configuración guardada', 'success');
 }
 
@@ -467,7 +563,7 @@ function saveSettingsHandler() {
 function showNotification(message, type = 'info') {
     // Crear notificación toast (puede mejorarse con una librería)
     console.log(`[${type.toUpperCase()}] ${message}`);
-    
+
     // Actualizar status si es error de conexión
     if (type === 'error' && message.includes('conexión')) {
         updateStatus('error', 'Error de conexión');

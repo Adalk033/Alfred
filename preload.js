@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('alfredAPI', {
   checkServer: () => ipcRenderer.invoke('check-server'),
   getStats: () => ipcRenderer.invoke('get-stats'),
-  sendQuery: (question) => ipcRenderer.invoke('send-query', question),
-  getHistory: (limit) => ipcRenderer.invoke('get-history', limit)
+  sendQuery: (question, searchDocuments) => ipcRenderer.invoke('send-query', question, searchDocuments),
+  getHistory: (limit) => ipcRenderer.invoke('get-history', limit),
+  saveToHistory: (data) => ipcRenderer.invoke('save-to-history', data)
 });

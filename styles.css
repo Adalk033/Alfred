@@ -267,6 +267,49 @@ body {
     padding: 0 4px;
 }
 
+.message-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 0 4px;
+}
+
+.save-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.save-btn:hover {
+    background-color: var(--bg-primary);
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.save-btn.saved {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.2), rgba(40, 167, 69, 0.1));
+    border-color: var(--success-color);
+    color: var(--success-color);
+    cursor: default;
+}
+
+.save-btn.saved:hover {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.2), rgba(40, 167, 69, 0.1));
+}
+
+.save-btn svg {
+    flex-shrink: 0;
+}
+
 .message-tag {
     background-color: var(--bg-tertiary);
     padding: 2px 8px;
@@ -340,6 +383,47 @@ body {
     display: flex;
     gap: 12px;
     align-items: flex-end;
+}
+
+.input-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.mode-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.mode-toggle-btn:hover {
+    background-color: var(--bg-primary);
+    border-color: var(--primary-color);
+    color: var(--text-primary);
+}
+
+.mode-toggle-btn.active {
+    background: linear-gradient(135deg, rgba(74, 158, 255, 0.2), rgba(106, 90, 205, 0.2));
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.mode-toggle-btn svg {
+    flex-shrink: 0;
+}
+
+.mode-toggle-btn span {
+    font-weight: 500;
 }
 
 #messageInput {
