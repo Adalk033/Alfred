@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   saveToHistory: (data) => ipcRenderer.invoke('save-to-history', data),
   getModel: () => ipcRenderer.invoke('get-model'),
   changeModel: (modelName) => ipcRenderer.invoke('change-model', modelName),
+  stopOllama: () => ipcRenderer.invoke('stop-ollama'),
   
   // Escuchar notificaciones del backend
   onBackendNotification: (callback) => {

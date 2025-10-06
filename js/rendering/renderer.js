@@ -178,7 +178,11 @@ async function sendMessage() {
     try {
         // Enviar consulta a Alfred con el modo de búsqueda seleccionado
         const searchDocuments = searchMode === 'documents';
+        console.log('📤 Enviando consulta:', { message, searchDocuments });
+        
         const result = await window.alfredAPI.sendQuery(message, searchDocuments);
+        
+        console.log('📥 Respuesta recibida:', result);
 
         if (result.success) {
             const response = result.data;
@@ -197,12 +201,16 @@ async function sendMessage() {
             });
         } else {
             typingIndicator.style.display = 'none';
-            showNotification('Error al procesar la consulta', 'error');
+            const errorMsg = result.error || 'Error desconocido';
+            console.error('❌ Error del servidor:', errorMsg);
+            showNotification('error', `Error: ${errorMsg}`);
+            addMessage(`❌ Error: ${errorMsg}`, 'system');
         }
     } catch (error) {
         typingIndicator.style.display = 'none';
-        showNotification('Error de conexión', 'error');
-        console.error('Error:', error);
+        console.error('❌ Error de conexión:', error);
+        showNotification('error', 'Error de conexión con el servidor');
+        addMessage('❌ Error de conexión con el servidor', 'system');
     }
 }
 
@@ -688,6 +696,46 @@ async function restartBackend() {
         console.error('Error al reiniciar backend:', error);
         showNotification('error', 'Error al reiniciar el servidor');
     }
+}
+
+// Función para detener Ollama y liberar recursos
+function stopOllama() {
+    // Mostrar mensaje inmediatamente sin confirmación bloqueante
+    showNotification('info', 'Deteniendo Ollama en segundo plano...');
+    addMessage('🛑 Deteniendo Ollama para liberar recursos...', 'system');
+    
+    // Ejecutar en segundo plano sin await
+    window.alfredAPI.stopOllama()
+        .then(result => {
+            if (result.success) {
+                showNotification('success', result.data.message || 'Ollama detenido exitosamente');
+                // Actualizar el mensaje del sistema
+                const systemMessages = messagesContainer.querySelectorAll('.message.system');
+                const lastSystemMsg = systemMessages[systemMessages.length - 1];
+                if (lastSystemMsg && lastSystemMsg.textContent.includes('Deteniendo Ollama')) {
+                    lastSystemMsg.querySelector('.message-bubble').textContent = '🛑 Ollama detenido. Recursos liberados. Se recargará automáticamente en la próxima pregunta.';
+                }
+            } else {
+                showNotification('error', result.error || 'Error al detener Ollama');
+                // Actualizar el mensaje con error
+                const systemMessages = messagesContainer.querySelectorAll('.message.system');
+                const lastSystemMsg = systemMessages[systemMessages.length - 1];
+                if (lastSystemMsg && lastSystemMsg.textContent.includes('Deteniendo Ollama')) {
+                    lastSystemMsg.querySelector('.message-bubble').textContent = '❌ Error al detener Ollama.';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error al detener Ollama:', error);
+            showNotification('error', 'Error al detener Ollama');
+            const systemMessages = messagesContainer.querySelectorAll('.message.system');
+            const lastSystemMsg = systemMessages[systemMessages.length - 1];
+            if (lastSystemMsg && lastSystemMsg.textContent.includes('Deteniendo Ollama')) {
+                lastSystemMsg.querySelector('.message-bubble').textContent = '❌ Error al detener Ollama.';
+            }
+        });
+    
+    // Retornar inmediatamente para no bloquear la UI
 }
 
 // Función auxiliar para actualizar estado de conexión

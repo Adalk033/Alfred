@@ -363,6 +363,8 @@ ipcMain.handle('get-stats', async () => {
 
 ipcMain.handle('send-query', async (event, question, searchDocuments = true) => {
     try {
+        console.log('[MAIN] Enviando consulta al backend:', { question, searchDocuments });
+        
         const result = await makeRequest('http://127.0.0.1:8000/query', {
             method: 'POST',
             headers: {
@@ -382,8 +384,18 @@ ipcMain.handle('send-query', async (event, question, searchDocuments = true) => 
             })
         });
 
+        console.log('[MAIN] Respuesta del backend:', result);
+        
+        // Si el backend devuelve un error 500, result.data puede contener el detalle
+        if (result.statusCode >= 400) {
+            const errorDetail = result.data?.detail || result.data?.message || 'Error del servidor';
+            console.error('[MAIN] Error del servidor:', errorDetail);
+            return { success: false, error: errorDetail };
+        }
+
         return { success: true, data: result.data };
     } catch (error) {
+        console.error('[MAIN] Error en send-query:', error);
         return { success: false, error: error.message };
     }
 });
@@ -442,6 +454,26 @@ ipcMain.handle('change-model', async (event, modelName) => {
         return { success: true, data: result.data };
     } catch (error) {
         console.error('[MAIN] Error al cambiar modelo:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('stop-ollama', async () => {
+    try {
+        console.log('[MAIN] Deteniendo Ollama...');
+        const result = await makeRequest('http://127.0.0.1:8000/ollama/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('[MAIN] Resultado de detener Ollama:', result.data);
+        notifyUser('success', result.data.message || 'Ollama detenido exitosamente');
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al detener Ollama:', error);
+        notifyUser('error', 'Error al detener Ollama');
         return { success: false, error: error.message };
     }
 });
