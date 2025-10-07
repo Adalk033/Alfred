@@ -44,7 +44,7 @@ function createWindow() {
 
     // Mostrar cuando esté listo
     mainWindow.once('ready-to-show', () => {
-        console.log('✅ Ventana principal lista');
+        console.log('Ventana principal lista');
         mainWindow.show();
         // Verificar/iniciar backend después de mostrar la ventana
         checkAndStartBackend();
@@ -52,7 +52,7 @@ function createWindow() {
 
     // Manejar recarga de la página (Ctrl+R)
     mainWindow.webContents.on('did-finish-load', () => {
-        console.log('🔄 Página cargada/recargada');
+        console.log('Pagina cargada/recargada');
         // Solo verificar conexión si ya pasó el ready-to-show inicial
         if (mainWindow.isVisible()) {
             // Dar tiempo a que el renderer se inicialice
@@ -127,11 +127,11 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
 
     while (Date.now() - startTime < timeout) {
         if (await isBackendRunning()) {
-            console.log('✅ Backend está disponible');
+            console.log('Backend esta disponible');
             return true;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log('⏳ Esperando al backend...');
+        console.log('Esperando al backend...');
     }
 
     return false;
@@ -139,17 +139,17 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
 
 // Iniciar el proceso del backend
 async function startBackend() {
-    console.log('🔍 Verificando si el backend ya está iniciado...');
+    console.log('Verificando si el backend ya está iniciado...');
     if (backendProcess) {
-        console.log('⚠️ El backend ya está iniciado');
+        console.log('El backend ya está iniciado');
         return true;
     }
 
-    console.log('🚀 Iniciando backend de Alfred...');
+    console.log('Iniciando backend de Alfred...');
 
     // Verificar que el directorio existe
     if (!fs.existsSync(BACKEND_CONFIG.path)) {
-        console.error('❌ No se encontró el directorio del backend:', BACKEND_CONFIG.path);
+        console.error('No se encontró el directorio del backend:', BACKEND_CONFIG.path);
         notifyUser('error', 'No se encontró el directorio del backend de Alfred');
         return false;
     }
@@ -157,7 +157,7 @@ async function startBackend() {
     // Verificar que el script existe
     const scriptPath = path.join(BACKEND_CONFIG.path, BACKEND_CONFIG.script);
     if (!fs.existsSync(scriptPath)) {
-        console.error('❌ No se encontró el script del backend:', scriptPath);
+        console.error('No se encontró el script del backend:', scriptPath);
         notifyUser('error', 'No se encontró alfred_backend.py');
         return false;
     }
@@ -195,7 +195,7 @@ async function startBackend() {
 
         // Manejar errores del proceso
         backendProcess.on('error', (error) => {
-            console.error('❌ Error al iniciar el backend:', error);
+            console.error('Error al iniciar el backend:', error);
             backendProcess = null;
             isBackendStartedByElectron = false;
             notifyUser('error', `Error al iniciar el backend: ${error.message}`);
@@ -206,18 +206,18 @@ async function startBackend() {
         const isReady = await waitForBackend();
 
         if (isReady) {
-            console.log('✅ Backend iniciado correctamente');
+            console.log('Backend iniciado correctamente');
 
             // Verificar y mostrar estado de GPU
             try {
                 const gpuStatus = await makeRequest('http://127.0.0.1:8000/gpu/status');
                 if (gpuStatus.success && gpuStatus.data) {
                     console.log('\n' + '='.repeat(60));
-                    console.log('🎮 ESTADO DE GPU');
+                    console.log('ESTADO DE GPU');
                     console.log('='.repeat(60));
 
                     if (gpuStatus.data.gpu_available) {
-                        console.log('🟢 GPU DETECTADA Y ACTIVA');
+                        console.log('---GPU DETECTADA Y ACTIVA');
                         console.log(`   Tipo: ${gpuStatus.data.device_type}`);
                         console.log(`   Dispositivo: ${gpuStatus.data.device}`);
 
@@ -235,9 +235,9 @@ async function startBackend() {
                         }
                         notifyUser('success', `Servidor iniciado con GPU ${gpuStatus.data.device_type}`);
                     } else {
-                        console.log('🟡 MODO CPU ACTIVO');
+                        console.log('---MODO CPU ACTIVO');
                         console.log(`   Dispositivo: ${gpuStatus.data.device_type}`);
-                        console.log('   ℹ️  No se detectó GPU dedicada');
+                        console.log('   ---No se detectó GPU dedicada');
                         notifyUser('success', 'Servidor iniciado en modo CPU');
                     }
                     console.log('='.repeat(60) + '\n');
@@ -245,20 +245,20 @@ async function startBackend() {
                     notifyUser('success', 'Servidor de Alfred iniciado correctamente');
                 }
             } catch (error) {
-                console.log('⚠️  No se pudo obtener el estado de GPU:', error.message);
+                console.log('No se pudo obtener el estado de GPU:', error.message);
                 notifyUser('success', 'Servidor de Alfred iniciado correctamente');
             }
 
             return true;
         } else {
-            console.error('❌ El backend no respondió a tiempo');
+            console.error('El backend no respondio a tiempo');
             stopBackend();
             notifyUser('error', 'El servidor no respondió. Verifica los logs.');
             return false;
         }
 
     } catch (error) {
-        console.error('❌ Error al iniciar el backend:', error);
+        console.error('Error al iniciar el backend:', error);
         notifyUser('error', `Error al iniciar el backend: ${error.message}`);
         return false;
     }
@@ -267,7 +267,7 @@ async function startBackend() {
 // Detener el proceso del backend
 function stopBackend() {
     if (backendProcess && isBackendStartedByElectron) {
-        console.log('🛑 Deteniendo backend...');
+        console.log('Deteniendo backend...');
 
         // Intentar detener gracefully
         backendProcess.kill('SIGTERM');
@@ -275,7 +275,7 @@ function stopBackend() {
         // Si no se detiene en 5 segundos, forzar
         setTimeout(() => {
             if (backendProcess) {
-                console.log('⚠️ Forzando detención del backend');
+                console.log('Forzando detención del backend');
                 backendProcess.kill('SIGKILL');
             }
         }, 5000);
@@ -289,24 +289,24 @@ function stopBackend() {
 async function checkAndStartBackend() {
     // Evitar chequeos simultáneos
     if (isCheckingBackend) {
-        console.log('⏳ Ya hay un chequeo en progreso...');
+        console.log('Ya hay un chequeo en progreso...');
         return;
     }
 
     isCheckingBackend = true;
 
     try {
-        console.log('🔍 Verificando estado del backend...');
+        console.log('Verificando estado del backend...');
 
         const isRunning = await isBackendRunning();
 
         if (isRunning) {
-            console.log('✅ El backend ya está corriendo');
+            console.log('El backend ya está corriendo');
             notifyUser('success', 'Conectado al servidor de Alfred');
             return true;
         }
 
-        console.log('⚠️ El backend no está corriendo. Intentando iniciar...');
+        console.log('El backend no esta corriendo. Intentando iniciar...');
         return await startBackend();
     } finally {
         isCheckingBackend = false;
@@ -411,8 +411,8 @@ ipcMain.handle('send-query', async (event, question, searchDocuments = true) => 
             const gpuStatus = await makeRequest('http://127.0.0.1:8000/gpu/status');
             if (gpuStatus.success && gpuStatus.data) {
                 const gpuType = gpuStatus.data.gpu_available
-                    ? `🎮 ${gpuStatus.data.device_type}`
-                    : '💻 CPU';
+                    ? `${gpuStatus.data.device_type}`
+                    : 'CPU';
                 console.log(`[MAIN] Procesando con: ${gpuType}`);
             }
         } catch (gpuError) {
@@ -596,7 +596,7 @@ ipcMain.handle('select-profile-picture', async () => {
         const dataUrl = `data:${mimeType};base64,${base64Image}`;
 
         console.log('[MAIN] Imagen convertida a Base64, tamaño:', dataUrl.length, 'caracteres');
-        console.log('[MAIN] ✅ Imagen procesada correctamente');
+        console.log('[MAIN] Imagen procesada correctamente');
 
         return { success: true, data: dataUrl };
     } catch (error) {
