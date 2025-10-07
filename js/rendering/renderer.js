@@ -1,6 +1,9 @@
 // renderer.js - Lógica del cliente para la interfaz
 
 let conversationHistory = [];
+let currentConversationId = null; // ID de la conversacion activa
+let conversations = []; // Lista de conversaciones
+
 let settings = {
     serverUrl: 'http://127.0.0.1:8000',
     autoSave: true,
@@ -76,6 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
     await loadCurrentModel();
     loadProfilePicture();
+    await loadConversations(); // Cargar conversaciones al inicio
 
     // Auto-ajustar altura del textarea
     messageInput.addEventListener('input', () => {
@@ -115,6 +119,12 @@ function setupEventListeners() {
     statsBtn.addEventListener('click', showStats);
     settingsBtn.addEventListener('click', () => settingsModal.classList.remove('none'));
     closeSidebar.addEventListener('click', () => sidebar.classList.add('none'));
+
+    // Event listener para conversaciones
+    const conversationsBtn = document.getElementById('conversationsBtn');
+    if (conversationsBtn) {
+        conversationsBtn.addEventListener('click', showConversations);
+    }
 
     closeSettings.addEventListener('click', () => settingsModal.classList.add('none'));
     cancelSettings.addEventListener('click', () => settingsModal.classList.add('none'));
@@ -174,6 +184,11 @@ async function sendMessage() {
         welcomeMsg.remove();
     }
 
+    // Crear conversacion si no existe
+    if (!currentConversationId) {
+        await createNewConversation();
+    }
+
     // Agregar mensaje del usuario
     addMessage(message, 'user');
     conversationHistory.push({ role: 'user', content: message });
@@ -188,11 +203,11 @@ async function sendMessage() {
     scrollToBottom();
 
     try {
-        // Enviar consulta a Alfred con el modo de búsqueda seleccionado
+        // Enviar consulta a Alfred con el modo de búsqueda seleccionado y el ID de conversacion
         const searchDocuments = searchMode === 'documents';
-        console.log('📤 Enviando consulta:', { message, searchDocuments });
+        console.log('📤 Enviando consulta:', { message, searchDocuments, conversationId: currentConversationId });
 
-        const result = await window.alfredAPI.sendQuery(message, searchDocuments);
+        const result = await window.alfredAPI.sendQueryWithConversation(message, currentConversationId, searchDocuments);
 
         console.log('📥 Respuesta recibida:', result);
 
@@ -211,6 +226,9 @@ async function sendMessage() {
                 content: response.answer,
                 metadata: response
             });
+
+            // Actualizar lista de conversaciones
+            await loadConversations();
         } else {
             typingIndicator.style.display = 'none';
             const errorMsg = result.error || 'Error desconocido';
@@ -491,7 +509,7 @@ async function showHistory() {
         const result = await window.alfredAPI.getHistory(20);
 
         if (result.success) {
-            sidebarTitle.textContent = 'Historial de conversaciones';
+            sidebarTitle.textContent = 'Historial Preguntas rapidas';
             sidebarContent.innerHTML = '';
 
             if (result.data.length === 0) {
@@ -596,6 +614,27 @@ async function showStats(changeVisibility = true) {
         }
     } catch (error) {
         showNotification('Error al cargar las estadísticas', 'error');
+        console.error('Error:', error);
+    }
+}
+
+// Mostrar conversaciones
+async function showConversations() {
+    if (checkSidebar()) {
+        sidebar.classList.add('none');
+        return;
+    }
+
+    try {
+        await loadConversations();
+
+        sidebarTitle.textContent = 'Conversaciones';
+        sidebarContent.innerHTML = '<div id="conversationsList" class="conversations-list"></div>';
+
+        updateConversationsList();
+        sidebar.classList.remove('none');
+    } catch (error) {
+        showNotification('error', 'Error al cargar conversaciones');
         console.error('Error:', error);
     }
 }
@@ -1009,4 +1048,194 @@ function deleteProfilePicture(index) {
     
     showNotification('success', 'Foto eliminada del historial');
 }
+
+// ===============================================
+// FUNCIONES DE CONVERSACIONES
+// ===============================================
+
+// Crear una nueva conversacion
+async function createNewConversation(title = null) {
+    try {
+        const result = await window.alfredAPI.createConversation(title);
+        
+        if (result.success) {
+            currentConversationId = result.data.id;
+            conversationHistory = [];
+            
+            // Limpiar chat
+            messagesContainer.innerHTML = '';
+            const welcomeDiv = document.createElement('div');
+            welcomeDiv.className = 'welcome-message';
+            welcomeDiv.innerHTML = `
+                <h2>Hola! Soy Alfred</h2>
+                <p>Soy tu asistente personal inteligente. Puedo ayudarte con:</p>
+                <ul>
+                    <li>Buscar informacion en tus documentos</li>
+                    <li>Responder preguntas generales</li>
+                    <li>Recordar informacion de conversaciones anteriores</li>
+                </ul>
+                <p>Como puedo ayudarte hoy?</p>
+            `;
+            messagesContainer.appendChild(welcomeDiv);
+            
+            // Actualizar lista de conversaciones
+            await loadConversations();
+            
+            showNotification('success', 'Nueva conversacion creada');
+            return result.data;
+        } else {
+            showNotification('error', 'Error al crear conversacion');
+            console.error('Error al crear conversacion:', result.error);
+            return null;
+        }
+    } catch (error) {
+        showNotification('error', 'Error al crear conversacion');
+        console.error('Error al crear conversacion:', error);
+        return null;
+    }
+}
+
+// Cargar lista de conversaciones
+async function loadConversations() {
+    try {
+        const result = await window.alfredAPI.listConversations(50, 0);
+        
+        if (result.success) {
+            conversations = result.data;
+            updateConversationsList();
+        } else {
+            console.error('Error al cargar conversaciones:', result.error);
+        }
+    } catch (error) {
+        console.error('Error al cargar conversaciones:', error);
+    }
+}
+
+// Actualizar la lista de conversaciones en la UI
+function updateConversationsList() {
+    const conversationsList = document.getElementById('conversationsList');
+    if (!conversationsList) return;
+    
+    conversationsList.innerHTML = '';
+    
+    conversations.forEach(conv => {
+        const convDiv = document.createElement('div');
+        convDiv.className = 'conversation-item';
+        if (conv.id === currentConversationId) {
+            convDiv.classList.add('active');
+        }
+        
+        convDiv.innerHTML = `
+            <div class="conversation-info">
+                <div class="conversation-title">${conv.title}</div>
+                <div class="conversation-meta">
+                    <span class="message-count">${conv.message_count} mensajes</span>
+                    <span class="conversation-date">${formatDate(conv.updated_at)}</span>
+                </div>
+            </div>
+            <div class="conversation-actions">
+                <button class="icon-btn" onclick="loadConversation('${conv.id}')" title="Cargar">📂</button>
+                <button class="icon-btn" onclick="deleteConversationById('${conv.id}')" title="Eliminar">🗑️</button>
+            </div>
+        `;
+        
+        conversationsList.appendChild(convDiv);
+    });
+}
+
+// Cargar una conversacion especifica
+async function loadConversation(conversationId) {
+    try {
+        const result = await window.alfredAPI.getConversation(conversationId);
+        
+        if (result.success) {
+            currentConversationId = conversationId;
+            conversationHistory = result.data.messages.map(msg => ({
+                role: msg.role,
+                content: msg.content,
+                metadata: msg.metadata
+            }));
+            
+            // Limpiar y recargar mensajes
+            messagesContainer.innerHTML = '';
+            
+            result.data.messages.forEach(msg => {
+                addMessage(msg.content, msg.role, msg.metadata);
+            });
+            
+            scrollToBottom();
+            updateConversationsList();
+            
+            showNotification('success', 'Conversacion cargada');
+        } else {
+            showNotification('error', 'Error al cargar conversacion');
+            console.error('Error al cargar conversacion:', result.error);
+        }
+    } catch (error) {
+        showNotification('error', 'Error al cargar conversacion');
+        console.error('Error al cargar conversacion:', error);
+    }
+}
+
+// Eliminar una conversacion
+async function deleteConversationById(conversationId) {
+    if (!confirm('Estas seguro de que deseas eliminar esta conversacion?')) {
+        return;
+    }
+    
+    try {
+        const result = await window.alfredAPI.deleteConversation(conversationId);
+        
+        if (result.success) {
+            // Si es la conversacion actual, resetear
+            if (conversationId === currentConversationId) {
+                currentConversationId = null;
+                conversationHistory = [];
+                messagesContainer.innerHTML = '';
+                
+                const welcomeDiv = document.createElement('div');
+                welcomeDiv.className = 'welcome-message';
+                welcomeDiv.innerHTML = `
+                    <h2>Hola! Soy Alfred</h2>
+                    <p>Conversacion eliminada. Puedes crear una nueva o cargar una existente.</p>
+                `;
+                messagesContainer.appendChild(welcomeDiv);
+            }
+            
+            // Actualizar lista
+            await loadConversations();
+            
+            showNotification('success', 'Conversacion eliminada');
+        } else {
+            showNotification('error', 'Error al eliminar conversacion');
+            console.error('Error al eliminar conversacion:', result.error);
+        }
+    } catch (error) {
+        showNotification('error', 'Error al eliminar conversacion');
+        console.error('Error al eliminar conversacion:', error);
+    }
+}
+
+// Formatear fecha para mostrar
+function formatDate(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Ahora';
+    if (diffMins < 60) return `Hace ${diffMins}m`;
+    if (diffHours < 24) return `Hace ${diffHours}h`;
+    if (diffDays < 7) return `Hace ${diffDays}d`;
+    
+    return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+}
+
+// Exponer funciones globalmente para los botones HTML
+window.loadConversation = loadConversation;
+window.deleteConversationById = deleteConversationById;
+window.createNewConversation = createNewConversation;
+
 

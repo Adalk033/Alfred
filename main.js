@@ -184,7 +184,7 @@ async function startBackend() {
 
         // Manejar cierre del proceso
         backendProcess.on('close', (code) => {
-            console.log(`[Backend] Proceso terminado con código ${code}`);
+            console.log(`[Backend] Proceso terminado con codigo ${code}`);
             backendProcess = null;
             isBackendStartedByElectron = false;
 
@@ -253,7 +253,7 @@ async function startBackend() {
         } else {
             console.error('El backend no respondio a tiempo');
             stopBackend();
-            notifyUser('error', 'El servidor no respondió. Verifica los logs.');
+            notifyUser('error', 'El servidor no respondio. Verifica los logs.');
             return false;
         }
 
@@ -601,6 +601,126 @@ ipcMain.handle('select-profile-picture', async () => {
         return { success: true, data: dataUrl };
     } catch (error) {
         console.error('[MAIN] Error al seleccionar foto de perfil:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// --- IPC Handlers para Conversaciones ---
+
+ipcMain.handle('create-conversation', async (event, title) => {
+    try {
+        const result = await makeRequest('http://127.0.0.1:8000/conversations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title: title || null })
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('list-conversations', async (event, limit, offset) => {
+    try {
+        const params = new URLSearchParams();
+        if (limit) params.append('limit', limit);
+        if (offset) params.append('offset', offset);
+        
+        const url = `http://127.0.0.1:8000/conversations${params.toString() ? '?' + params.toString() : ''}`;
+        const result = await makeRequest(url);
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('get-conversation', async (event, conversationId) => {
+    try {
+        const result = await makeRequest(`http://127.0.0.1:8000/conversations/${conversationId}`);
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('delete-conversation', async (event, conversationId) => {
+    try {
+        const result = await makeRequest(`http://127.0.0.1:8000/conversations/${conversationId}`, {
+            method: 'DELETE'
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('update-conversation-title', async (event, conversationId, newTitle) => {
+    try {
+        const result = await makeRequest(`http://127.0.0.1:8000/conversations/${conversationId}/title`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title: newTitle })
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('clear-conversation', async (event, conversationId) => {
+    try {
+        const result = await makeRequest(`http://127.0.0.1:8000/conversations/${conversationId}/messages`, {
+            method: 'DELETE'
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('search-conversations', async (event, query) => {
+    try {
+        const result = await makeRequest(`http://127.0.0.1:8000/conversations/search/${encodeURIComponent(query)}`);
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('send-query-with-conversation', async (event, question, conversationId, searchDocuments = true) => {
+    try {
+        console.log('[MAIN] Enviando consulta con conversacion:', { question, conversationId, searchDocuments });
+
+        const result = await makeRequest('http://127.0.0.1:8000/query/conversation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                question: question,
+                conversation_id: conversationId || null,
+                use_history: true,
+                save_response: false,
+                search_documents: searchDocuments,
+                max_context_messages: 10
+            })
+        });
+
+        console.log('[MAIN] Respuesta del backend recibida');
+
+        if (result.statusCode >= 400) {
+            const errorDetail = result.data?.detail || result.data?.message || 'Error del servidor';
+            console.error('[MAIN] Error del servidor:', errorDetail);
+            return { success: false, error: errorDetail };
+        }
+
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error en send-query-with-conversation:', error);
         return { success: false, error: error.message };
     }
 });

@@ -14,6 +14,16 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   stopOllama: () => ipcRenderer.invoke('stop-ollama'),
   selectProfilePicture: () => ipcRenderer.invoke('select-profile-picture'),
   
+  // API de Conversaciones
+  createConversation: (title) => ipcRenderer.invoke('create-conversation', title),
+  listConversations: (limit, offset) => ipcRenderer.invoke('list-conversations', limit, offset),
+  getConversation: (conversationId) => ipcRenderer.invoke('get-conversation', conversationId),
+  deleteConversation: (conversationId) => ipcRenderer.invoke('delete-conversation', conversationId),
+  updateConversationTitle: (conversationId, newTitle) => ipcRenderer.invoke('update-conversation-title', conversationId, newTitle),
+  clearConversation: (conversationId) => ipcRenderer.invoke('clear-conversation', conversationId),
+  searchConversations: (query) => ipcRenderer.invoke('search-conversations', query),
+  sendQueryWithConversation: (question, conversationId, searchDocuments) => ipcRenderer.invoke('send-query-with-conversation', question, conversationId, searchDocuments),
+  
   // Escuchar notificaciones del backend
   onBackendNotification: (callback) => {
     ipcRenderer.on('backend-notification', (event, data) => callback(data));
