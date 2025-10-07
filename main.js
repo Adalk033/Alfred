@@ -207,7 +207,48 @@ async function startBackend() {
 
         if (isReady) {
             console.log('✅ Backend iniciado correctamente');
-            notifyUser('success', 'Servidor de Alfred iniciado correctamente');
+
+            // Verificar y mostrar estado de GPU
+            try {
+                const gpuStatus = await makeRequest('http://127.0.0.1:8000/gpu/status');
+                if (gpuStatus.success && gpuStatus.data) {
+                    console.log('\n' + '='.repeat(60));
+                    console.log('🎮 ESTADO DE GPU');
+                    console.log('='.repeat(60));
+
+                    if (gpuStatus.data.gpu_available) {
+                        console.log('🟢 GPU DETECTADA Y ACTIVA');
+                        console.log(`   Tipo: ${gpuStatus.data.device_type}`);
+                        console.log(`   Dispositivo: ${gpuStatus.data.device}`);
+
+                        if (gpuStatus.data.gpu_info) {
+                            const info = gpuStatus.data.gpu_info;
+                            if (info.device_name) {
+                                console.log(`   Nombre: ${info.device_name}`);
+                            }
+                            if (info.memory_total) {
+                                console.log(`   Memoria: ${info.memory_total.toFixed(2)} GB`);
+                            }
+                            if (info.cuda_version) {
+                                console.log(`   CUDA: ${info.cuda_version}`);
+                            }
+                        }
+                        notifyUser('success', `Servidor iniciado con GPU ${gpuStatus.data.device_type}`);
+                    } else {
+                        console.log('🟡 MODO CPU ACTIVO');
+                        console.log(`   Dispositivo: ${gpuStatus.data.device_type}`);
+                        console.log('   ℹ️  No se detectó GPU dedicada');
+                        notifyUser('success', 'Servidor iniciado en modo CPU');
+                    }
+                    console.log('='.repeat(60) + '\n');
+                } else {
+                    notifyUser('success', 'Servidor de Alfred iniciado correctamente');
+                }
+            } catch (error) {
+                console.log('⚠️  No se pudo obtener el estado de GPU:', error.message);
+                notifyUser('success', 'Servidor de Alfred iniciado correctamente');
+            }
+
             return true;
         } else {
             console.error('❌ El backend no respondió a tiempo');
@@ -251,9 +292,9 @@ async function checkAndStartBackend() {
         console.log('⏳ Ya hay un chequeo en progreso...');
         return;
     }
-    
+
     isCheckingBackend = true;
-    
+
     try {
         console.log('🔍 Verificando estado del backend...');
 
@@ -364,7 +405,20 @@ ipcMain.handle('get-stats', async () => {
 ipcMain.handle('send-query', async (event, question, searchDocuments = true) => {
     try {
         console.log('[MAIN] Enviando consulta al backend:', { question, searchDocuments });
-        
+
+        // Consultar estado de GPU
+        try {
+            const gpuStatus = await makeRequest('http://127.0.0.1:8000/gpu/status');
+            if (gpuStatus.success && gpuStatus.data) {
+                const gpuType = gpuStatus.data.gpu_available
+                    ? `🎮 ${gpuStatus.data.device_type}`
+                    : '💻 CPU';
+                console.log(`[MAIN] Procesando con: ${gpuType}`);
+            }
+        } catch (gpuError) {
+            console.log('[MAIN] No se pudo obtener estado de GPU');
+        }
+
         const result = await makeRequest('http://127.0.0.1:8000/query', {
             method: 'POST',
             headers: {
@@ -384,8 +438,8 @@ ipcMain.handle('send-query', async (event, question, searchDocuments = true) => 
             })
         });
 
-        console.log('[MAIN] Respuesta del backend:', result);
-        
+        console.log('[MAIN] Respuesta del backend recibida');
+
         // Si el backend devuelve un error 500, result.data puede contener el detalle
         if (result.statusCode >= 400) {
             const errorDetail = result.data?.detail || result.data?.message || 'Error del servidor';
@@ -482,7 +536,7 @@ ipcMain.handle('stop-ollama', async () => {
 ipcMain.handle('select-profile-picture', async () => {
     try {
         console.log('[MAIN] Abriendo selector de foto de perfil...');
-        
+
         const result = await dialog.showOpenDialog(mainWindow, {
             title: 'Seleccionar foto de perfil',
             properties: ['openFile'],
@@ -503,26 +557,26 @@ ipcMain.handle('select-profile-picture', async () => {
         const stats = fs.statSync(filePath);
         const fileSizeInBytes = stats.size;
         const fileSizeInMB = fileSizeInBytes / (1024 * 1024);
-        
+
         console.log('[MAIN] Tamaño del archivo:', fileSizeInMB.toFixed(2), 'MB');
-        
+
         // Rechazar archivos muy grandes (más de 2MB)
         if (fileSizeInMB > 2) {
             console.log('[MAIN] Archivo demasiado grande');
-            return { 
-                success: false, 
-                error: `La imagen es demasiado grande (${fileSizeInMB.toFixed(2)} MB). Por favor, usa una imagen menor a 2MB.` 
+            return {
+                success: false,
+                error: `La imagen es demasiado grande (${fileSizeInMB.toFixed(2)} MB). Por favor, usa una imagen menor a 2MB.`
             };
         }
 
         // Leer el archivo y convertirlo a Base64
         const imageBuffer = fs.readFileSync(filePath);
         const base64Image = imageBuffer.toString('base64');
-        
+
         // Detectar el tipo MIME basado en la extensión
         const ext = path.extname(filePath).toLowerCase();
         let mimeType = 'image/jpeg';
-        
+
         switch (ext) {
             case '.png':
                 mimeType = 'image/png';
@@ -540,10 +594,10 @@ ipcMain.handle('select-profile-picture', async () => {
         }
 
         const dataUrl = `data:${mimeType};base64,${base64Image}`;
-        
+
         console.log('[MAIN] Imagen convertida a Base64, tamaño:', dataUrl.length, 'caracteres');
         console.log('[MAIN] ✅ Imagen procesada correctamente');
-        
+
         return { success: true, data: dataUrl };
     } catch (error) {
         console.error('[MAIN] Error al seleccionar foto de perfil:', error);
