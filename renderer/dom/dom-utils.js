@@ -2,8 +2,8 @@
 // UTILIDADES DOM Y UI
 // ===============================================
 
-import { messagesContainer } from './state.js';
-import { showNotification } from './notifications.js';
+import { messagesContainer } from '../state/state.js';
+import { showNotification } from '../core/notifications.js';
 
 // Scroll al final del contenedor de mensajes
 export function scrollToBottom() {
@@ -40,7 +40,7 @@ export function markdownToHtml(text) {
 }
 
 // Escapar HTML para prevenir XSS
-function escapeHtml(text) {
+export function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;

@@ -1,10 +1,10 @@
-@import './css/support.css';
-@import './css/bottom.css';
-@import './css/messages.css';
-@import './css/notifications.css';
-@import './css/profile.css';
-@import './css/topbar.css';
-@import './css/sidebar.css';
+@import './components/support.css';
+@import './components/bottom.css';
+@import './components/messages.css';
+@import './components/notifications.css';
+@import './components/profile.css';
+@import './components/topbar.css';
+@import './components/sidebar.css';
 
 /* styles.css - Estilos modernos para Alfred Electron */
 :root {

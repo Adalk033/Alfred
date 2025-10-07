@@ -1,7 +1,7 @@
-import { showNotification } from '../notifications.js';
-import { addMessage, scrollToBottom, markdownToHtml, updateStatus } from '../dom-utils.js';
-import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory } from '../conversations.js';
-import * as State from '../state.js';
+import { showNotification } from './core/notifications.js';
+import { addMessage, scrollToBottom, markdownToHtml, updateStatus } from './dom/dom-utils.js';
+import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory } from './core/conversations.js';
+import * as State from './state/state.js';
 
 // Escuchar notificaciones del backend
 window.alfredAPI.onBackendNotification((data) => {

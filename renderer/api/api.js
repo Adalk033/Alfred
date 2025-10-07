@@ -1,9 +1,9 @@
 // api.js - Modulo para comunicacion con el backend
 
-import { getSettings, getCurrentConversationId, addToConversationHistory } from './state.js';
+import { getSettings, getCurrentConversationId, addToConversationHistory } from '../state/state.js';
 import { addMessage, addMessageWithTyping, showTypingIndicator, hideTypingIndicator, clearMessages } from './messages.js';
 import { showNotification, updateStatus, disableInput, clearInput, showSidebar, checkSidebar, hideSidebar } from './ui.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml } from '../dom/dom-utils.js';
 
 // Verificar estado del servidor
 export async function checkServerStatus() {

@@ -1,6 +1,6 @@
 import { showNotification } from './notifications.js';
-import { addMessage, scrollToBottom, formatDate } from './dom-utils.js';
-import * as State from './state.js';
+import { addMessage, scrollToBottom, formatDate } from '../dom/dom-utils.js';
+import * as State from '../state/state.js';
 
 // ===============================================
 // FUNCIONES DE CONVERSACIONES
