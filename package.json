@@ -41,8 +41,8 @@
     },
     "files": [
       "main.js",
-      "renderer.js",
-      "index.html",
+      "js/**/*",
+      "renderer/index.html",
       "styles.css",
       "assets/**/*"
     ]

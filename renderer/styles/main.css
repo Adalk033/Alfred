@@ -1,5 +1,12 @@
-/* styles.css - Estilos modernos para Alfred Electron */
+@import './css/support.css';
+@import './css/bottom.css';
+@import './css/messages.css';
+@import './css/notifications.css';
+@import './css/profile.css';
+@import './css/topbar.css';
+@import './css/sidebar.css';
 
+/* styles.css - Estilos modernos para Alfred Electron */
 :root {
     --primary-color: #4a9eff;
     --primary-hover: #3a8eef;
@@ -26,7 +33,7 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background-color: var(--bg-primary);
     color: var(--text-primary);
     height: 100vh;
@@ -87,6 +94,8 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
+    /* Importante para flexbox */
 }
 
 

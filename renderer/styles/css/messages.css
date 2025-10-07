@@ -1,12 +1,14 @@
 
 /* Área de mensajes */
 .messages {
-    flex: 1;
+    flex: 1 1 auto;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0; /* Crucial para flexbox */
 }
 
 .messages::-webkit-scrollbar {

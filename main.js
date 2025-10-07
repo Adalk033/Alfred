@@ -40,7 +40,7 @@ function createWindow() {
         titleBarStyle: 'default'
     });
 
-    mainWindow.loadFile('index.html');
+    mainWindow.loadFile('./renderer/index.html');
 
     // Mostrar cuando esté listo
     mainWindow.once('ready-to-show', () => {
@@ -139,9 +139,9 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
 
 // Iniciar el proceso del backend
 async function startBackend() {
-    console.log('Verificando si el backend ya está iniciado...');
+    console.log('Verificando si el backend ya esta iniciado...');
     if (backendProcess) {
-        console.log('El backend ya está iniciado');
+        console.log('El backend ya esta iniciado');
         return true;
     }
 
@@ -301,7 +301,7 @@ async function checkAndStartBackend() {
         const isRunning = await isBackendRunning();
 
         if (isRunning) {
-            console.log('El backend ya está corriendo');
+            console.log('El backend ya esta corriendo');
             notifyUser('success', 'Conectado al servidor de Alfred');
             return true;
         }

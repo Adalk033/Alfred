@@ -5,14 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alfred - Asistente Personal</title>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/support.css">
-    <link rel="stylesheet" href="css/top.css">
-    <link rel="stylesheet" href="css/bottom.css">
-    <link rel="stylesheet" href="css/sidebar.css">
-    <link rel="stylesheet" href="css/messages.css">
-    <link rel="stylesheet" href="css/notifications.css">
-    <link rel="stylesheet" href="css/profile.css">
+    <link rel="stylesheet" href="./styles/main.css">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
 </head>
 
 <body>
@@ -75,7 +69,7 @@
                 </svg>
             </button>
             <button class="icon-button" id="settingsBtn" title="Configuración">
-                <img src="./assets/cogwheel.png" alt="" width="20" height="20">
+                <img src="../assets/cogwheel.png" alt="" width="20" height="20">
             </button>
         </div>
     </div>
@@ -103,7 +97,7 @@
 
             <!-- Input de mensaje -->
             <div class="input-container">
-                <textarea id="messageInput" placeholder="Escribe tu mensaje aquí..." rows="1"></textarea>
+                <textarea id="messageInput" placeholder="Escribe tu mensaje aquí..." rows="1" autocomplete="off"></textarea>
                 <div class="input-actions">
                     <button id="searchDocsBtn" class="mode-toggle-btn" title="Buscar en documentos">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -220,8 +214,8 @@
         </div>
     </div>
 
-    <!-- <script src="renderer.js"></script> -->
-    <script src="./js/rendering/renderer.js"></script>
+    <!-- Scripts modulares -->
+    <script type="module" src="../js/rendering/renderer.js"></script>
 </body>
 
 </html>

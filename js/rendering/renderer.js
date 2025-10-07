@@ -1,92 +1,7 @@
-// renderer.js - Lógica del cliente para la interfaz
-
-// Funcion para convertir Markdown basico a HTML
-function markdownToHtml(text) {
-    if (!text) return '';
-    
-    let html = text;
-    
-    // Escapar HTML existente para seguridad
-    html = html.replace(/&/g, '&amp;')
-               .replace(/</g, '&lt;')
-               .replace(/>/g, '&gt;');
-    
-    // Separar en lineas para procesar listas
-    let lines = html.split('\n');
-    let inList = false;
-    let processedLines = [];
-    
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-        let trimmed = line.trim();
-        
-        // Detectar items de lista
-        if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
-            if (!inList) {
-                processedLines.push('<ul>');
-                inList = true;
-            }
-            let content = trimmed.substring(2);
-            processedLines.push('<li>' + content + '</li>');
-        } else {
-            if (inList) {
-                processedLines.push('</ul>');
-                inList = false;
-            }
-            processedLines.push(line);
-        }
-    }
-    
-    // Cerrar lista si quedo abierta
-    if (inList) {
-        processedLines.push('</ul>');
-    }
-    
-    html = processedLines.join('\n');
-    
-    // Encabezados (###, ##, #)
-    html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-    html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-    
-    // Negrita (**texto** o __texto__)
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-    
-    // Cursiva (*texto* o _texto_) - cuidado con no afectar los * de listas
-    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-    html = html.replace(/_([^_\n]+)_/g, '<em>$1</em>');
-    
-    // Codigo en linea (`codigo`)
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    
-    // Bloques de codigo (```codigo```)
-    html = html.replace(/```([^`]+)```/gs, '<pre><code>$1</code></pre>');
-    
-    // Enlaces [texto](url)
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    
-    // Saltos de linea simples
-    html = html.replace(/\n/g, '<br>');
-    
-    return html;
-}
-
-let conversationHistory = [];
-let currentConversationId = null; // ID de la conversacion activa
-let conversations = []; // Lista de conversaciones
-
-let settings = {
-    serverUrl: 'http://127.0.0.1:8000',
-    autoSave: true,
-    useHistory: true,
-    soundEnabled: false,
-    profilePicture: null, // URL de la foto de perfil actual
-    profilePictureHistory: [] // Array de fotos anteriores
-};
-
-// Estado del modo de búsqueda
-let searchMode = 'prompt'; // 'documents' o 'prompt'
+import { showNotification } from '../notifications.js';
+import { addMessage, scrollToBottom, markdownToHtml, updateStatus } from '../dom-utils.js';
+import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory } from '../conversations.js';
+import * as State from '../state.js';
 
 // Escuchar notificaciones del backend
 window.alfredAPI.onBackendNotification((data) => {
@@ -109,43 +24,62 @@ window.alfredAPI.onBackendStatus((data) => {
     updateConnectionStatus(status === 'connected');
 });
 
-// Elementos del DOM
-const messagesContainer = document.getElementById('messages');
-const messageInput = document.getElementById('messageInput');
-const sendBtn = document.getElementById('sendBtn');
-const typingIndicator = document.getElementById('typingIndicator');
-const statusElement = document.getElementById('status');
-const sidebar = document.getElementById('sidebar');
-const sidebarTitle = document.getElementById('sidebarTitle');
-const sidebarContent = document.getElementById('sidebarContent');
+// Elementos del DOM (locales a renderer.js)
+let historyBtn;
+let statsBtn;
+let settingsBtn;
+let closeSidebar;
 
-// Botones
-const historyBtn = document.getElementById('historyBtn');
-const statsBtn = document.getElementById('statsBtn');
-const settingsBtn = document.getElementById('settingsBtn');
-const closeSidebar = document.getElementById('closeSidebar');
-
-// Botones de modo de búsqueda
-const searchDocsBtn = document.getElementById('searchDocsBtn');
-const promptOnlyBtn = document.getElementById('promptOnlyBtn');
+// Botones de modo de busqueda
+let searchDocsBtn;
+let promptOnlyBtn;
 
 // Selector de modelo
-const modelSelect = document.getElementById('modelSelect');
+let modelSelect;
 
-// Modal de configuración
-const settingsModal = document.getElementById('settingsModal');
-const closeSettings = document.getElementById('closeSettings');
-const cancelSettings = document.getElementById('cancelSettings');
-const saveSettings = document.getElementById('saveSettings');
+// Modal de configuracion
+let settingsModal;
+let closeSettings;
+let cancelSettings;
+let saveSettings;
 
 // Elementos de foto de perfil
-const changeProfilePictureBtn = document.getElementById('changeProfilePictureBtn');
-const currentProfilePicture = document.getElementById('currentProfilePicture');
-const profileHistoryGallery = document.getElementById('profileHistoryGallery');
-const profileHistoryCount = document.getElementById('profileHistoryCount');
+let changeProfilePictureBtn;
+let currentProfilePicture;
+let profileHistoryGallery;
+let profileHistoryCount;
 
-// Inicialización
+// Inicializacion
 document.addEventListener('DOMContentLoaded', async () => {
+    // Inicializar elementos del DOM en State
+    State.setDOMElements({
+        messagesContainer: document.getElementById('messages'),
+        messageInput: document.getElementById('messageInput'),
+        sendBtn: document.getElementById('sendBtn'),
+        typingIndicator: document.getElementById('typingIndicator'),
+        statusElement: document.getElementById('status'),
+        sidebar: document.getElementById('sidebar'),
+        sidebarTitle: document.getElementById('sidebarTitle'),
+        sidebarContent: document.getElementById('sidebarContent')
+    });
+
+    // Inicializar elementos locales
+    historyBtn = document.getElementById('historyBtn');
+    statsBtn = document.getElementById('statsBtn');
+    settingsBtn = document.getElementById('settingsBtn');
+    closeSidebar = document.getElementById('closeSidebar');
+    searchDocsBtn = document.getElementById('searchDocsBtn');
+    promptOnlyBtn = document.getElementById('promptOnlyBtn');
+    modelSelect = document.getElementById('modelSelect');
+    settingsModal = document.getElementById('settingsModal');
+    closeSettings = document.getElementById('closeSettings');
+    cancelSettings = document.getElementById('cancelSettings');
+    saveSettings = document.getElementById('saveSettings');
+    changeProfilePictureBtn = document.getElementById('changeProfilePictureBtn');
+    currentProfilePicture = document.getElementById('currentProfilePicture');
+    profileHistoryGallery = document.getElementById('profileHistoryGallery');
+    profileHistoryCount = document.getElementById('profileHistoryCount');
+
     await checkServerStatus();
     setupEventListeners();
     loadSettings();
@@ -154,35 +88,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadConversations(); // Cargar conversaciones al inicio
 
     // Auto-ajustar altura del textarea
-    messageInput.addEventListener('input', () => {
-        messageInput.style.height = 'auto';
-        messageInput.style.height = messageInput.scrollHeight + 'px';
+    State.messageInput.addEventListener('input', () => {
+        State.messageInput.style.height = 'auto';
+        State.messageInput.style.height = State.messageInput.scrollHeight + 'px';
     });
 });
 
 // Configurar event listeners
 function setupEventListeners() {
-    sendBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keydown', (e) => {
+    State.sendBtn.addEventListener('click', sendMessage);
+    State.messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
 
-    messageInput.addEventListener('input', () => {
-        sendBtn.disabled = !messageInput.value.trim();
+    State.messageInput.addEventListener('input', () => {
+        State.sendBtn.disabled = !State.messageInput.value.trim();
     });
 
     // Event listeners para botones de modo
     searchDocsBtn.addEventListener('click', () => {
-        searchMode = 'documents';
+        State.setSearchMode('documents');
         searchDocsBtn.classList.add('active');
         promptOnlyBtn.classList.remove('active');
     });
 
     promptOnlyBtn.addEventListener('click', () => {
-        searchMode = 'prompt';
+        State.setSearchMode('prompt');
         promptOnlyBtn.classList.add('active');
         searchDocsBtn.classList.remove('active');
     });
@@ -190,7 +124,7 @@ function setupEventListeners() {
     historyBtn.addEventListener('click', showHistory);
     statsBtn.addEventListener('click', showStats);
     settingsBtn.addEventListener('click', () => settingsModal.classList.remove('none'));
-    closeSidebar.addEventListener('click', () => sidebar.classList.add('none'));
+    closeSidebar.addEventListener('click', () => State.sidebar.classList.add('none'));
 
     // Event listener para conversaciones
     const conversationsBtn = document.getElementById('conversationsBtn');
@@ -215,22 +149,16 @@ async function checkServerStatus() {
         const result = await window.alfredAPI.checkServer();
 
         if (result.success) {
-            updateStatus('connected', 'Conectado');
+            updateStatus('connected', 'Conectado', State.statusElement);
             await loadInitialStats();
         } else {
-            updateStatus('error', 'Desconectado');
+            updateStatus('error', 'Desconectado', State.statusElement);
             showNotification('No se pudo conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.', 'error');
         }
     } catch (error) {
-        updateStatus('error', 'Error de conexión');
+        updateStatus('error', 'Error de conexión', State.statusElement);
         showNotification('Error al verificar el servidor', 'error');
     }
-}
-
-// Actualizar estado de conexión
-function updateStatus(status, text) {
-    statusElement.className = `status ${status}`;
-    statusElement.querySelector('.status-text').textContent = text;
 }
 
 // Cargar estadísticas iniciales
@@ -247,39 +175,40 @@ async function loadInitialStats() {
 
 // Enviar mensaje
 async function sendMessage() {
-    const message = messageInput.value.trim();
+    const message = State.messageInput.value.trim();
     if (!message) return;
 
     // Limpiar mensaje de bienvenida si existe
-    const welcomeMsg = messagesContainer.querySelector('.welcome-message');
+    const welcomeMsg = State.messagesContainer.querySelector('.welcome-message');
     if (welcomeMsg) {
         welcomeMsg.remove();
     }
 
     // Crear conversacion si no existe (sin mostrar mensaje de bienvenida)
+    const currentConversationId = getCurrentConversationId();
     if (!currentConversationId) {
         await createNewConversation(null, false);
     }
 
     // Agregar mensaje del usuario
     addMessage(message, 'user');
-    conversationHistory.push({ role: 'user', content: message });
+    State.addToConversationHistory({ role: 'user', content: message });
 
     // Limpiar input
-    messageInput.value = '';
-    messageInput.style.height = 'auto';
-    sendBtn.disabled = true;
+    State.messageInput.value = '';
+    State.messageInput.style.height = 'auto';
+    State.sendBtn.disabled = true;
 
     // Mostrar indicador de escritura
-    typingIndicator.style.display = 'flex';
+    State.typingIndicator.style.display = 'flex';
     scrollToBottom();
 
     try {
-        // Enviar consulta a Alfred con el modo de búsqueda seleccionado y el ID de conversacion
-        const searchDocuments = searchMode === 'documents';
-        console.log('📤 Enviando consulta:', { message, searchDocuments, conversationId: currentConversationId });
+        // Enviar consulta a Alfred con el modo de busqueda seleccionado y el ID de conversacion
+        const searchDocuments = State.searchMode === 'documents';
+        console.log('📤 Enviando consulta:', { message, searchDocuments, conversationId: getCurrentConversationId() });
 
-        const result = await window.alfredAPI.sendQueryWithConversation(message, currentConversationId, searchDocuments);
+        const result = await window.alfredAPI.sendQueryWithConversation(message, getCurrentConversationId(), searchDocuments);
 
         console.log('📥 Respuesta recibida:', result);
 
@@ -287,13 +216,13 @@ async function sendMessage() {
             const response = result.data;
 
             // Ocultar indicador de escritura
-            typingIndicator.style.display = 'none';
+            State.typingIndicator.style.display = 'none';
 
             // Agregar respuesta de Alfred con efecto de escritura
-            // Pasar la pregunta actual para que el botón de guardar tenga la referencia correcta
+            // Pasar la pregunta actual para que el boton de guardar tenga la referencia correcta
             await addMessageWithTyping(response.answer, 'assistant', response, message);
 
-            conversationHistory.push({
+            State.addToConversationHistory({
                 role: 'assistant',
                 content: response.answer,
                 metadata: response
@@ -302,127 +231,24 @@ async function sendMessage() {
             // Actualizar lista de conversaciones
             await loadConversations();
         } else {
-            typingIndicator.style.display = 'none';
+            State.typingIndicator.style.display = 'none';
             const errorMsg = result.error || 'Error desconocido';
             console.error('❌ Error del servidor:', errorMsg);
             showNotification('error', `Error: ${errorMsg}`);
             addMessage(`❌ Error: ${errorMsg}`, 'system');
         }
     } catch (error) {
-        typingIndicator.style.display = 'none';
-        console.error('❌ Error de conexión:', error);
-        showNotification('error', 'Error de conexión con el servidor');
-        addMessage('❌ Error de conexión con el servidor', 'system');
+        State.typingIndicator.style.display = 'none';
+        console.error('❌ Error de conexion:', error);
+        showNotification('error', 'Error de conexion con el servidor');
+        addMessage('❌ Error de conexion con el servidor', 'system');
     }
-}
-
-// Agregar mensaje al chat
-function addMessage(content, role, metadata = null, userQuestion = null) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
-
-    const avatar = document.createElement('div');
-    avatar.className = 'message-avatar';
-
-    // Asignar avatar según el rol
-    if (role === 'system') {
-        avatar.textContent = '⚙️';
-    } else if (role === 'user') {
-        // Usar foto de perfil si existe, sino usar emoji por defecto
-        if (settings.profilePicture) {
-            const img = document.createElement('img');
-            img.src = settings.profilePicture;
-            img.alt = 'Avatar de usuario';
-            avatar.appendChild(img);
-        } else {
-            avatar.textContent = '👤';
-        }
-    } else {
-        avatar.textContent = '🤖';
-    }
-
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-
-    const bubble = document.createElement('div');
-    bubble.className = 'message-bubble';
-    
-    // Renderizar Markdown solo para mensajes del asistente
-    if (role === 'assistant') {
-        bubble.innerHTML = markdownToHtml(content);
-    } else {
-        bubble.textContent = content;
-    }
-
-    contentDiv.appendChild(bubble);
-
-    // Agregar metadata si existe
-    if (metadata) {
-        const meta = document.createElement('div');
-        meta.className = 'message-meta';
-
-        if (metadata.from_history) {
-            const tag = document.createElement('span');
-            tag.className = 'message-tag';
-            tag.textContent = `📚 Del historial (${Math.round(metadata.history_score * 100)}%)`;
-            meta.appendChild(tag);
-        }
-
-        if (metadata.context_count > 0) {
-            const tag = document.createElement('span');
-            tag.className = 'message-tag';
-            tag.textContent = `🔍 ${metadata.context_count} fragmentos`;
-            meta.appendChild(tag);
-        }
-
-        contentDiv.appendChild(meta);
-
-        // Mostrar fuentes si existen
-        if (metadata.sources && metadata.sources.length > 0) {
-            const sourcesDiv = document.createElement('div');
-            sourcesDiv.className = 'message-sources';
-
-            const title = document.createElement('div');
-            title.className = 'message-sources-title';
-            title.textContent = '📄 Fuentes:';
-
-            const list = document.createElement('ul');
-            list.className = 'message-sources-list';
-
-            metadata.sources.slice(0, 3).forEach(source => {
-                const li = document.createElement('li');
-                const fileName = source.split(/[\\/]/).pop();
-                li.textContent = fileName;
-                list.appendChild(li);
-            });
-
-            if (metadata.sources.length > 3) {
-                const li = document.createElement('li');
-                li.textContent = `+${metadata.sources.length - 3} más...`;
-                list.appendChild(li);
-            }
-
-            sourcesDiv.appendChild(title);
-            sourcesDiv.appendChild(list);
-            contentDiv.appendChild(sourcesDiv);
-        }
-    }
-
-    // Agregar botón de guardar si es mensaje del asistente
-    if (role === 'assistant' && userQuestion) {
-        const actionsDiv = createSaveButton(userQuestion, content, metadata);
-        contentDiv.appendChild(actionsDiv);
-    }
-
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
-    messagesContainer.appendChild(messageDiv);
-
-    scrollToBottom();
 }
 
 // Agregar mensaje con efecto de escritura
 async function addMessageWithTyping(content, role, metadata = null, userQuestion = null) {
+    if (!State.messagesContainer) return;
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
@@ -439,13 +265,14 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
     contentDiv.appendChild(bubble);
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
-    messagesContainer.appendChild(messageDiv);
+    State.messagesContainer.appendChild(messageDiv);
 
     // Efecto de escritura
     let index = 0;
-    const speed = 10; // ms por carácter
+    const speed = 10; // ms por caracter
 
     function typeChar() {
+        const newContent = markdownToHtml(content);
         if (index < content.length) {
             bubble.textContent += content.charAt(index);
             index++;
@@ -454,9 +281,9 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
         } else {
             // Al terminar de escribir, renderizar Markdown si es asistente
             if (role === 'assistant') {
-                bubble.innerHTML = markdownToHtml(content);
+                bubble.innerHTML = newContent;
             }
-            
+
             // Agregar metadata después de terminar de escribir
             if (metadata) {
                 const meta = document.createElement('div');
@@ -556,7 +383,7 @@ function createSaveButton(userQuestion, answer, metadata) {
     return actionsDiv;
 }
 
-// Guardar conversación en el historial
+// Guardar conversacion en el historial
 async function saveConversation(question, answer, metadata) {
     if (!question || !answer) {
         throw new Error('Faltan datos para guardar');
@@ -576,27 +403,22 @@ async function saveConversation(question, answer, metadata) {
     return result;
 }
 
-// Scroll al final
-function scrollToBottom() {
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
 // Mostrar historial
 async function showHistory() {
 
     if (checkSidebar()) {
-        sidebar.classList.add('none');
+        State.sidebar.classList.add('none');
         return;
     }
     try {
         const result = await window.alfredAPI.getHistory(20);
 
         if (result.success) {
-            sidebarTitle.textContent = 'Historial Preguntas rapidas';
-            sidebarContent.innerHTML = '';
+            State.sidebarTitle.textContent = 'Historial Preguntas rapidas';
+            State.sidebarContent.innerHTML = '';
 
             if (result.data.length === 0) {
-                sidebarContent.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No hay conversaciones guardadas</p>';
+                State.sidebarContent.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No hay conversaciones guardadas</p>';
             } else {
                 result.data.forEach(item => {
                     const historyItem = document.createElement('div');
@@ -618,11 +440,11 @@ async function showHistory() {
                     historyItem.appendChild(question);
                     historyItem.appendChild(answer);
                     historyItem.appendChild(time);
-                    sidebarContent.appendChild(historyItem);
+                    State.sidebarContent.appendChild(historyItem);
                 });
             }
 
-            sidebar.classList.remove('none');
+            State.sidebar.classList.remove('none');
         }
     } catch (error) {
         showNotification('Error al cargar el historial', 'error');
@@ -633,7 +455,7 @@ async function showHistory() {
 // Cargar item del historial
 function loadHistoryItem(item) {
     // Limpiar mensaje de bienvenida si existe
-    const welcomeMsg = messagesContainer.querySelector('.welcome-message');
+    const welcomeMsg = State.messagesContainer.querySelector('.welcome-message');
     if (welcomeMsg) {
         welcomeMsg.remove();
     }
@@ -644,11 +466,11 @@ function loadHistoryItem(item) {
         sources: item.sources || []
     });
 
-    sidebar.style.display = 'none';
+    State.sidebar.style.display = 'none';
 }
 
 function checkSidebar() {
-    if (sidebar.classList.contains('none')) { return false; }
+    if (State.sidebar.classList.contains('none')) { return false; }
     return true;
 }
 
@@ -665,8 +487,8 @@ async function showStats(changeVisibility = true) {
         if (result.success) {
             const stats = result.data;
 
-            sidebarTitle.textContent = 'Estadísticas del sistema';
-            sidebarContent.innerHTML = `
+            State.sidebarTitle.textContent = 'Estadisticas del sistema';
+            State.sidebarContent.innerHTML = `
                 <div class="stat-card">
                     <div class="stat-label">👤 Usuario</div>
                     <div class="stat-value">${stats.user_name || 'N/A'}</div>
@@ -693,10 +515,10 @@ async function showStats(changeVisibility = true) {
                 </div>
             `;
 
-            sidebar.classList.remove('none');
+            State.sidebar.classList.remove('none');
         }
     } catch (error) {
-        showNotification('Error al cargar las estadísticas', 'error');
+        showNotification('Error al cargar las estadisticas', 'error');
         console.error('Error:', error);
     }
 }
@@ -704,133 +526,82 @@ async function showStats(changeVisibility = true) {
 // Mostrar conversaciones
 async function showConversations() {
     if (checkSidebar()) {
-        sidebar.classList.add('none');
+        State.sidebar.classList.add('none');
         return;
     }
 
     try {
         await loadConversations();
 
-        sidebarTitle.textContent = 'Conversaciones';
-        sidebarContent.innerHTML = '<div id="conversationsList" class="conversations-list"></div>';
+        State.sidebarTitle.textContent = 'Conversaciones';
+        State.sidebarContent.innerHTML = '<div id="conversationsList" class="conversations-list"></div>';
 
         updateConversationsList();
-        sidebar.classList.remove('none');
+        State.sidebar.classList.remove('none');
     } catch (error) {
         showNotification('error', 'Error al cargar conversaciones');
         console.error('Error:', error);
     }
 }
 
-// Cargar configuración
+// Cargar configuracion
 function loadSettings() {
     const saved = localStorage.getItem('alfred-settings');
     if (saved) {
-        settings = JSON.parse(saved);
+        const loadedSettings = JSON.parse(saved);
+        State.updateSettings(loadedSettings);
     }
 
     // Asegurar que las propiedades de foto de perfil existan
-    if (!settings.profilePicture) {
-        settings.profilePicture = null;
+    const currentSettings = State.settings;
+    if (!currentSettings.profilePicture) {
+        State.updateSettings({ profilePicture: null });
     }
-    if (!settings.profilePictureHistory) {
-        settings.profilePictureHistory = [];
+    if (!currentSettings.profilePictureHistory) {
+        State.updateSettings({ profilePictureHistory: [] });
     }
 
-    document.getElementById('serverUrl').value = settings.serverUrl;
-    document.getElementById('autoSave').checked = settings.autoSave;
-    document.getElementById('useHistory').checked = settings.useHistory;
-    document.getElementById('soundEnabled').checked = settings.soundEnabled;
+    document.getElementById('serverUrl').value = State.settings.serverUrl;
+    document.getElementById('autoSave').checked = State.settings.autoSave;
+    document.getElementById('useHistory').checked = State.settings.useHistory;
+    document.getElementById('soundEnabled').checked = State.settings.soundEnabled;
 }
 
-// Guardar configuración
+// Guardar configuracion
 function saveSettingsHandler() {
-    settings.serverUrl = document.getElementById('serverUrl').value;
-    settings.autoSave = document.getElementById('autoSave').checked;
-    settings.useHistory = document.getElementById('useHistory').checked;
-    settings.soundEnabled = document.getElementById('soundEnabled').checked;
+    State.updateSettings({
+        serverUrl: document.getElementById('serverUrl').value,
+        autoSave: document.getElementById('autoSave').checked,
+        useHistory: document.getElementById('useHistory').checked,
+        soundEnabled: document.getElementById('soundEnabled').checked
+    });
 
-    localStorage.setItem('alfred-settings', JSON.stringify(settings));
+    localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
     settingsModal.classList.add('none');
 
-    showNotification('Configuración guardada', 'success');
-}
-
-// Mostrar notificación
-function showNotification(type, message) {
-    // Crear contenedor de notificaciones si no existe
-    let notificationContainer = document.getElementById('notification-container');
-    if (!notificationContainer) {
-        notificationContainer = document.createElement('div');
-        notificationContainer.id = 'notification-container';
-        document.body.appendChild(notificationContainer);
-    }
-
-    // Crear elemento de notificación
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-
-    // Crear contenedor de mensaje
-    const messageSpan = document.createElement('span');
-    messageSpan.className = 'notification-message';
-    messageSpan.textContent = message;
-
-    // Crear botón de cerrar
-    const closeButton = document.createElement('button');
-    closeButton.className = 'notification-close';
-    closeButton.innerHTML = '×';
-    closeButton.setAttribute('aria-label', 'Cerrar notificación');
-
-    // Función para cerrar la notificación
-    const closeNotification = () => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-            notification.remove();
-            // Si no hay más notificaciones, remover el contenedor
-            if (notificationContainer.children.length === 0) {
-                notificationContainer.remove();
-            }
-        }, 300);
-    };
-
-    // Agregar evento al botón de cerrar
-    closeButton.addEventListener('click', closeNotification);
-
-    // Agregar elementos a la notificación
-    notification.appendChild(messageSpan);
-    notification.appendChild(closeButton);
-
-    // Agregar al contenedor
-    notificationContainer.appendChild(notification);
-
-    // Animar entrada
-    setTimeout(() => notification.classList.add('show'), 12);
-
-    // Remover después de 10 segundos
-    const autoCloseTimeout = setTimeout(() => {
-        closeNotification();
-    }, 10000);
-
-    // Cancelar el cierre automático si el usuario cierra manualmente
-    closeButton.addEventListener('click', () => {
-        clearTimeout(autoCloseTimeout);
-    }, { once: true });
-
-    // Actualizar status si es error de conexión
-    if (type === 'error' && message.includes('conexión')) {
-        updateStatus('error', 'Error de conexión');
-    }
+    showNotification('Configuracion guardada', 'success');
 }
 
 // Cargar el modelo actual
 async function loadCurrentModel() {
     try {
+        console.log('Cargando modelo actual...');
         const result = await window.alfredAPI.getModel();
+
+        console.log('Respuesta de getModel:', result);
 
         if (result.success && result.data) {
             const currentModel = result.data.model_name;
-            modelSelect.value = currentModel;
-            console.log('Modelo actual cargado:', currentModel);
+            console.log('Modelo actual:', currentModel);
+
+            if (modelSelect) {
+                modelSelect.value = currentModel;
+                console.log('Modelo cargado y seleccionado:', currentModel);
+            } else {
+                console.error('ERROR: modelSelect es null');
+            }
+        } else {
+            console.error('Error en respuesta:', result);
         }
     } catch (error) {
         console.error('Error al cargar el modelo actual:', error);
@@ -845,13 +616,13 @@ async function changeModel() {
     try {
         // Mostrar indicador de cambio
         modelSelect.disabled = true;
-        updateStatus('warning', 'Cambiando modelo...');
+        updateStatus('warning', 'Cambiando modelo...', State.statusElement);
 
         const result = await window.alfredAPI.changeModel(newModel);
 
         if (result.success) {
             showNotification(`Modelo cambiado exitosamente a ${newModel}`, 'success');
-            updateStatus('connected', 'Conectado');
+            updateStatus('connected', 'Conectado', State.statusElement);
 
             // Agregar mensaje informativo en el chat
             addMessage(`🔄 Modelo cambiado a ${newModel}`, 'system');
@@ -860,14 +631,14 @@ async function changeModel() {
             showNotification('Error al cambiar el modelo', 'error');
             // Revertir al modelo anterior
             modelSelect.value = previousModel;
-            updateStatus('connected', 'Conectado');
+            updateStatus('connected', 'Conectado', State.statusElement);
         }
     } catch (error) {
         console.error('Error al cambiar modelo:', error);
         showNotification('Error al cambiar el modelo', 'error');
         // Revertir al modelo anterior
         modelSelect.value = previousModel;
-        updateStatus('connected', 'Conectado');
+        updateStatus('connected', 'Conectado', State.statusElement);
     } finally {
         modelSelect.disabled = false;
     }
@@ -921,10 +692,12 @@ function stopOllama() {
         .catch(error => {
             console.error('Error al detener Ollama:', error);
             showNotification('error', 'Error al detener Ollama');
-            const systemMessages = messagesContainer.querySelectorAll('.message.system');
-            const lastSystemMsg = systemMessages[systemMessages.length - 1];
-            if (lastSystemMsg && lastSystemMsg.textContent.includes('Deteniendo Ollama')) {
-                lastSystemMsg.querySelector('.message-bubble').textContent = '❌ Error al detener Ollama.';
+            if (State.messagesContainer) {
+                const systemMessages = State.messagesContainer.querySelectorAll('.message.system');
+                const lastSystemMsg = systemMessages[systemMessages.length - 1];
+                if (lastSystemMsg && lastSystemMsg.textContent.includes('Deteniendo Ollama')) {
+                    lastSystemMsg.querySelector('.message-bubble').textContent = '❌ Error al detener Ollama.';
+                }
             }
         });
 
@@ -934,9 +707,9 @@ function stopOllama() {
 // Función auxiliar para actualizar estado de conexión
 function updateConnectionStatus(connected) {
     if (connected) {
-        updateStatus('connected', 'Conectado');
+        updateStatus('connected', 'Conectado', State.statusElement, State.statusElement);
     } else {
-        updateStatus('error', 'Desconectado');
+        updateStatus('error', 'Desconectado', State.statusElement);
     }
 }
 
@@ -944,8 +717,8 @@ function updateConnectionStatus(connected) {
 
 // Cargar foto de perfil y actualizar UI
 function loadProfilePicture() {
-    if (settings.profilePicture) {
-        updateProfilePictureDisplay(settings.profilePicture);
+    if (State.settings.profilePicture) {
+        updateProfilePictureDisplay(State.settings.profilePicture);
     }
     updateProfileHistory();
 }
@@ -962,70 +735,74 @@ function updateProfilePictureDisplay(imageDataUrl) {
 // Cambiar foto de perfil
 async function changeProfilePicture() {
     try {
-        console.log('🖼️ Iniciando selección de foto de perfil...');
-        
+        console.log('🖼️ Iniciando seleccion de foto de perfil...');
+
         // Asegurar que el historial existe
-        if (!settings.profilePictureHistory) {
-            settings.profilePictureHistory = [];
+        if (!State.settings.profilePictureHistory) {
+            State.updateSettings({ profilePictureHistory: [] });
         }
-        
+
         const result = await window.alfredAPI.selectProfilePicture();
-        
-        console.log('📥 Resultado de selección:', { 
-            success: result.success, 
+
+        console.log('📥 Resultado de seleccion:', {
+            success: result.success,
             hasData: !!result.data,
             dataLength: result.data?.length,
-            error: result.error 
+            error: result.error
         });
-        
+
         if (!result.success) {
-            if (result.error !== 'Selección cancelada') {
+            if (result.error !== 'Seleccion cancelada') {
                 showNotification('error', `Error: ${result.error}`);
             }
             return;
         }
-        
+
         if (result.success && result.data) {
             const newImageData = result.data;
-            
-            // Validar tamaño de la imagen (localStorage tiene límite ~5-10MB)
+
+            // Validar tamaño de la imagen (localStorage tiene limite ~5-10MB)
             const imageSizeKB = Math.round(newImageData.length / 1024);
             console.log(`📊 Tamaño de imagen: ${imageSizeKB} KB`);
-            
+
             if (imageSizeKB > 5000) {
-                showNotification('error', 'La imagen es demasiado grande (máx 5MB). Por favor, usa una imagen más pequeña.');
+                showNotification('error', 'La imagen es demasiado grande (max 5MB). Por favor, usa una imagen mas pequeña.');
                 return;
             }
-            
+
             // Guardar la foto actual al historial antes de cambiarla
-            if (settings.profilePicture && !settings.profilePictureHistory.includes(settings.profilePicture)) {
-                settings.profilePictureHistory.unshift(settings.profilePicture);
+            const currentPicture = State.settings.profilePicture;
+            const currentHistory = State.settings.profilePictureHistory;
+            if (currentPicture && !currentHistory.includes(currentPicture)) {
+                const newHistory = [currentPicture, ...currentHistory];
                 // Limitar el historial a 20 fotos
-                if (settings.profilePictureHistory.length > 20) {
-                    settings.profilePictureHistory.pop();
+                if (newHistory.length > 20) {
+                    newHistory.pop();
                 }
+                State.updateSettings({ profilePictureHistory: newHistory });
             }
-            
+
             // Establecer nueva foto de perfil
-            settings.profilePicture = newImageData;
-            
+            State.updateSettings({ profilePicture: newImageData });
+
             // Actualizar UI
             updateProfilePictureDisplay(newImageData);
             updateProfileHistory();
-            
+
             // Guardar en localStorage con manejo de errores
             try {
-                localStorage.setItem('alfred-settings', JSON.stringify(settings));
-                console.log('✅ Configuración guardada correctamente');
+                localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+                console.log('✅ Configuracion guardada correctamente');
                 showNotification('success', 'Foto de perfil actualizada correctamente');
             } catch (storageError) {
                 console.error('❌ Error al guardar en localStorage:', storageError);
                 // Revertir cambios
-                settings.profilePicture = settings.profilePictureHistory[0] || null;
-                if (settings.profilePictureHistory.length > 0) {
-                    settings.profilePictureHistory.shift();
-                }
-                showNotification('error', 'La imagen es demasiado grande para guardar. Por favor, usa una imagen más pequeña.');
+                const currentHistory = State.settings.profilePictureHistory;
+                State.updateSettings({
+                    profilePicture: currentHistory[0] || null,
+                    profilePictureHistory: currentHistory.slice(1)
+                });
+                showNotification('error', 'La imagen es demasiado grande para guardar. Por favor, usa una imagen mas pequeña.');
             }
         }
     } catch (error) {
@@ -1034,40 +811,42 @@ async function changeProfilePicture() {
     }
 }
 
-// Actualizar galería de historial
+// Actualizar galeria de historial
 function updateProfileHistory() {
     profileHistoryGallery.innerHTML = '';
-    
+
     // Asegurar que el historial existe
-    if (!settings.profilePictureHistory) {
-        settings.profilePictureHistory = [];
+    if (!State.settings.profilePictureHistory) {
+        State.updateSettings({ profilePictureHistory: [] });
     }
-    
-    if (settings.profilePictureHistory.length === 0) {
+
+    const history = State.settings.profilePictureHistory;
+
+    if (history.length === 0) {
         profileHistoryGallery.innerHTML = '<div class="no-history-message">No hay fotos en el historial</div>';
         profileHistoryCount.textContent = '0 fotos';
         return;
     }
-    
-    profileHistoryCount.textContent = `${settings.profilePictureHistory.length} foto${settings.profilePictureHistory.length !== 1 ? 's' : ''}`;
-    
-    settings.profilePictureHistory.forEach((imageData, index) => {
+
+    profileHistoryCount.textContent = `${history.length} foto${history.length !== 1 ? 's' : ''}`;
+
+    history.forEach((imageData, index) => {
         const item = document.createElement('div');
         item.className = 'profile-history-item';
-        
+
         // Marcar como activa si es la foto actual
-        if (imageData === settings.profilePicture) {
+        if (imageData === State.settings.profilePicture) {
             item.classList.add('active');
         }
-        
+
         const img = document.createElement('img');
         img.src = imageData;
-        img.alt = `Foto histórica ${index + 1}`;
-        
+        img.alt = `Foto historica ${index + 1}`;
+
         // Click para restaurar foto
         img.addEventListener('click', () => restoreProfilePicture(imageData, index));
-        
-        // Botón de eliminar
+
+        // Boton de eliminar
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-btn';
         deleteBtn.innerHTML = '×';
@@ -1076,7 +855,7 @@ function updateProfileHistory() {
             e.stopPropagation();
             deleteProfilePicture(index);
         });
-        
+
         item.appendChild(img);
         item.appendChild(deleteBtn);
         profileHistoryGallery.appendChild(item);
@@ -1085,244 +864,64 @@ function updateProfileHistory() {
 
 // Restaurar foto de perfil del historial
 function restoreProfilePicture(imageData, index) {
-    // Guardar la foto actual al historial si no está ya
-    if (settings.profilePicture && settings.profilePicture !== imageData) {
+    const currentPicture = State.settings.profilePicture;
+    const currentHistory = [...State.settings.profilePictureHistory];
+
+    // Guardar la foto actual al historial si no esta ya
+    if (currentPicture && currentPicture !== imageData) {
         // Remover la imagen que vamos a restaurar del historial
-        settings.profilePictureHistory.splice(index, 1);
-        
+        currentHistory.splice(index, 1);
+
         // Agregar la foto actual al principio del historial
-        settings.profilePictureHistory.unshift(settings.profilePicture);
+        currentHistory.unshift(currentPicture);
     } else {
         // Solo remover la imagen del historial si ya es la actual
-        settings.profilePictureHistory.splice(index, 1);
+        currentHistory.splice(index, 1);
     }
-    
+
     // Establecer como foto actual
-    settings.profilePicture = imageData;
-    
+    State.updateSettings({
+        profilePicture: imageData,
+        profilePictureHistory: currentHistory
+    });
+
     // Actualizar UI
     updateProfilePictureDisplay(imageData);
     updateProfileHistory();
-    
+
     // Guardar
-    localStorage.setItem('alfred-settings', JSON.stringify(settings));
-    
+    localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+
     showNotification('success', 'Foto de perfil restaurada');
 }
 
 // Eliminar foto del historial
 function deleteProfilePicture(index) {
-    const imageToDelete = settings.profilePictureHistory[index];
-    
+    const imageToDelete = State.settings.profilePictureHistory[index];
+
     // Si es la foto actual, resetear a default
-    if (imageToDelete === settings.profilePicture) {
-        settings.profilePicture = null;
+    if (imageToDelete === State.settings.profilePicture) {
+        State.updateSettings({ profilePicture: null });
         currentProfilePicture.innerHTML = '<span class="default-avatar">👤</span>';
     }
-    
+
     // Eliminar del historial
-    settings.profilePictureHistory.splice(index, 1);
-    
+    const newHistory = [...State.settings.profilePictureHistory];
+    newHistory.splice(index, 1);
+    State.updateSettings({ profilePictureHistory: newHistory });
+
     // Actualizar UI
     updateProfileHistory();
-    
+
     // Guardar
-    localStorage.setItem('alfred-settings', JSON.stringify(settings));
-    
+    localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+
     showNotification('success', 'Foto eliminada del historial');
-}
-
-// ===============================================
-// FUNCIONES DE CONVERSACIONES
-// ===============================================
-
-// Crear una nueva conversacion
-async function createNewConversation(title = null, showWelcome = true) {
-    try {
-        const result = await window.alfredAPI.createConversation(title);
-        
-        if (result.success) {
-            currentConversationId = result.data.id;
-            conversationHistory = [];
-            
-            // Limpiar chat
-            messagesContainer.innerHTML = '';
-            
-            // Solo mostrar mensaje de bienvenida si se solicita explicitamente
-            if (showWelcome) {
-                const welcomeDiv = document.createElement('div');
-                welcomeDiv.className = 'welcome-message';
-                welcomeDiv.innerHTML = `
-                    <h2>Hola! Soy Alfred</h2>
-                    <p>Soy tu asistente personal inteligente. Puedo ayudarte con:</p>
-                    <ul>
-                        <li>Buscar informacion en tus documentos</li>
-                        <li>Responder preguntas generales</li>
-                        <li>Recordar informacion de conversaciones anteriores</li>
-                    </ul>
-                    <p>Como puedo ayudarte hoy?</p>
-                `;
-                messagesContainer.appendChild(welcomeDiv);
-                showNotification('success', 'Nueva conversacion creada');
-            }
-            
-            // Actualizar lista de conversaciones
-            await loadConversations();
-            
-            return result.data;
-        } else {
-            showNotification('error', 'Error al crear conversacion');
-            console.error('Error al crear conversacion:', result.error);
-            return null;
-        }
-    } catch (error) {
-        showNotification('error', 'Error al crear conversacion');
-        console.error('Error al crear conversacion:', error);
-        return null;
-    }
-}
-
-// Cargar lista de conversaciones
-async function loadConversations() {
-    try {
-        const result = await window.alfredAPI.listConversations(50, 0);
-        
-        if (result.success) {
-            conversations = result.data;
-            updateConversationsList();
-        } else {
-            console.error('Error al cargar conversaciones:', result.error);
-        }
-    } catch (error) {
-        console.error('Error al cargar conversaciones:', error);
-    }
-}
-
-// Actualizar la lista de conversaciones en la UI
-function updateConversationsList() {
-    const conversationsList = document.getElementById('conversationsList');
-    if (!conversationsList) return;
-    
-    conversationsList.innerHTML = '';
-    
-    conversations.forEach(conv => {
-        const convDiv = document.createElement('div');
-        convDiv.className = 'conversation-item';
-        if (conv.id === currentConversationId) {
-            convDiv.classList.add('active');
-        }
-        
-        convDiv.innerHTML = `
-            <div class="conversation-info">
-                <div class="conversation-title">${conv.title}</div>
-                <div class="conversation-meta">
-                    <span class="message-count">${conv.message_count} mensajes</span>
-                    <span class="conversation-date">${formatDate(conv.updated_at)}</span>
-                </div>
-            </div>
-            <div class="conversation-actions">
-                <button class="icon-btn" onclick="loadConversation('${conv.id}')" title="Cargar">📂</button>
-                <button class="icon-btn" onclick="deleteConversationById('${conv.id}')" title="Eliminar">🗑️</button>
-            </div>
-        `;
-        
-        conversationsList.appendChild(convDiv);
-    });
-}
-
-// Cargar una conversacion especifica
-async function loadConversation(conversationId) {
-    try {
-        const result = await window.alfredAPI.getConversation(conversationId);
-        
-        if (result.success) {
-            currentConversationId = conversationId;
-            conversationHistory = result.data.messages.map(msg => ({
-                role: msg.role,
-                content: msg.content,
-                metadata: msg.metadata
-            }));
-            
-            // Limpiar y recargar mensajes
-            messagesContainer.innerHTML = '';
-            
-            result.data.messages.forEach(msg => {
-                addMessage(msg.content, msg.role, msg.metadata);
-            });
-            
-            scrollToBottom();
-            updateConversationsList();
-            
-            showNotification('success', 'Conversacion cargada');
-        } else {
-            showNotification('error', 'Error al cargar conversacion');
-            console.error('Error al cargar conversacion:', result.error);
-        }
-    } catch (error) {
-        showNotification('error', 'Error al cargar conversacion');
-        console.error('Error al cargar conversacion:', error);
-    }
-}
-
-// Eliminar una conversacion
-async function deleteConversationById(conversationId) {
-    if (!confirm('Estas seguro de que deseas eliminar esta conversacion?')) {
-        return;
-    }
-    
-    try {
-        const result = await window.alfredAPI.deleteConversation(conversationId);
-        
-        if (result.success) {
-            // Si es la conversacion actual, resetear
-            if (conversationId === currentConversationId) {
-                currentConversationId = null;
-                conversationHistory = [];
-                messagesContainer.innerHTML = '';
-                
-                const welcomeDiv = document.createElement('div');
-                welcomeDiv.className = 'welcome-message';
-                welcomeDiv.innerHTML = `
-                    <h2>Hola! Soy Alfred</h2>
-                    <p>Conversacion eliminada. Puedes crear una nueva o cargar una existente.</p>
-                `;
-                messagesContainer.appendChild(welcomeDiv);
-            }
-            
-            // Actualizar lista
-            await loadConversations();
-            
-            showNotification('success', 'Conversacion eliminada');
-        } else {
-            showNotification('error', 'Error al eliminar conversacion');
-            console.error('Error al eliminar conversacion:', result.error);
-        }
-    } catch (error) {
-        showNotification('error', 'Error al eliminar conversacion');
-        console.error('Error al eliminar conversacion:', error);
-    }
-}
-
-// Formatear fecha para mostrar
-function formatDate(isoString) {
-    const date = new Date(isoString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return 'Ahora';
-    if (diffMins < 60) return `Hace ${diffMins}m`;
-    if (diffHours < 24) return `Hace ${diffHours}h`;
-    if (diffDays < 7) return `Hace ${diffDays}d`;
-    
-    return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
 }
 
 // Exponer funciones globalmente para los botones HTML
 window.loadConversation = loadConversation;
 window.deleteConversationById = deleteConversationById;
 window.createNewConversation = createNewConversation;
-
-
+window.stopOllama = stopOllama;
+window.restartBackend = restartBackend;
