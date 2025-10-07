@@ -275,7 +275,7 @@ function stopBackend() {
         // Si no se detiene en 5 segundos, forzar
         setTimeout(() => {
             if (backendProcess) {
-                console.log('Forzando detención del backend');
+                console.log('Forzando detencion del backend');
                 backendProcess.kill('SIGKILL');
             }
         }, 5000);
@@ -369,7 +369,7 @@ ipcMain.handle('check-server', async () => {
     try {
         console.log('[MAIN] Verificando servidor Alfred en http://127.0.0.1:8000/health');
         const isRunning = await isBackendRunning();
-        console.log(`[MAIN] Servidor está ${isRunning ? 'conectado' : 'no disponible'}`);
+        console.log(`[MAIN] Servidor esta ${isRunning ? 'conectado' : 'no disponible'}`);
         return {
             connected: isRunning,
             message: isRunning ? 'Servidor conectado' : 'Servidor no disponible'
@@ -382,7 +382,6 @@ ipcMain.handle('check-server', async () => {
 
 ipcMain.handle('restart-backend', async () => {
     try {
-        notifyUser('info', 'Reiniciando servidor...');
         stopBackend();
         await new Promise(resolve => setTimeout(resolve, 2000));
         const started = await startBackend();
@@ -523,7 +522,6 @@ ipcMain.handle('stop-ollama', async () => {
         });
 
         console.log('[MAIN] Resultado de detener Ollama:', result.data);
-        notifyUser('success', result.data.message || 'Ollama detenido exitosamente');
         return { success: true, data: result.data };
     } catch (error) {
         console.error('[MAIN] Error al detener Ollama:', error);
@@ -627,7 +625,7 @@ ipcMain.handle('list-conversations', async (event, limit, offset) => {
         const params = new URLSearchParams();
         if (limit) params.append('limit', limit);
         if (offset) params.append('offset', offset);
-        
+
         const url = `http://127.0.0.1:8000/conversations${params.toString() ? '?' + params.toString() : ''}`;
         const result = await makeRequest(url);
         return { success: true, data: result.data };

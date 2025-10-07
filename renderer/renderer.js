@@ -673,7 +673,7 @@ function stopOllama() {
             if (result.success) {
                 showNotification('success', result.data.message || 'Ollama detenido exitosamente');
                 // Actualizar el mensaje del sistema
-                const systemMessages = messagesContainer.querySelectorAll('.message.system');
+                const systemMessages = State.messagesContainer.querySelectorAll('.message.system');
                 const lastSystemMsg = systemMessages[systemMessages.length - 1];
                 if (lastSystemMsg && lastSystemMsg.textContent.includes('Deteniendo Ollama')) {
                     lastSystemMsg.querySelector('.message-bubble').textContent = '🛑 Ollama detenido. Recursos liberados. Se recargará automáticamente en la próxima pregunta.';
@@ -681,7 +681,7 @@ function stopOllama() {
             } else {
                 showNotification('error', result.error || 'Error al detener Ollama');
                 // Actualizar el mensaje con error
-                const systemMessages = messagesContainer.querySelectorAll('.message.system');
+                const systemMessages = State.messagesContainer.querySelectorAll('.message.system');
                 const lastSystemMsg = systemMessages[systemMessages.length - 1];
                 if (lastSystemMsg && lastSystemMsg.textContent.includes('Deteniendo Ollama')) {
                     lastSystemMsg.querySelector('.message-bubble').textContent = '❌ Error al detener Ollama.';
