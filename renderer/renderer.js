@@ -147,17 +147,16 @@ function setupEventListeners() {
 async function checkServerStatus() {
     try {
         const result = await window.alfredAPI.checkServer();
-
-        if (result.success) {
+        if (result.success || result.connected) {
             updateStatus('connected', 'Conectado', State.statusElement);
             await loadInitialStats();
         } else {
             updateStatus('error', 'Desconectado', State.statusElement);
-            showNotification('No se pudo conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.', 'error');
+            showNotification('No se pudo conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.', 'Hubo un error al conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.');
         }
     } catch (error) {
         updateStatus('error', 'Error de conexión', State.statusElement);
-        showNotification('Error al verificar el servidor', 'error');
+        showNotification('Error al verificar el servidor', 'Hubo un error al verificar el estado del servidor.');
     }
 }
 
