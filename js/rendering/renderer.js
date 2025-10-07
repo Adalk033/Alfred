@@ -184,9 +184,9 @@ async function sendMessage() {
         welcomeMsg.remove();
     }
 
-    // Crear conversacion si no existe
+    // Crear conversacion si no existe (sin mostrar mensaje de bienvenida)
     if (!currentConversationId) {
-        await createNewConversation();
+        await createNewConversation(null, false);
     }
 
     // Agregar mensaje del usuario
@@ -1054,7 +1054,7 @@ function deleteProfilePicture(index) {
 // ===============================================
 
 // Crear una nueva conversacion
-async function createNewConversation(title = null) {
+async function createNewConversation(title = null, showWelcome = true) {
     try {
         const result = await window.alfredAPI.createConversation(title);
         
@@ -1064,24 +1064,28 @@ async function createNewConversation(title = null) {
             
             // Limpiar chat
             messagesContainer.innerHTML = '';
-            const welcomeDiv = document.createElement('div');
-            welcomeDiv.className = 'welcome-message';
-            welcomeDiv.innerHTML = `
-                <h2>Hola! Soy Alfred</h2>
-                <p>Soy tu asistente personal inteligente. Puedo ayudarte con:</p>
-                <ul>
-                    <li>Buscar informacion en tus documentos</li>
-                    <li>Responder preguntas generales</li>
-                    <li>Recordar informacion de conversaciones anteriores</li>
-                </ul>
-                <p>Como puedo ayudarte hoy?</p>
-            `;
-            messagesContainer.appendChild(welcomeDiv);
+            
+            // Solo mostrar mensaje de bienvenida si se solicita explicitamente
+            if (showWelcome) {
+                const welcomeDiv = document.createElement('div');
+                welcomeDiv.className = 'welcome-message';
+                welcomeDiv.innerHTML = `
+                    <h2>Hola! Soy Alfred</h2>
+                    <p>Soy tu asistente personal inteligente. Puedo ayudarte con:</p>
+                    <ul>
+                        <li>Buscar informacion en tus documentos</li>
+                        <li>Responder preguntas generales</li>
+                        <li>Recordar informacion de conversaciones anteriores</li>
+                    </ul>
+                    <p>Como puedo ayudarte hoy?</p>
+                `;
+                messagesContainer.appendChild(welcomeDiv);
+                showNotification('success', 'Nueva conversacion creada');
+            }
             
             // Actualizar lista de conversaciones
             await loadConversations();
             
-            showNotification('success', 'Nueva conversacion creada');
             return result.data;
         } else {
             showNotification('error', 'Error al crear conversacion');
