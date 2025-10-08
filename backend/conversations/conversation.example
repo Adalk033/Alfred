@@ -1,0 +1,24 @@
+{
+  "id": "37e7fc0b-f4f7-431d-9f97-4cba9c60dae2",
+  "title": "Hola de nuevo",
+  "created_at": "2025-10-06T19:03:52.251040",
+  "updated_at": "2025-10-06T19:04:02.081130",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hola de nuevo",
+      "timestamp": "2025-10-06T19:04:02.072144",
+      "metadata": {}
+    },
+    {
+      "role": "assistant",
+      "content": "Hola. ¿Cómo puedo ayudarte hoy? \n",
+      "timestamp": "2025-10-06T19:04:02.081122",
+      "metadata": {
+        "sources": [],
+        "personal_data": null,
+        "from_history": false
+      }
+    }
+  ]
+}
