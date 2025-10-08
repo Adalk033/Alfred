@@ -48,6 +48,9 @@ let changeProfilePictureBtn;
 let currentProfilePicture;
 let profileHistoryGallery;
 let profileHistoryCount;
+let ollamaKeepAliveSlider;
+let ollamaKeepAliveValue;
+let ollamaKeepAlivePresets;
 
 // Inicializacion
 document.addEventListener('DOMContentLoaded', async () => {
@@ -79,11 +82,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentProfilePicture = document.getElementById('currentProfilePicture');
     profileHistoryGallery = document.getElementById('profileHistoryGallery');
     profileHistoryCount = document.getElementById('profileHistoryCount');
+    ollamaKeepAliveSlider = document.getElementById('ollamaKeepAlive');
+    ollamaKeepAliveValue = document.getElementById('ollamaKeepAliveValue');
+    ollamaKeepAlivePresets = document.querySelectorAll('.preset-btn');
 
     await checkServerStatus();
     setupEventListeners();
     loadSettings();
     await loadCurrentModel();
+    await loadOllamaKeepAlive(); // Cargar configuracion de keep_alive
     loadProfilePicture();
     await loadConversations(); // Cargar conversaciones al inicio
 
@@ -141,6 +148,24 @@ function setupEventListeners() {
 
     // Event listener para cambiar foto de perfil
     changeProfilePictureBtn.addEventListener('click', changeProfilePicture);
+    
+    // Event listeners para Keep Alive de Ollama
+    if (ollamaKeepAliveSlider) {
+        ollamaKeepAliveSlider.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            updateKeepAliveDisplay(value);
+        });
+    }
+    
+    if (ollamaKeepAlivePresets) {
+        ollamaKeepAlivePresets.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const seconds = parseInt(btn.dataset.seconds);
+                ollamaKeepAliveSlider.value = seconds;
+                updateKeepAliveDisplay(seconds);
+            });
+        });
+    }
 }
 
 // Verificar estado del servidor
@@ -576,9 +601,73 @@ function saveSettingsHandler() {
     });
 
     localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+    
+    // Guardar keep_alive de Ollama
+    saveOllamaKeepAlive();
+    
     settingsModal.classList.add('none');
 
     showNotification('Configuracion guardada', 'success');
+}
+
+// ===============================================
+// FUNCIONES DE OLLAMA KEEP ALIVE
+// ===============================================
+
+// Cargar configuracion actual de keep_alive
+async function loadOllamaKeepAlive() {
+    try {
+        const result = await window.alfredAPI.getOllamaKeepAlive();
+        
+        if (result.success && result.data) {
+            const seconds = result.data.keep_alive_seconds;
+            if (ollamaKeepAliveSlider) {
+                ollamaKeepAliveSlider.value = seconds;
+                updateKeepAliveDisplay(seconds);
+            }
+            console.log('Keep alive cargado:', seconds, 'segundos');
+        }
+    } catch (error) {
+        console.error('Error al cargar keep_alive:', error);
+    }
+}
+
+// Actualizar el display del keep_alive
+function updateKeepAliveDisplay(seconds) {
+    if (ollamaKeepAliveValue) {
+        ollamaKeepAliveValue.textContent = seconds;
+    }
+    
+    // Actualizar botones de preset
+    if (ollamaKeepAlivePresets) {
+        ollamaKeepAlivePresets.forEach(btn => {
+            const presetSeconds = parseInt(btn.dataset.seconds);
+            if (presetSeconds === seconds) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+}
+
+// Guardar configuracion de keep_alive
+async function saveOllamaKeepAlive() {
+    try {
+        const seconds = parseInt(ollamaKeepAliveSlider.value);
+        const result = await window.alfredAPI.setOllamaKeepAlive(seconds);
+        
+        if (result.success) {
+            console.log('Keep alive actualizado a', seconds, 'segundos');
+            showNotification('Configuracion de Ollama actualizada', 'success');
+        } else {
+            console.error('Error al actualizar keep_alive:', result.error);
+            showNotification('Error al actualizar configuracion de Ollama', 'error');
+        }
+    } catch (error) {
+        console.error('Error al guardar keep_alive:', error);
+        showNotification('Error al actualizar configuracion de Ollama', 'error');
+    }
 }
 
 // Cargar el modelo actual

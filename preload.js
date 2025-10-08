@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   getModel: () => ipcRenderer.invoke('get-model'),
   changeModel: (modelName) => ipcRenderer.invoke('change-model', modelName),
   stopOllama: () => ipcRenderer.invoke('stop-ollama'),
+  getOllamaKeepAlive: () => ipcRenderer.invoke('get-ollama-keep-alive'),
+  setOllamaKeepAlive: (seconds) => ipcRenderer.invoke('set-ollama-keep-alive', seconds),
   selectProfilePicture: () => ipcRenderer.invoke('select-profile-picture'),
   
   // API de Conversaciones

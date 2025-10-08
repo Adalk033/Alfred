@@ -162,6 +162,15 @@ class QueryWithConversationRequest(BaseModel):
     search_kwargs: Optional[Dict[str, Any]] = Field(None, description="Parametros adicionales de busqueda")
     max_context_messages: int = Field(50, description="Numero maximo de mensajes de contexto", ge=1, le=50)
 
+class OllamaKeepAliveRequest(BaseModel):
+    """Solicitud para actualizar el keep_alive de Ollama"""
+    seconds: int = Field(..., description="Tiempo en segundos (0-3600)", ge=0, le=3600)
+
+class OllamaKeepAliveResponse(BaseModel):
+    """Respuesta con el keep_alive actual"""
+    keep_alive_seconds: int = Field(..., description="Tiempo en segundos")
+    description: str = Field(..., description="Descripcion del comportamiento")
+
 # --- Inicialización del núcleo de Alfred ---
 alfred_core: Optional[AlfredCore] = None
 
@@ -595,6 +604,73 @@ async def stop_ollama(background_tasks: BackgroundTasks):
         "message": f"Deteniendo modelo {current_model} en segundo plano. Los recursos se liberaran en unos segundos.",
         "model": current_model
     }
+
+@app.get("/ollama/keep-alive", response_model=OllamaKeepAliveResponse, tags=["Configuración"])
+async def get_ollama_keep_alive():
+    """
+    Obtener el tiempo de keep_alive actual de Ollama
+    
+    El keep_alive controla cuanto tiempo Ollama mantiene el modelo en memoria
+    despues de usarlo. Despues de este tiempo sin uso, el modelo se descarga
+    automaticamente para liberar recursos.
+    """
+    if not alfred_core or not alfred_core.is_initialized():
+        raise HTTPException(status_code=503, detail="Alfred Core no esta inicializado")
+    
+    try:
+        keep_alive = alfred_core.get_ollama_keep_alive()
+        
+        if keep_alive == 0:
+            description = "El modelo se descarga inmediatamente despues de cada uso"
+        elif keep_alive < 60:
+            description = f"El modelo permanece en memoria {keep_alive} segundos despues de cada uso"
+        elif keep_alive < 3600:
+            minutes = keep_alive // 60
+            description = f"El modelo permanece en memoria {minutes} minuto(s) despues de cada uso"
+        else:
+            hours = keep_alive // 3600
+            description = f"El modelo permanece en memoria {hours} hora(s) despues de cada uso"
+        
+        return OllamaKeepAliveResponse(
+            keep_alive_seconds=keep_alive,
+            description=description
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener keep_alive: {str(e)}")
+
+@app.put("/ollama/keep-alive", tags=["Configuración"])
+async def set_ollama_keep_alive(request: OllamaKeepAliveRequest):
+    """
+    Actualizar el tiempo de keep_alive de Ollama
+    
+    - **seconds**: Tiempo en segundos (0-3600)
+        - 0: Descargar el modelo inmediatamente despues de cada uso
+        - 1-3600: Mantener el modelo en memoria durante este tiempo
+    
+    Valores recomendados:
+    - 0s: Para liberar memoria inmediatamente (uso ocasional)
+    - 30s-60s: Para uso regular con pausas cortas
+    - 300s (5min): Para sesiones de trabajo activas
+    - 1800s (30min): Para uso prolongado sin pausas
+    """
+    if not alfred_core or not alfred_core.is_initialized():
+        raise HTTPException(status_code=503, detail="Alfred Core no esta inicializado")
+    
+    try:
+        success = alfred_core.set_ollama_keep_alive(request.seconds)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="No se pudo actualizar el keep_alive")
+        
+        return {
+            "status": "success",
+            "message": f"keep_alive actualizado a {request.seconds} segundos",
+            "keep_alive_seconds": request.seconds
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al actualizar keep_alive: {str(e)}")
 
 # --- Endpoints de Conversaciones ---
 

@@ -684,6 +684,38 @@ ipcMain.handle('stop-ollama', async () => {
     }
 });
 
+// Handler para obtener keep_alive de Ollama
+ipcMain.handle('get-ollama-keep-alive', async () => {
+    try {
+        console.log('[MAIN] Obteniendo keep_alive de Ollama...');
+        const result = await makeRequest('http://127.0.0.1:8000/ollama/keep-alive');
+        console.log('[MAIN] Keep alive actual:', result.data);
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al obtener keep_alive:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Handler para actualizar keep_alive de Ollama
+ipcMain.handle('set-ollama-keep-alive', async (event, seconds) => {
+    try {
+        console.log('[MAIN] Actualizando keep_alive a', seconds, 'segundos...');
+        const result = await makeRequest('http://127.0.0.1:8000/ollama/keep-alive', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ seconds: seconds })
+        });
+        console.log('[MAIN] Keep alive actualizado:', result.data);
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al actualizar keep_alive:', error);
+        return { success: false, error: error.message };
+    }
+});
+
 // Handler para seleccionar foto de perfil
 ipcMain.handle('select-profile-picture', async () => {
     try {

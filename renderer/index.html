@@ -191,10 +191,32 @@
                     <label for="serverUrl">URL del servidor Alfred</label>
                     <input type="text" id="serverUrl" value="http://127.0.0.1:8000" />
                 </div>
+                
+                <!-- Configuracion de Ollama Keep Alive -->
+                <div class="setting-group">
+                    <label for="ollamaKeepAlive">Tiempo de inactividad de Ollama</label>
+                    <div class="keep-alive-controls">
+                        <input type="range" id="ollamaKeepAlive" min="0" max="1800" value="30" step="30" />
+                        <div class="keep-alive-display">
+                            <span id="ollamaKeepAliveValue">30</span> segundos
+                        </div>
+                    </div>
+                    <p class="setting-description">
+                        Tiempo que Ollama mantiene el modelo en memoria despues de usarlo. 
+                        Valores mas bajos liberan memoria mas rapido, valores mas altos mejoran la velocidad de respuesta.
+                    </p>
+                    <div class="keep-alive-presets">
+                        <button class="preset-btn" data-seconds="0">Inmediato (0s)</button>
+                        <button class="preset-btn" data-seconds="30">Rapido (30s)</button>
+                        <button class="preset-btn" data-seconds="300">Normal (5min)</button>
+                        <button class="preset-btn" data-seconds="1800">Largo (30min)</button>
+                    </div>
+                </div>
+                
                 <div class="setting-group">
                     <label>
                         <input type="checkbox" id="autoSave" checked />
-                        Guardar conversaciones automáticamente
+                        Guardar conversaciones automaticamente
                     </label>
                 </div>
                 <div class="setting-group">

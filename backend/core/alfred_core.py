@@ -43,6 +43,11 @@ class AlfredCore:
         self.model_name = os.getenv('ALFRED_MODEL', 'gemma2:9b')
         self.embedding_model = os.getenv('ALFRED_EMBEDDING_MODEL', 'nomic-embed-text:v1.5')
         
+        # Configuracion de keep_alive para Ollama (en segundos)
+        # Valor por defecto: 30 segundos
+        # Despues de este tiempo sin uso, Ollama descargara el modelo de memoria
+        self.ollama_keep_alive = int(os.getenv('ALFRED_OLLAMA_KEEP_ALIVE', '30'))
+        
         # Validar configuración
         if not self.docs_path:
             raise ValueError("Error: Define la variable de entorno ALFRED_DOCS_PATH")
@@ -102,9 +107,14 @@ class AlfredCore:
         print("\n", flush=True)
         sys.stdout.flush()
         
-        # Inicializar LLM
-        self.llm = OllamaLLM(model=self.model_name)
-        print(f"LLM inicializado", flush=True)
+        # Inicializar LLM con keep_alive configurable
+        # keep_alive controla cuanto tiempo Ollama mantiene el modelo en memoria
+        # Formato: numero de segundos (ej: 30) o "0" para descargar inmediatamente
+        self.llm = OllamaLLM(
+            model=self.model_name,
+            keep_alive=self.ollama_keep_alive
+        )
+        print(f"LLM inicializado (keep_alive: {self.ollama_keep_alive}s)", flush=True)
         sys.stdout.flush()
         
         # Inicializar embeddings
@@ -478,8 +488,11 @@ class AlfredCore:
         try:
             print(f"Cambiando modelo de {self.model_name} a {new_model}...")
             
-            # Crear nueva instancia del LLM con el nuevo modelo
-            new_llm = OllamaLLM(model=new_model)
+            # Crear nueva instancia del LLM con el nuevo modelo y keep_alive configurado
+            new_llm = OllamaLLM(
+                model=new_model,
+                keep_alive=self.ollama_keep_alive
+            )
             
             # Actualizar el modelo
             self.llm = new_llm
@@ -506,4 +519,54 @@ class AlfredCore:
     def get_gpu_memory_usage(self) -> Optional[Dict]:
         """Obtener uso de memoria de GPU"""
         return self.gpu_manager.get_memory_usage()
+    
+    def get_ollama_keep_alive(self) -> int:
+        """
+        Obtener el valor actual de keep_alive para Ollama
+        
+        Returns:
+            Tiempo en segundos que Ollama mantiene el modelo en memoria
+        """
+        return self.ollama_keep_alive
+    
+    def set_ollama_keep_alive(self, seconds: int) -> bool:
+        """
+        Actualizar el valor de keep_alive para Ollama
+        
+        Args:
+            seconds: Tiempo en segundos (minimo 0, maximo 3600)
+        
+        Returns:
+            True si se actualizo exitosamente, False en caso contrario
+        """
+        try:
+            # Validar rango
+            if seconds < 0 or seconds > 3600:
+                print(f"Valor de keep_alive fuera de rango: {seconds}")
+                return False
+            
+            print(f"Actualizando keep_alive de {self.ollama_keep_alive}s a {seconds}s...")
+            
+            # Actualizar configuracion
+            self.ollama_keep_alive = seconds
+            
+            # Guardar en variable de entorno para persistencia
+            os.environ['ALFRED_OLLAMA_KEEP_ALIVE'] = str(seconds)
+            
+            # Reinicializar LLM con el nuevo keep_alive
+            self.llm = OllamaLLM(
+                model=self.model_name,
+                keep_alive=self.ollama_keep_alive
+            )
+            
+            # Reconfigurar la cadena de recuperacion
+            self._setup_retrieval_chain()
+            
+            print(f"keep_alive actualizado exitosamente a {seconds}s")
+            return True
+            
+        except Exception as e:
+            print(f"Error al actualizar keep_alive: {e}")
+            return False
+
 

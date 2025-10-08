@@ -67,10 +67,11 @@ try {
     Write-Host "  cd ..\Alfred" -ForegroundColor Gray
     Write-Host "  .\start_alfred_server.ps1" -ForegroundColor Gray
     Write-Host ""
-    $continuar = Read-Host "¿Deseas continuar de todas formas? (s/n)"
-    if ($continuar -ne "s" -and $continuar -ne "S") {
-        exit 1
-    }
+    Write-Host "El servidor sera iniciado..." -ForegroundColor White
+    # $continuar = Read-Host "¿Deseas continuar de todas formas? (s/n)"
+    # if ($continuar -ne "s" -and $continuar -ne "S") {
+    #     exit 1
+    # }
 }
 
 Write-Host ""
