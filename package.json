@@ -1,6 +1,6 @@
 {
   "name": "alfred-electron",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Alfred - Asistente Personal Inteligente con interfaz gráfica",
   "main": "main.js",
   "scripts": {
@@ -21,8 +21,8 @@
   "author": "Adalk033",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron": "^38.2.2",
+    "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "com.adalk033.alfred",
