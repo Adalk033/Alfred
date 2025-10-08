@@ -109,14 +109,28 @@ export function updateConversationsList() {
                 </div>
             </div>
             <div class="conversation-actions">
-                <button class="icon-btn" onclick="loadConversation('${conv.id}')" title="Cargar">📂</button>
-                <button class="icon-btn" onclick="deleteConversationById('${conv.id}')" title="Eliminar">🗑️</button>
+                <button class="icon-btn" onclick="window.conversationActions.load('${conv.id}')" title="Cargar">📂</button>
+                <button class="icon-btn" onclick="window.conversationActions.rename('${conv.id}')" title="Renombrar">✏️</button>
+                <button class="icon-btn" onclick="window.conversationActions.delete('${conv.id}')" title="Eliminar">🗑️</button>
             </div>
         `;
 
         conversationsList.appendChild(convDiv);
     });
 }
+
+// Exportar funciones para uso global desde onclick
+window.conversationActions = {
+    load: (conversationId) => loadConversation(conversationId),
+    delete: (conversationId) => deleteConversationById(conversationId),
+    rename: (conversationId) => {
+        const convItem = document.querySelector(`.conversation-item .conversation-actions button[onclick*="${conversationId}"]`)?.closest('.conversation-item');
+        if (convItem) {
+            const titleElement = convItem.querySelector('.conversation-title');
+            enableEditMode(conversationId, titleElement);
+        }
+    }
+};
 
 // Cargar una conversacion especifica
 export async function loadConversation(conversationId) {
@@ -195,6 +209,114 @@ export async function deleteConversationById(conversationId) {
         showNotification('error', 'Error al eliminar conversacion');
         console.error('Error al eliminar conversacion:', error);
     }
+}
+
+// Renombrar una conversacion
+export async function renameConversation(conversationId, newTitle) {
+    if (!newTitle || newTitle.trim() === '') {
+        showNotification('error', 'El titulo no puede estar vacio');
+        return false;
+    }
+
+    try {
+        const result = await window.alfredAPI.updateConversationTitle(conversationId, newTitle.trim());
+
+        if (result.success) {
+            // Actualizar lista de conversaciones
+            await loadConversations();
+            showNotification('success', 'Conversacion renombrada');
+            return true;
+        } else {
+            showNotification('error', 'Error al renombrar conversacion');
+            console.error('Error al renombrar conversacion:', result.error);
+            return false;
+        }
+    } catch (error) {
+        showNotification('error', 'Error al renombrar conversacion');
+        console.error('Error al renombrar conversacion:', error);
+        return false;
+    }
+}
+
+// Activar modo de edicion para el titulo de una conversacion
+export function enableEditMode(conversationId, titleElement) {
+    const currentTitle = titleElement.textContent;
+    const conversationItem = titleElement.closest('.conversation-item');
+    
+    // Crear input de edicion
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'conversation-title-edit';
+    input.value = currentTitle;
+    input.maxLength = 100;
+    
+    // Reemplazar el titulo con el input
+    titleElement.style.display = 'none';
+    titleElement.parentNode.insertBefore(input, titleElement);
+    
+    // Enfocar el input y seleccionar el texto
+    input.focus();
+    input.select();
+    
+    // Crear botones de accion
+    const actionsDiv = conversationItem.querySelector('.conversation-actions');
+    const originalButtons = actionsDiv.innerHTML;
+    
+    actionsDiv.innerHTML = `
+        <button class="icon-btn edit-save" title="Guardar">✓</button>
+        <button class="icon-btn edit-cancel" title="Cancelar">✗</button>
+    `;
+    
+    // Funcion para guardar el cambio
+    const saveEdit = async () => {
+        const newTitle = input.value.trim();
+        if (newTitle && newTitle !== currentTitle) {
+            const success = await renameConversation(conversationId, newTitle);
+            if (!success) {
+                // Si falla, restaurar el estado original
+                input.remove();
+                titleElement.style.display = '';
+                actionsDiv.innerHTML = originalButtons;
+            }
+        } else {
+            // Cancelar si no hay cambios
+            input.remove();
+            titleElement.style.display = '';
+            actionsDiv.innerHTML = originalButtons;
+        }
+    };
+    
+    // Funcion para cancelar
+    const cancelEdit = () => {
+        input.remove();
+        titleElement.style.display = '';
+        actionsDiv.innerHTML = originalButtons;
+    };
+    
+    // Eventos para guardar
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveEdit();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+        }
+    });
+    
+    // Eventos para los botones
+    const saveBtn = actionsDiv.querySelector('.edit-save');
+    const cancelBtn = actionsDiv.querySelector('.edit-cancel');
+    
+    saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        saveEdit();
+    });
+    
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelEdit();
+    });
 }
 
 // Eliminar funcion formatDate ya que ahora esta en dom-utils.js

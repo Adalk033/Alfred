@@ -228,3 +228,114 @@
     font-weight: 600;
     color: var(--primary-color);
 }
+
+/* Estilos para conversaciones */
+.conversation-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.conversation-item:hover {
+    background-color: var(--border-color);
+    transform: translateX(4px);
+}
+
+.conversation-item.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.conversation-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.conversation-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.conversation-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.conversation-item:hover .conversation-actions {
+    opacity: 1;
+}
+
+/* Input de edicion para titulo de conversacion */
+.conversation-title-edit {
+    width: 100%;
+    padding: 6px 8px;
+    background-color: var(--bg-primary);
+    border: 2px solid var(--primary-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+}
+
+.conversation-title-edit:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
+}
+
+/* Botones de accion en modo edicion */
+.conversation-actions .edit-save {
+    background-color: #4caf50;
+    color: white;
+}
+
+.conversation-actions .edit-save:hover {
+    background-color: #45a049;
+}
+
+.conversation-actions .edit-cancel {
+    background-color: #f44336;
+    color: white;
+}
+
+.conversation-actions .edit-cancel:hover {
+    background-color: #da190b;
+}
+
+.icon-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 16px;
+}
+
+.icon-btn:hover {
+    background-color: var(--bg-tertiary);
+    transform: scale(1.1);
+}
