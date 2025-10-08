@@ -21,8 +21,8 @@
   "author": "Adalk033",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^38.2.2",
-    "electron-builder": "^26.0.12"
+    "electron": "38.2.2",
+    "electron-builder": "26.0.12"
   },
   "build": {
     "appId": "com.adalk033.alfred",
