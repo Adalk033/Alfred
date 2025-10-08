@@ -1,35 +1,3 @@
-# .gitignore para proyecto Electron
-
-# Dependencias
-node_modules/
-package-lock.json
-
-# Build outputs
-dist/
-build/
-out/
-
-# Electron
-*.log
-.DS_Store
-Thumbs.db
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Configuración local
-config.local.json
-.env
-
-
 # .gitignore
 venv/
 .venv/

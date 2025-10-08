@@ -3,20 +3,26 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-const { spawn } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const fs = require('fs');
+const { contextIsolated } = require('process');
 
 let mainWindow;
 let backendProcess = null;
 let isBackendStartedByElectron = false;
 let isCheckingBackend = false; // Flag para evitar chequeos simultáneos
 
+const BACKEND_PORT = 8000;
+const HOST = '127.0.0.1';
+const PATH_BACKEND = path.join(__dirname, '.', 'backend'); // Ruta al proyecto Alfred
+const SCRIPT_BACKEND = 'alfred_backend.py';
+
 // Configuración del backend
 const BACKEND_CONFIG = {
-    host: '127.0.0.1',
-    port: 8000,
-    path: path.join(__dirname, '..', 'Alfred'), // Ruta al proyecto Alfred
-    script: 'alfred_backend.py',
+    host: HOST,
+    port: BACKEND_PORT,
+    path: PATH_BACKEND,
+    script: SCRIPT_BACKEND,
     maxRetries: 3,
     retryDelay: 2000,
     startupTimeout: 30000
@@ -98,6 +104,193 @@ app.on('before-quit', () => {
     stopBackend();
 });
 
+async function ensurePythonEnv(backendPath) {
+    const venvPath = path.join(backendPath, "venv");
+    const requirementsPath = path.join(backendPath, "requirements.txt");
+
+    // Detectar rutas del binario Python
+    const pythonCmd = process.platform === "win32"
+        ? path.join(venvPath, "Scripts", "python.exe")
+        : path.join(venvPath, "bin", "python");
+
+    try {
+        if (!fs.existsSync(venvPath)) {
+            console.log("Creando entorno virtual...");
+            execSync("python -m venv venv", { 
+                cwd: backendPath, 
+                encoding: 'utf8',
+                stdio: 'pipe'
+            });
+        }
+
+        console.log(`Usando Python en: ${pythonCmd}`);
+
+        // Verificar pip
+        try {
+            const pipVersion = execSync(`"${pythonCmd}" -m pip --version`, { 
+                encoding: 'utf8',
+                stdio: 'pipe'
+            });
+            console.log(pipVersion.trim());
+        } catch {
+            console.log("Instalando pip...");
+            execSync(`"${pythonCmd}" -m ensurepip --upgrade`, { 
+                cwd: backendPath, 
+                encoding: 'utf8',
+                stdio: 'pipe'
+            });
+        }
+
+        // Verificar dependencias instaladas
+        console.log("Verificando dependencias...");
+        const installedPkgs = execSync(`"${pythonCmd}" -m pip freeze`, { 
+            encoding: "utf8",
+            stdio: 'pipe'
+        }).toLowerCase();
+        
+        const reqs = fs.readFileSync(requirementsPath, "utf8")
+            .split("\n")
+            .filter(line => line.trim() && !line.trim().startsWith('#'))
+            .map(line => line.trim());
+
+        // Extraer nombres de paquetes (antes de ==, >=, etc.)
+        const reqPkgNames = reqs.map(r => {
+            const match = r.match(/^([a-zA-Z0-9\-_]+)/);
+            return match ? match[1].toLowerCase() : null;
+        }).filter(Boolean);
+
+        // Verificar si hay paquetes faltantes
+        const missing = reqPkgNames.filter(pkg => {
+            // Buscar el paquete en pip freeze (nombre==version)
+            const pattern = new RegExp(`^${pkg}==`, 'm');
+            return !pattern.test(installedPkgs);
+        });
+
+        if (missing.length > 0) {
+            console.log(`Instalando ${missing.length} dependencias faltantes: ${missing.join(', ')}`);
+
+            await new Promise((resolve, reject) => {
+                const proc = spawn(pythonCmd, [
+                    "-m", "pip", "install", 
+                    "--no-color",  // Deshabilitar colores ANSI
+                    "--progress-bar", "off",  // Deshabilitar barra de progreso
+                    "-r", "requirements.txt"
+                ], {
+                    cwd: backendPath,
+                    stdio: ["ignore", "pipe", "pipe"],
+                    env: { 
+                        ...process.env, 
+                        PYTHONIOENCODING: 'utf-8',  // Forzar UTF-8
+                        PYTHONUNBUFFERED: '1'  // Sin buffer
+                    }
+                });
+
+                let installOutput = '';
+
+                proc.stdout.on("data", (data) => {
+                    const output = data.toString('utf8').trim();
+                    installOutput += output + '\n';
+                    if (output && !output.includes('Requirement already satisfied')) {
+                        console.log(`[pip] ${output}`);
+                    }
+                });
+                
+                proc.stderr.on("data", (data) => {
+                    const error = data.toString('utf8').trim();
+                    if (error) console.error(`[pip error] ${error}`);
+                });
+
+                proc.on("close", (code) => {
+                    if (code === 0) {
+                        console.log("Dependencias instaladas correctamente.");
+                        resolve();
+                    } else {
+                        console.error("Error durante la instalacion de dependencias:");
+                        console.error(installOutput);
+                        reject(new Error(`pip exited with code ${code}`));
+                    }
+                });
+
+                proc.on("error", (err) => {
+                    reject(err);
+                });
+            });
+        } else {
+            console.log("Todas las dependencias ya estan instaladas.");
+        }
+
+        // Verificar PyTorch con CUDA (si hay GPU NVIDIA)
+        await checkPyTorchCuda(pythonCmd);
+
+        // NOTA: Poppler ya no es necesario - usamos PyPDFLoader que es nativo de Python
+        // await checkPoppler();
+
+        return pythonCmd;
+    } catch (err) {
+        console.error("Error en ensurePythonEnv:", err);
+        throw err;
+    }
+}
+
+// Verificar si PyTorch tiene soporte CUDA
+async function checkPyTorchCuda(pythonCmd) {
+    try {
+        console.log("Verificando soporte GPU de PyTorch...");
+        
+        // Verificar si hay GPU NVIDIA
+        const hasNvidiaGpu = await checkNvidiaGpu();
+        
+        if (!hasNvidiaGpu) {
+            console.log("No se detecto GPU NVIDIA, usando version CPU de PyTorch");
+            return;
+        }
+
+        // Verificar si PyTorch tiene CUDA - usar comillas simples para evitar conflictos
+        const checkScript = "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')";
+        const result = execSync(`"${pythonCmd}" -c "${checkScript}"`, {
+            encoding: 'utf8',
+            stdio: 'pipe'
+        }).trim();
+
+        if (result === 'CUDA') {
+            console.log("PyTorch con soporte CUDA detectado correctamente");
+        } else {
+            console.log("==== PyTorch instalado SIN soporte CUDA");
+            console.log("Para habilitar aceleracion GPU, ejecuta: .\\install-pytorch-gpu.ps1");
+            notifyUser('warning', 'PyTorch sin GPU - Alfred usara CPU (más lento). Ejecuta install-pytorch-gpu.ps1 para habilitar GPU.');
+        }
+    } catch (err) {
+        console.log("No se pudo verificar PyTorch GPU:", err.message);
+    }
+}
+
+// Verificar si hay GPU NVIDIA
+async function checkNvidiaGpu() {
+    try {
+        if (process.platform === 'win32') {
+            execSync('nvidia-smi', { stdio: 'pipe' });
+            return true;
+        }
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+// Verificar si Poppler está instalado
+async function checkPoppler() {
+    try {
+        console.log("Verificando Poppler para procesamiento de PDFs...");
+        execSync('pdfinfo -v', { stdio: 'pipe' });
+        console.log("Poppler instalado correctamente");
+    } catch {
+        console.log("==== Poppler no está instalado");
+        console.log("Los archivos PDF no se podrán procesar hasta instalarlo");
+        console.log("Para instalarlo, ejecuta: .\\install-poppler.ps1");
+        notifyUser('warning', 'Poppler no instalado - Los PDFs no se procesarán. Ejecuta install-poppler.ps1 para instalarlo.');
+    }
+}
+
 // Verificar si el backend está corriendo
 async function isBackendRunning() {
     return new Promise((resolve) => {
@@ -137,7 +330,6 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
     return false;
 }
 
-// Iniciar el proceso del backend
 async function startBackend() {
     console.log('Verificando si el backend ya esta iniciado...');
     if (backendProcess) {
@@ -147,119 +339,81 @@ async function startBackend() {
 
     console.log('Iniciando backend de Alfred...');
 
-    // Verificar que el directorio existe
+    // Verificar que el directorio y script existan antes de lanzar el proceso
     if (!fs.existsSync(BACKEND_CONFIG.path)) {
-        console.error('No se encontró el directorio del backend:', BACKEND_CONFIG.path);
-        notifyUser('error', 'No se encontró el directorio del backend de Alfred');
+        console.error('No se encontro el directorio del backend:', BACKEND_CONFIG.path);
+        notifyUser('error', 'No se encontro el directorio del backend de Alfred');
         return false;
     }
 
-    // Verificar que el script existe
-    const scriptPath = path.join(BACKEND_CONFIG.path, BACKEND_CONFIG.script);
+    const scriptPath = path.join(BACKEND_CONFIG.path, 'core', BACKEND_CONFIG.script);
     if (!fs.existsSync(scriptPath)) {
-        console.error('No se encontró el script del backend:', scriptPath);
-        notifyUser('error', 'No se encontró alfred_backend.py');
+        console.error('No se encontro el script del backend:', scriptPath);
+        notifyUser('error', 'No se encontro alfred_backend.py');
         return false;
     }
 
     try {
-        // Iniciar el proceso de Python
-        backendProcess = spawn('python', [BACKEND_CONFIG.script], {
+        // Preparar entorno Python
+        const pythonPath = await ensurePythonEnv(BACKEND_CONFIG.path);
+        
+        // Pequena pausa para asegurar que pip libere recursos
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log('Iniciando servidor FastAPI...');
+
+        // Ejecutar backend en modo sin buffer (-u)
+        backendProcess = spawn(pythonPath, ['-u', scriptPath], {
             cwd: BACKEND_CONFIG.path,
-            env: { ...process.env },
+            env: { 
+                ...process.env,
+                PYTHONIOENCODING: 'utf-8',  // Forzar UTF-8
+                PYTHONUNBUFFERED: '1'  // Sin buffer
+            },
             stdio: ['ignore', 'pipe', 'pipe']
         });
 
+        // Captura de salida estándar
+        backendProcess.stdout.on('data', (data) => {
+            const output = data.toString('utf8').trim();
+            if (output) console.log(`[Backend] ${output}`);
+        });
+
+        // Captura de errores
+        backendProcess.stderr.on('data', (data) => {
+            const error = data.toString('utf8').trim();
+            if (error) console.error(`[Backend Error] ${error}`);
+        });
+
+        backendProcess.on('close', (code) => {
+            console.log(`[Backend] Proceso finalizado con codigo ${code}`);
+            backendProcess = null;
+            isBackendStartedByElectron = false;
+        });
+
+        backendProcess.on('error', (err) => {
+            console.error(`[Backend Error] ${err.message}`);
+            backendProcess = null;
+            isBackendStartedByElectron = false;
+        });
+
+        // Marcar que nosotros iniciamos el backend
         isBackendStartedByElectron = true;
 
-        // Capturar salida estándar
-        backendProcess.stdout.on('data', (data) => {
-            console.log(`[Backend] ${data.toString().trim()}`);
-        });
-
-        // Capturar errores
-        backendProcess.stderr.on('data', (data) => {
-            console.error(`[Backend Error] ${data.toString().trim()}`);
-        });
-
-        // Manejar cierre del proceso
-        backendProcess.on('close', (code) => {
-            console.log(`[Backend] Proceso terminado con codigo ${code}`);
-            backendProcess = null;
-            isBackendStartedByElectron = false;
-
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('backend-status', { status: 'disconnected' });
-            }
-        });
-
-        // Manejar errores del proceso
-        backendProcess.on('error', (error) => {
-            console.error('Error al iniciar el backend:', error);
-            backendProcess = null;
-            isBackendStartedByElectron = false;
-            notifyUser('error', `Error al iniciar el backend: ${error.message}`);
-        });
-
-        // Esperar a que el backend esté listo
-        notifyUser('info', 'Iniciando servidor de Alfred...');
-        const isReady = await waitForBackend();
-
-        if (isReady) {
-            console.log('Backend iniciado correctamente');
-
-            // Verificar y mostrar estado de GPU
-            try {
-                const gpuStatus = await makeRequest('http://127.0.0.1:8000/gpu/status');
-                if (gpuStatus.success && gpuStatus.data) {
-                    console.log('\n' + '='.repeat(60));
-                    console.log('ESTADO DE GPU');
-                    console.log('='.repeat(60));
-
-                    if (gpuStatus.data.gpu_available) {
-                        console.log('---GPU DETECTADA Y ACTIVA');
-                        console.log(`   Tipo: ${gpuStatus.data.device_type}`);
-                        console.log(`   Dispositivo: ${gpuStatus.data.device}`);
-
-                        if (gpuStatus.data.gpu_info) {
-                            const info = gpuStatus.data.gpu_info;
-                            if (info.device_name) {
-                                console.log(`   Nombre: ${info.device_name}`);
-                            }
-                            if (info.memory_total) {
-                                console.log(`   Memoria: ${info.memory_total.toFixed(2)} GB`);
-                            }
-                            if (info.cuda_version) {
-                                console.log(`   CUDA: ${info.cuda_version}`);
-                            }
-                        }
-                        notifyUser('success', `Servidor iniciado con GPU ${gpuStatus.data.device_type}`);
-                    } else {
-                        console.log('---MODO CPU ACTIVO');
-                        console.log(`   Dispositivo: ${gpuStatus.data.device_type}`);
-                        console.log('   ---No se detectó GPU dedicada');
-                        notifyUser('success', 'Servidor iniciado en modo CPU');
-                    }
-                    console.log('='.repeat(60) + '\n');
-                } else {
-                    notifyUser('success', 'Servidor de Alfred iniciado correctamente');
-                }
-            } catch (error) {
-                console.log('No se pudo obtener el estado de GPU:', error.message);
-                notifyUser('success', 'Servidor de Alfred iniciado correctamente');
-            }
-
-            return true;
-        } else {
-            console.error('El backend no respondio a tiempo');
+        // Esperar a que el backend esté disponible antes de continuar
+        const ready = await waitForBackend();
+        if (!ready) {
+            console.error('El backend no respondio a tiempo.');
             stopBackend();
-            notifyUser('error', 'El servidor no respondio. Verifica los logs.');
             return false;
         }
 
+        console.log('Backend iniciado correctamente.');
+        return true;
     } catch (error) {
         console.error('Error al iniciar el backend:', error);
         notifyUser('error', `Error al iniciar el backend: ${error.message}`);
+        stopBackend();
         return false;
     }
 }
