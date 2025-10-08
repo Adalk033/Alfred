@@ -403,6 +403,26 @@ async def save_to_history(request: SaveHistoryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+@app.delete("/history/{timestamp}", tags=["Historial"])
+async def delete_history_entry(timestamp: str):
+    """
+    Eliminar una entrada del historial por su timestamp
+    
+    - **timestamp**: Timestamp ISO de la entrada a eliminar
+    """
+    try:
+        success = functionsToHistory.delete_qa_from_history(timestamp)
+        
+        if success:
+            return {"status": "success", "message": "Entrada eliminada del historial"}
+        else:
+            raise HTTPException(status_code=404, detail="No se encontro la entrada con ese timestamp")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar del historial: {str(e)}")
+
 @app.get("/stats", response_model=DatabaseStats, tags=["Estadísticas"])
 async def get_stats():
     """Obtener estadísticas de la base de datos y configuración"""

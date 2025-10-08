@@ -633,6 +633,18 @@ ipcMain.handle('save-to-history', async (event, data) => {
     }
 });
 
+ipcMain.handle('delete-history-item', async (event, timestamp) => {
+    try {
+        const result = await makeRequest(`http://127.0.0.1:8000/history/${encodeURIComponent(timestamp)}`, {
+            method: 'DELETE'
+        });
+
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
 ipcMain.handle('get-model', async () => {
     try {
         console.log('[MAIN] Obteniendo modelo actual desde http://127.0.0.1:8000/model');

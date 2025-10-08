@@ -341,21 +341,54 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
                     const list = document.createElement('ul');
                     list.className = 'message-sources-list';
 
-                    metadata.sources.slice(0, 3).forEach(source => {
+                    // Mostrar primeras 3 fuentes
+                    const visibleSources = metadata.sources.slice(0, 3);
+                    visibleSources.forEach(source => {
                         const li = document.createElement('li');
                         const fileName = source.split(/[\\/]/).pop();
                         li.textContent = fileName;
                         list.appendChild(li);
                     });
 
+                    // Si hay más de 3, agregar contenedor para las fuentes ocultas y botón expandir
                     if (metadata.sources.length > 3) {
-                        const li = document.createElement('li');
-                        li.textContent = `+${metadata.sources.length - 3} más...`;
-                        list.appendChild(li);
+                        const hiddenSourcesContainer = document.createElement('div');
+                        hiddenSourcesContainer.className = 'hidden-sources';
+                        hiddenSourcesContainer.style.display = 'none';
+
+                        const hiddenList = document.createElement('ul');
+                        hiddenList.className = 'message-sources-list';
+                        
+                        metadata.sources.slice(3).forEach(source => {
+                            const li = document.createElement('li');
+                            const fileName = source.split(/[\\/]/).pop();
+                            li.textContent = fileName;
+                            hiddenList.appendChild(li);
+                        });
+
+                        hiddenSourcesContainer.appendChild(hiddenList);
+
+                        const expandButton = document.createElement('button');
+                        expandButton.className = 'expand-sources-btn';
+                        expandButton.textContent = `+${metadata.sources.length - 3} más...`;
+                        expandButton.onclick = () => {
+                            const isHidden = hiddenSourcesContainer.style.display === 'none';
+                            hiddenSourcesContainer.style.display = isHidden ? 'block' : 'none';
+                            expandButton.textContent = isHidden 
+                                ? 'Ver menos' 
+                                : `+${metadata.sources.length - 3} más...`;
+                            expandButton.classList.toggle('expanded', isHidden);
+                        };
+
+                        list.appendChild(expandButton);
+                        sourcesDiv.appendChild(title);
+                        sourcesDiv.appendChild(list);
+                        sourcesDiv.appendChild(hiddenSourcesContainer);
+                    } else {
+                        sourcesDiv.appendChild(title);
+                        sourcesDiv.appendChild(list);
                     }
 
-                    sourcesDiv.appendChild(title);
-                    sourcesDiv.appendChild(list);
                     contentDiv.appendChild(sourcesDiv);
                 }
 
@@ -447,7 +480,10 @@ async function showHistory() {
                 result.data.forEach(item => {
                     const historyItem = document.createElement('div');
                     historyItem.className = 'history-item';
-                    historyItem.onclick = () => loadHistoryItem(item);
+                    
+                    const contentWrapper = document.createElement('div');
+                    contentWrapper.className = 'history-item-content';
+                    contentWrapper.onclick = () => loadHistoryItem(item);
 
                     const question = document.createElement('div');
                     question.className = 'history-question';
@@ -461,9 +497,26 @@ async function showHistory() {
                     time.className = 'history-time';
                     time.textContent = new Date(item.timestamp).toLocaleString('es-ES');
 
-                    historyItem.appendChild(question);
-                    historyItem.appendChild(answer);
-                    historyItem.appendChild(time);
+                    contentWrapper.appendChild(question);
+                    contentWrapper.appendChild(answer);
+                    contentWrapper.appendChild(time);
+
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'history-item-actions';
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-history-btn';
+                    deleteBtn.textContent = 'x';
+                    deleteBtn.title = 'Eliminar del historial';
+                    deleteBtn.onclick = async (e) => {
+                        e.stopPropagation();
+                        await deleteHistoryItem(item.timestamp);
+                    };
+
+                    actionsDiv.appendChild(deleteBtn);
+                    
+                    historyItem.appendChild(contentWrapper);
+                    historyItem.appendChild(actionsDiv);
                     State.sidebarContent.appendChild(historyItem);
                 });
             }
@@ -472,6 +525,24 @@ async function showHistory() {
         }
     } catch (error) {
         showNotification('Error al cargar el historial', 'error');
+        console.error('Error:', error);
+    }
+}
+
+// Eliminar item del historial
+async function deleteHistoryItem(timestamp) {
+    try {
+        const result = await window.alfredAPI.deleteHistoryItem(timestamp);
+        
+        if (result.success) {
+            showNotification('Pregunta eliminada del historial', 'success');
+            // Recargar el historial
+            await showHistory();
+        } else {
+            showNotification('Error al eliminar del historial', 'error');
+        }
+    } catch (error) {
+        showNotification('Error al eliminar del historial', 'error');
         console.error('Error:', error);
     }
 }
@@ -490,7 +561,8 @@ function loadHistoryItem(item) {
         sources: item.sources || []
     });
 
-    State.sidebar.style.display = 'none';
+    // Cerrar el sidebar usando la clase 'none' (consistente con el resto del codigo)
+    State.sidebar.classList.add('none');
 }
 
 function checkSidebar() {

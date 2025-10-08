@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   sendQuery: (question, searchDocuments) => ipcRenderer.invoke('send-query', question, searchDocuments),
   getHistory: (limit) => ipcRenderer.invoke('get-history', limit),
   saveToHistory: (data) => ipcRenderer.invoke('save-to-history', data),
+  deleteHistoryItem: (timestamp) => ipcRenderer.invoke('delete-history-item', timestamp),
   getModel: () => ipcRenderer.invoke('get-model'),
   changeModel: (modelName) => ipcRenderer.invoke('change-model', modelName),
   stopOllama: () => ipcRenderer.invoke('stop-ollama'),

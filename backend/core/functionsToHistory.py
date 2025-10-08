@@ -92,6 +92,43 @@ def load_qa_history(QA_HISTORY_FILE='alfred_qa_history.json'):
             print(f"Error al cargar historial: {e}")
     return []
 
+def delete_qa_from_history(timestamp, QA_HISTORY_FILE='alfred_qa_history.json'):
+    """
+    Elimina una entrada del historial de Q&A por su timestamp
+    
+    Args:
+        timestamp: Timestamp ISO de la entrada a eliminar
+        QA_HISTORY_FILE: Archivo del historial
+    
+    Returns:
+        True si se elimino exitosamente, False en caso contrario
+    """
+    # Cargar historial existente
+    history = load_qa_history(QA_HISTORY_FILE)
+    
+    if not history:
+        print("Historial vacio, no hay nada que eliminar")
+        return False
+    
+    # Filtrar la entrada con el timestamp especificado
+    original_length = len(history)
+    history = [entry for entry in history if entry.get('timestamp') != timestamp]
+    
+    # Verificar si se elimino algo
+    if len(history) == original_length:
+        print(f"No se encontro entrada con timestamp: {timestamp}")
+        return False
+    
+    # Guardar historial actualizado
+    try:
+        with open(QA_HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        print(f"Entrada eliminada del historial: {timestamp}")
+        return True
+    except Exception as e:
+        print(f"Error al guardar historial después de eliminar: {e}")
+        return False
+
 def search_in_qa_history(question, history=None, threshold=0.3, top_k=3):
     """
     Busca en el historial de Q&A respuestas similares a la pregunta actual.

@@ -390,7 +390,7 @@ class AlfredCore:
             context_parts = []
             if conversation_history and len(conversation_history) > 0:
                 context_parts.append("Previous messages in this conversation:")
-                for msg in conversation_history[-10:]:  # Ultimos 10 mensajes
+                for msg in conversation_history[-30:]:  # Ultimos 30 mensajes
                     role = "User" if msg["role"] == "user" else "Alfred"
                     context_parts.append(f"{role}: {msg['content']}")
             
@@ -442,7 +442,7 @@ class AlfredCore:
         conversation_history_text = ""
         if conversation_history and len(conversation_history) > 0:
             history_parts = ["Previous messages in this conversation:"]
-            for msg in conversation_history[-5:]:  # Ultimos 5 mensajes para contexto
+            for msg in conversation_history[-30:]:  # Ultimos 30 mensajes para contexto
                 role = "User" if msg["role"] == "user" else "Alfred"
                 history_parts.append(f"{role}: {msg['content']}")
             conversation_history_text = "\n".join(history_parts)

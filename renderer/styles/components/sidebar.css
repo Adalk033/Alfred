@@ -269,17 +269,57 @@
 
 /* Estilos para el historial */
 .history-item {
-    padding: 12px;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
     margin-bottom: 12px;
-    cursor: pointer;
+    overflow: hidden;
     transition: var(--transition);
 }
 
 .history-item:hover {
     background-color: var(--border-color);
+}
+
+.history-item-content {
+    flex: 1;
+    padding: 12px;
+    cursor: pointer;
+}
+
+.history-item-content:hover {
     transform: translateX(4px);
+}
+
+.history-item-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 8px;
+}
+
+.delete-history-btn {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 16px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-history-btn:hover {
+    background-color: var(--danger);
+    color: white;
+    transform: scale(1.1);
 }
 
 .history-question {

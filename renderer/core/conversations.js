@@ -155,7 +155,7 @@ export async function loadConversation(conversationId) {
 
                 scrollToBottom();
             }
-            
+
             updateConversationsList();
 
             showNotification('success', 'Conversacion cargada');
@@ -171,34 +171,57 @@ export async function loadConversation(conversationId) {
 
 // Eliminar una conversacion
 export async function deleteConversationById(conversationId) {
-    if (!confirm('Estas seguro de que deseas eliminar esta conversacion?')) {
+    // Usar setTimeout para evitar bloqueo del thread principal
+    const confirmed = await new Promise(resolve => {
+        setTimeout(() => {
+            resolve(confirm('Estas seguro de que deseas eliminar esta conversacion?'));
+        }, 0);
+    });
+
+    if (!confirmed) {
+        // Restaurar enfoque al textarea
+        if (State.messageInput) {
+            setTimeout(() => State.messageInput.focus(), 100);
+        }
         return;
     }
 
     try {
+        const wasCurrentConversation = conversationId === State.currentConversationId;
+
+        // Eliminar la conversacion
         const result = await window.alfredAPI.deleteConversation(conversationId);
 
         if (result.success) {
-            // Si es la conversacion actual, resetear
-            if (conversationId === State.currentConversationId) {
+            // Si es la conversacion actual, resetear inmediatamente
+            if (wasCurrentConversation) {
                 State.setCurrentConversationId(null);
                 State.clearConversationHistory();
-                
+
                 if (State.messagesContainer) {
                     State.messagesContainer.innerHTML = '';
+                }
 
-                    const welcomeDiv = document.createElement('div');
-                    welcomeDiv.className = 'welcome-message';
-                    welcomeDiv.innerHTML = `
-                        <h2>Hola! Soy Alfred</h2>
-                        <p>Conversacion eliminada. Puedes crear una nueva o cargar una existente.</p>
-                    `;
-                    State.messagesContainer.appendChild(welcomeDiv);
+                // Crear nueva conversacion en segundo plano sin bloquear
+                createNewConversation(null, true).then(() => {
+                    // Restaurar enfoque al textarea después de crear la conversacion
+                    if (State.messageInput) {
+                        setTimeout(() => State.messageInput.focus(), 100);
+                    }
+                }).catch(err => {
+                    console.error('Error al crear nueva conversacion:', err);
+                });
+            } else {
+                // Restaurar enfoque al textarea si no era la conversacion actual
+                if (State.messageInput) {
+                    setTimeout(() => State.messageInput.focus(), 100);
                 }
             }
 
-            // Actualizar lista
-            await loadConversations();
+            // Actualizar lista en segundo plano sin bloquear
+            loadConversations().catch(err => {
+                console.error('Error al cargar conversaciones:', err);
+            });
 
             showNotification('success', 'Conversacion eliminada');
         } else {
@@ -242,31 +265,31 @@ export async function renameConversation(conversationId, newTitle) {
 export function enableEditMode(conversationId, titleElement) {
     const currentTitle = titleElement.textContent;
     const conversationItem = titleElement.closest('.conversation-item');
-    
+
     // Crear input de edicion
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'conversation-title-edit';
     input.value = currentTitle;
     input.maxLength = 100;
-    
+
     // Reemplazar el titulo con el input
     titleElement.style.display = 'none';
     titleElement.parentNode.insertBefore(input, titleElement);
-    
+
     // Enfocar el input y seleccionar el texto
     input.focus();
     input.select();
-    
+
     // Crear botones de accion
     const actionsDiv = conversationItem.querySelector('.conversation-actions');
     const originalButtons = actionsDiv.innerHTML;
-    
+
     actionsDiv.innerHTML = `
         <button class="icon-btn edit-save" title="Guardar">✓</button>
         <button class="icon-btn edit-cancel" title="Cancelar">✗</button>
     `;
-    
+
     // Funcion para guardar el cambio
     const saveEdit = async () => {
         const newTitle = input.value.trim();
@@ -285,14 +308,14 @@ export function enableEditMode(conversationId, titleElement) {
             actionsDiv.innerHTML = originalButtons;
         }
     };
-    
+
     // Funcion para cancelar
     const cancelEdit = () => {
         input.remove();
         titleElement.style.display = '';
         actionsDiv.innerHTML = originalButtons;
     };
-    
+
     // Eventos para guardar
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -303,16 +326,16 @@ export function enableEditMode(conversationId, titleElement) {
             cancelEdit();
         }
     });
-    
+
     // Eventos para los botones
     const saveBtn = actionsDiv.querySelector('.edit-save');
     const cancelBtn = actionsDiv.querySelector('.edit-cancel');
-    
+
     saveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         saveEdit();
     });
-    
+
     cancelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         cancelEdit();
