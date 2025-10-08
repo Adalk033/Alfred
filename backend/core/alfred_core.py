@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Dict, Optional, Any, List
 from dotenv import load_dotenv
+from datetime import datetime
+import locale
 
 from langchain_ollama import OllamaLLM
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
@@ -22,6 +24,33 @@ from langchain_core.prompts import ChatPromptTemplate
 import config
 import functionsToHistory
 from gpu_manager import get_gpu_manager
+
+
+def get_current_datetime_spanish() -> str:
+    """
+    Obtener la fecha y hora actual formateada en español
+    
+    Returns:
+        String con fecha y hora en formato legible en español
+        Ejemplo: "Lunes, 7 de Octubre de 2025, 14:30:45 (hora local de Mexico)"
+    """
+    # Nombres de dias y meses en español
+    dias = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
+    meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+             'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    
+    now = datetime.now()
+    
+    # Formato: "Lunes, 7 de Octubre de 2025, 14:30:45"
+    dia_semana = dias[now.weekday()]
+    dia = now.day
+    mes = meses[now.month - 1]
+    año = now.year
+    hora = now.strftime("%H:%M:%S")
+    
+    fecha_formateada = f"{dia_semana}, {dia} de {mes} de {año}, {hora}"
+    
+    return fecha_formateada
 
 
 class AlfredCore:
@@ -263,11 +292,17 @@ class AlfredCore:
     
     def _setup_retrieval_chain(self):
         """Configurar la cadena de recuperación"""
-        # Preparar prompt
+        # Preparar prompt con fecha/hora actual
+        current_datetime = get_current_datetime_spanish()
+        
         if self.model_name in ["gpt-oss:20b"]:
             prompt_template = config.PROMPT_TEMPLATE_GPT_ONLY.replace("{USER_NAME}", self.user_name)
         else:
             prompt_template = config.PROMPT_TEMPLATE.replace("{USER_NAME}", self.user_name)
+        
+        # Inyectar fecha y hora actual en el prompt
+        prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
+        
         prompt = ChatPromptTemplate.from_template(prompt_template)
         
         # Configurar retriever
@@ -342,24 +377,35 @@ class AlfredCore:
         
         # 2. Si search_documents es False, responder solo con el LLM sin buscar en documentos
         if not search_documents:
-            # Construir prompt con historial de conversacion si existe
-            prompt_parts = ["Eres Alfred, un asistente personal inteligente."]
+            # Obtener fecha/hora actual
+            current_datetime = get_current_datetime_spanish()
             
+            # Usar el template para modo sin documentos
+            prompt_template = config.PROMPT_TEMPLATE_NO_DOCUMENTS.replace("{USER_NAME}", self.user_name)
+            
+            # Inyectar fecha y hora actual
+            prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
+            
+            # Construir contexto con historial de conversacion si existe
+            context_parts = []
             if conversation_history and len(conversation_history) > 0:
-                prompt_parts.append("\nHistorial de la conversacion:")
+                context_parts.append("Previous messages in this conversation:")
                 for msg in conversation_history[-10:]:  # Ultimos 10 mensajes
-                    role = "Usuario" if msg["role"] == "user" else "Alfred"
-                    prompt_parts.append(f"{role}: {msg['content']}")
-                prompt_parts.append("\n")
+                    role = "User" if msg["role"] == "user" else "Alfred"
+                    context_parts.append(f"{role}: {msg['content']}")
             
-            prompt_parts.append(f"Responde a la siguiente pregunta de manera clara y concisa:")
-            prompt_parts.append(f"\nPregunta: {question}")
-            prompt_parts.append("\nRespuesta:")
+            # Si no hay historial, indicar que no hay contexto adicional
+            if not context_parts:
+                context_parts.append("No previous conversation history.")
             
-            prompt = "\n".join(prompt_parts)
+            context_text = "\n".join(context_parts)
+            
+            # Reemplazar placeholders del template
+            final_prompt = prompt_template.replace("{context}", context_text)
+            final_prompt = final_prompt.replace("{input}", question)
             
             try:
-                answer = self.llm.invoke(prompt)
+                answer = self.llm.invoke(final_prompt)
                 
                 return {
                     'answer': answer,
@@ -380,17 +426,49 @@ class AlfredCore:
                 }
         
         # 3. Buscar en documentos usando la cadena de recuperación
-        # Construir input con historial de conversacion si existe
-        query_input = question
-        if conversation_history and len(conversation_history) > 0:
-            context_parts = ["Contexto de la conversacion anterior:"]
-            for msg in conversation_history[-5:]:  # Ultimos 5 mensajes para no saturar
-                role = "Usuario" if msg["role"] == "user" else "Alfred"
-                context_parts.append(f"{role}: {msg['content']}")
-            context_parts.append(f"\nPregunta actual: {question}")
-            query_input = "\n".join(context_parts)
+        # IMPORTANTE: Reconfigurar la cadena con la fecha/hora actual antes de cada consulta
+        current_datetime = get_current_datetime_spanish()
         
-        response = self.retrieval_chain.invoke({"input": query_input})
+        # Preparar prompt con fecha/hora actualizada usando el template para documentos
+        if self.model_name in ["gpt-oss:20b"]:
+            prompt_template = config.PROMPT_TEMPLATE_GPT_ONLY.replace("{USER_NAME}", self.user_name)
+        else:
+            prompt_template = config.PROMPT_TEMPLATE_WITH_DOCUMENTS.replace("{USER_NAME}", self.user_name)
+        
+        # Inyectar fecha y hora actual
+        prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
+        
+        # Construir historial de conversacion para el template
+        conversation_history_text = ""
+        if conversation_history and len(conversation_history) > 0:
+            history_parts = ["Previous messages in this conversation:"]
+            for msg in conversation_history[-5:]:  # Ultimos 5 mensajes para contexto
+                role = "User" if msg["role"] == "user" else "Alfred"
+                history_parts.append(f"{role}: {msg['content']}")
+            conversation_history_text = "\n".join(history_parts)
+        else:
+            conversation_history_text = "No previous conversation history."
+        
+        # Inyectar historial de conversacion en el template
+        prompt_template = prompt_template.replace("{conversation_history}", conversation_history_text)
+        
+        prompt = ChatPromptTemplate.from_template(prompt_template)
+        
+        # Recrear la cadena con el prompt actualizado
+        document_chain = create_stuff_documents_chain(self.llm, prompt)
+        retrieval_chain = create_retrieval_chain(
+            self.vectorstore.as_retriever(
+                search_type="mmr",
+                search_kwargs=search_kwargs or {"k": 20, "fetch_k": 100}
+            ),
+            document_chain
+        )
+        
+        # La pregunta se pasa directamente, el historial ya esta en el template
+        query_input = question
+        
+        # Usar la cadena actualizada en lugar de self.retrieval_chain
+        response = retrieval_chain.invoke({"input": query_input})
         
         # 4. Extraer datos personales de todos los fragmentos
         all_personal_data = {}
