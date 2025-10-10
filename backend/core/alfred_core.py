@@ -9,10 +9,9 @@ from pathlib import Path
 from typing import Dict, Optional, Any, List
 from dotenv import load_dotenv
 from datetime import datetime
-import locale
 
 from langchain_ollama import OllamaLLM
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma

@@ -14,6 +14,9 @@ backend_root = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "core"))
 sys.path.insert(0, str(backend_root / "gpu"))
+sys.path.insert(0, str(backend_root / "utils"))
+
+from utils.logger import get_logger
 
 # Configurar encoding UTF-8 para evitar errores con caracteres especiales en Windows
 if sys.platform == 'win32':
@@ -208,6 +211,16 @@ async def lifespan(app: FastAPI):
         print("="*60 + "\n", flush=True)
         sys.stdout.flush()
         # Aquí podrías agregar limpieza si es necesaria
+
+
+backend_logger = get_logger("server")
+rag_logger = get_logger("rag")
+security_logger = get_logger("security")
+
+# Log de inicio
+backend_logger.info(f"Iniciando backend Alfred en {os.getenv('ALFRED_IP', 'Not found')}:{os.getenv('ALFRED_PORT', 'Not found')}")
+rag_logger.info(f"Iniciando RAG en {os.getenv('ALFRED_RAG_IP', 'Not found')}:{os.getenv('ALFRED_RAG_PORT', 'Not found')}")
+security_logger.info(f"Iniciando seguridad en {os.getenv('ALFRED_SECURITY_IP', 'Not found')}:{os.getenv('ALFRED_SECURITY_PORT', 'Not found')}")
 
 # --- Crear aplicación FastAPI ---
 app = FastAPI(

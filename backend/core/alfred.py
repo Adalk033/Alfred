@@ -8,6 +8,7 @@ backend_root = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "core"))
 sys.path.insert(0, str(backend_root / "gpu"))
+sys.path.insert(0, str(backend_root / "utils"))
 
 from langchain_ollama import OllamaLLM
 from langchain_community.document_loaders import DirectoryLoader
