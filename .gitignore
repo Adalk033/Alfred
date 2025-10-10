@@ -42,9 +42,16 @@ chroma_db/
 *.env
 *.env.*
 
+# Logs
+logs/
+*.log
+
 # Archivos con información personal sensible
 .notReadable
 alfred_qa_history.json
 alfred_qa_history_backup_*.json
 # <-- Ignorar todos los archivos JSON en la carpeta conversations
 conversations/*.json
+
+# .key
+*.key
