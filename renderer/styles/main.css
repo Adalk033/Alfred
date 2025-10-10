@@ -5,6 +5,7 @@
 @import './components/profile.css';
 @import './components/topbar.css';
 @import './components/sidebar.css';
+@import './components/loading.css';
 
 /* styles.css - Estilos modernos para Alfred Electron */
 :root {

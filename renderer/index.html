@@ -11,6 +11,18 @@
 </head>
 
 <body>
+    <!-- Overlay de carga del backend -->
+    <div class="backend-loading-overlay" id="backendLoadingOverlay">
+        <div class="backend-loading-content">
+            <div class="loading-spinner"></div>
+            <h2>Iniciando Alfred</h2>
+            <p id="loadingStatusText">Conectando con el backend...</p>
+            <div class="loading-progress">
+                <div class="loading-progress-bar" id="loadingProgressBar"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Barra superior -->
     <div class="topbar">
         <div class="topbar-left">
@@ -42,9 +54,12 @@
             <div class="model-selector">
                 <label for="modelSelect">Modelo:</label>
                 <select id="modelSelect" class="model-select">
-                    <option value="gemma2:9b">Gemma2 9B</option>
+                    <option value="gemma3:4b">Gemma3 4B</option>
+                    <option value="gemma3n:e4b">Gemma3n e4B</option>
+                    <option value="gemma3:1b">Gemma3 1B</option>
+                    <option value="gemma3:12b">Gemma3 12B</option>
                     <option value="gpt-oss:20b">GPT-OSS 20B</option>
-                    <option value="deepseek-r1:7b">DeepSeek R1 7B</option>
+                    <option value="gemma2:9b">Gemma2 9B</option>
                 </select>
             </div>
             <button class="icon-button" onclick="stopOllama()" title="Detener Ollama (liberar recursos)">

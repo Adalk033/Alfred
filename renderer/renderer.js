@@ -86,7 +86,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     ollamaKeepAliveValue = document.getElementById('ollamaKeepAliveValue');
     ollamaKeepAlivePresets = document.querySelectorAll('.preset-btn');
 
-    await checkServerStatus();
+    // Esperar a que el backend este listo antes de habilitar el chat
+    await waitForBackendReady();
+    
     setupEventListeners();
     loadSettings();
     await loadCurrentModel();
@@ -166,6 +168,128 @@ function setupEventListeners() {
             });
         });
     }
+}
+
+// Esperar a que el backend este completamente listo
+async function waitForBackendReady() {
+    const API_BASE_URL = 'http://127.0.0.1:8000';
+    const MAX_RETRIES = 60; // 2 minutos maximo (60 * 2 segundos)
+    const RETRY_INTERVAL = 2000; // 2 segundos
+    
+    // Referencias al overlay
+    const overlay = document.getElementById('backendLoadingOverlay');
+    const statusText = document.getElementById('loadingStatusText');
+    const progressBar = document.getElementById('loadingProgressBar');
+    
+    // Deshabilitar input mientras se espera
+    if (State.messageInput) {
+        State.messageInput.disabled = true;
+        State.messageInput.placeholder = 'Iniciando Alfred...';
+    }
+    if (State.sendBtn) {
+        State.sendBtn.disabled = true;
+    }
+    
+    updateStatus('warning', 'Iniciando backend...', State.statusElement);
+    
+    let retries = 0;
+    
+    while (retries < MAX_RETRIES) {
+        try {
+            // Actualizar progreso visual
+            const progress = (retries / MAX_RETRIES) * 100;
+            if (progressBar) {
+                progressBar.style.width = `${progress}%`;
+            }
+            
+            // Intentar llamar al endpoint /health
+            const response = await fetch(`${API_BASE_URL}/health`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Verificar que el status sea "healthy" y que alfred_core este inicializado
+                if (data.status === 'healthy' && data.alfred_core_initialized && data.vectorstore_loaded) {
+                    // Backend esta listo!
+                    if (progressBar) {
+                        progressBar.style.width = '100%';
+                    }
+                    if (statusText) {
+                        statusText.textContent = 'Alfred esta listo!';
+                    }
+                    
+                    // Esperar un momento antes de ocultar el overlay
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Ocultar overlay
+                    if (overlay) {
+                        overlay.classList.add('hidden');
+                    }
+                    
+                    updateStatus('connected', 'Conectado', State.statusElement);
+                    
+                    // Habilitar input
+                    if (State.messageInput) {
+                        State.messageInput.disabled = false;
+                        State.messageInput.placeholder = 'Escribe tu mensaje aqui...';
+                    }
+                    if (State.sendBtn) {
+                        State.sendBtn.disabled = false;
+                    }
+                    
+                    showNotification('success', 'Alfred esta listo para ayudarte');
+                    await loadInitialStats();
+                    return true;
+                }
+                
+                // Backend responde pero no esta completamente listo
+                if (statusText) {
+                    if (!data.alfred_core_initialized) {
+                        statusText.textContent = 'Inicializando sistema...';
+                    } else if (!data.vectorstore_loaded) {
+                        statusText.textContent = 'Cargando documentos...';
+                    } else {
+                        statusText.textContent = 'Preparando recursos...';
+                    }
+                }
+                updateStatus('warning', 'Cargando...', State.statusElement);
+            }
+        } catch (error) {
+            // Error de conexion - backend aun no responde
+            console.log(`Esperando backend... intento ${retries + 1}/${MAX_RETRIES}`);
+            
+            if (statusText) {
+                const dots = '.'.repeat((retries % 3) + 1);
+                statusText.textContent = `Conectando con el backend${dots}`;
+            }
+        }
+        
+        // Esperar antes del siguiente intento
+        await new Promise(resolve => setTimeout(resolve, RETRY_INTERVAL));
+        retries++;
+        
+        // Actualizar mensaje de estado
+        const dots = '.'.repeat((retries % 3) + 1);
+        updateStatus('warning', `Iniciando backend${dots}`, State.statusElement);
+    }
+    
+    // Si llegamos aqui, el backend no se inicio en el tiempo esperado
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    if (statusText) {
+        statusText.textContent = 'Error al conectar con el backend';
+    }
+    
+    updateStatus('error', 'Error al iniciar backend', State.statusElement);
+    showNotification('error', 'No se pudo conectar con el backend despues de varios intentos. Intenta reiniciar la aplicacion.');
+    
+    return false;
 }
 
 // Verificar estado del servidor
