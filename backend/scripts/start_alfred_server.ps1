@@ -28,7 +28,7 @@ if (-not (Test-Path ".env")) {
 ALFRED_DOCS_PATH=C:\Users\$env:USERNAME\Documents
 
 # Configuración del servidor
-ALFRED_HOST=0.0.0.0
+ALFRED_HOST=127.0.0.1
 ALFRED_PORT=8000
 ALFRED_RELOAD=false
 
@@ -147,7 +147,7 @@ try {
 
 # Obtener configuración del servidor
 $host_addr = [System.Environment]::GetEnvironmentVariable('ALFRED_HOST', [System.EnvironmentVariableTarget]::Process)
-if (-not $host_addr) { $host_addr = "0.0.0.0" }
+if (-not $host_addr) { $host_addr = "127.0.0.1" }
 
 $port = [System.Environment]::GetEnvironmentVariable('ALFRED_PORT', [System.EnvironmentVariableTarget]::Process)
 if (-not $port) { $port = "8000" }

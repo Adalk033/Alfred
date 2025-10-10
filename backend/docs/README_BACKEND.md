@@ -22,7 +22,7 @@ Crea un archivo `.env` en la raíz del proyecto:
 ```env
 ALFRED_DOCS_PATH=C:\Users\TU_USUARIO\Documents
 ALFRED_USER_NAME=Tu Nombre
-ALFRED_HOST=0.0.0.0
+ALFRED_HOST=127.0.0.1
 ALFRED_PORT=8000
 ALFRED_MODEL=gemma2:9b
 ```
@@ -47,7 +47,7 @@ python alfred_backend.py
 
 **Opción 3: Con Uvicorn**
 ```powershell
-uvicorn alfred_backend:app --host 0.0.0.0 --port 8000
+uvicorn alfred_backend:app --host 127.0.0.1 --port 8000
 ```
 
 ### 4. Verificar que funciona
@@ -255,7 +255,7 @@ ALFRED_CHROMA_PATH=./chroma_db
 ALFRED_HISTORY_FILE=./alfred_qa_history.json
 
 # Servidor
-ALFRED_HOST=0.0.0.0
+ALFRED_HOST=127.0.0.1
 ALFRED_PORT=8000
 ALFRED_RELOAD=false
 

@@ -27,7 +27,7 @@ Crea un archivo `.env` en la raíz del proyecto:
 ALFRED_DOCS_PATH=C:\Users\TU_USUARIO\Documents
 
 # Configuración del servidor
-ALFRED_HOST=0.0.0.0
+ALFRED_HOST=127.0.0.1
 ALFRED_PORT=8000
 ALFRED_RELOAD=false
 
@@ -60,7 +60,7 @@ python alfred_backend.py
 
 ### Con Uvicorn directamente
 ```powershell
-uvicorn alfred_backend:app --host 0.0.0.0 --port 8000 --reload
+uvicorn alfred_backend:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ## 📚 Documentación de la API
@@ -261,7 +261,7 @@ services:
       - "8000:8000"
     environment:
       - ALFRED_DOCS_PATH=/data/documents
-      - ALFRED_HOST=0.0.0.0
+      - ALFRED_HOST=127.0.0.1
       - ALFRED_PORT=8000
       - ALFRED_USER_NAME=Usuario
     volumes:

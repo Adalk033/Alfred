@@ -194,7 +194,7 @@ ALFRED_DOCS_PATH=C:\Users\Usuario\Documents  # Ruta a documentos
 ALFRED_USER_NAME=Tu Nombre                   # Tu nombre
 
 # Servidor
-ALFRED_HOST=0.0.0.0                          # Host del servidor
+ALFRED_HOST=127.0.0.1                          # Host del servidor
 ALFRED_PORT=8000                             # Puerto
 
 # Modelos

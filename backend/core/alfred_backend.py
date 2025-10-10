@@ -495,7 +495,7 @@ async def get_current_model():
     try:
         current_model = alfred_core.get_current_model()
         # Lista de modelos disponibles (puedes expandir esto según tus necesidades)
-        available_models = ["gemma2:9b", "gpt-oss:20b", "deepseek-r1:7b"]
+        available_models = ["gemma2:9b", "gpt-oss:20b", "gemma3:12b", "gemma3:4b", "gemma3:1b", "gemma3n:e4b"]
         
         return ModelInfo(
             model_name=current_model,
@@ -987,7 +987,7 @@ if __name__ == "__main__":
     import uvicorn
     
     # Obtener configuración desde variables de entorno
-    host = os.getenv("ALFRED_HOST", "0.0.0.0")
+    host = os.getenv("ALFRED_HOST", "127.0.0.1")
     port = int(os.getenv("ALFRED_PORT", "8000"))
     reload = os.getenv("ALFRED_RELOAD", "false").lower() == "true"
     

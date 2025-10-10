@@ -215,7 +215,7 @@ if (-not $skipConfig) {
     # Preguntar configuración
     $docsPath = Read-HostWithDefault "Ruta a tus documentos" "C:\Users\$env:USERNAME\Documents"
     $userName = Read-HostWithDefault "Tu nombre" $env:USERNAME
-    $host_addr = Read-HostWithDefault "Host del servidor" "0.0.0.0"
+    $host_addr = Read-HostWithDefault "Host del servidor" "127.0.0.1"
     $port = Read-HostWithDefault "Puerto del servidor" "8000"
     $model = Read-HostWithDefault "Modelo LLM" "gemma2:9b"
     $embedModel = Read-HostWithDefault "Modelo de embeddings" "nomic-embed-text:v1.5"

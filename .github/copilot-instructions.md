@@ -138,7 +138,7 @@ This is intentional - FastAPI handles threading. Don't await LangChain chains.
 ALFRED_DOCS_PATH=          # REQUIRED: Path to personal documents
 ALFRED_MODEL=gemma2:9b     # LLM model name
 ALFRED_EMBEDDING_MODEL=nomic-embed-text:v1.5
-ALFRED_HOST=0.0.0.0        # API host
+ALFRED_HOST=127.0.0.1        # API host
 ALFRED_PORT=8000           # API port
 ALFRED_FORCE_RELOAD=false  # Force document reprocessing
 ```

@@ -177,7 +177,7 @@ El archivo `AlfredClient.cs` incluye:
 ALFRED_DOCS_PATH=C:\Users\TU_USUARIO\Documents
 
 # Servidor
-ALFRED_HOST=0.0.0.0
+ALFRED_HOST=127.0.0.1
 ALFRED_PORT=8000
 
 # IA
