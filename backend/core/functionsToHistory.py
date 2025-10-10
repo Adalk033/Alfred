@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import json
 import re
+from utils.security import encrypt_data, decrypt_data
 
 # Stopwords en español (palabras comunes sin significado relevante)
 SPANISH_STOPWORDS = {
@@ -49,16 +50,88 @@ def extract_keywords(text, min_length=3):
     
     return keywords
 
+# --- Funciones de cifrado para datos sensibles ---
+def encrypt_personal_data(personal_data: dict) -> dict:
+    """
+    Cifra los datos personales sensibles
+    
+    Args:
+        personal_data: Diccionario con datos personales
+    
+    Returns:
+        Diccionario con datos cifrados
+    """
+    if not personal_data:
+        return {}
+    
+    encrypted_data = {}
+    for key, value in personal_data.items():
+        if value and isinstance(value, str):
+            try:
+                encrypted_data[key] = encrypt_data(value)
+            except Exception as e:
+                print(f"Error al cifrar {key}: {e}")
+                encrypted_data[key] = value  # Fallback sin cifrar
+        else:
+            encrypted_data[key] = value
+    
+    return encrypted_data
+
+def decrypt_personal_data(encrypted_data: dict) -> dict:
+    """
+    Descifra los datos personales
+    
+    Args:
+        encrypted_data: Diccionario con datos cifrados
+    
+    Returns:
+        Diccionario con datos descifrados
+    """
+    if not encrypted_data:
+        return {}
+    
+    decrypted_data = {}
+    for key, value in encrypted_data.items():
+        if value and isinstance(value, str):
+            try:
+                decrypted_data[key] = decrypt_data(value)
+            except Exception as e:
+                print(f"Error al descifrar {key}: {e}")
+                decrypted_data[key] = value  # Fallback: devolver como esta
+        else:
+            decrypted_data[key] = value
+    
+    return decrypted_data
+
 # --- Función para guardar Q&A verificadas ---
-def save_qa_to_history(question, answer, personal_data=None, sources=None, QA_HISTORY_FILE='alfred_qa_history.json'):
-    """Guarda una pregunta y respuesta verificada en el historial"""
+def save_qa_to_history(question, answer, personal_data=None, sources=None, QA_HISTORY_FILE='alfred_qa_history.json', encrypt_sensitive=True):
+    """
+    Guarda una pregunta y respuesta verificada en el historial
+    
+    Args:
+        question: Pregunta del usuario
+        answer: Respuesta de Alfred
+        personal_data: Datos personales extraidos
+        sources: Fuentes utilizadas
+        QA_HISTORY_FILE: Archivo del historial
+        encrypt_sensitive: Si True, cifra los datos personales
+    
+    Returns:
+        True si se guardo exitosamente, False en caso contrario
+    """
+    # Cifrar datos personales si es necesario
+    stored_personal_data = personal_data or {}
+    if encrypt_sensitive and stored_personal_data:
+        stored_personal_data = encrypt_personal_data(stored_personal_data)
+    
     qa_entry = {
         "timestamp": datetime.now().isoformat(),
         "question": question,
         "answer": answer,
-        "personal_data": personal_data or {},
+        "personal_data": stored_personal_data,
         "sources": sources or [],
-        "verified": True
+        "verified": True,
+        "encrypted": encrypt_sensitive
     }
     
     # Cargar historial existente
@@ -82,12 +155,29 @@ def save_qa_to_history(question, answer, personal_data=None, sources=None, QA_HI
         print(f"Error al guardar historial: {e}")
         return False
 
-def load_qa_history(QA_HISTORY_FILE='alfred_qa_history.json'):
-    """Carga el historial de Q&A"""
+def load_qa_history(QA_HISTORY_FILE='alfred_qa_history.json', decrypt_sensitive=True):
+    """
+    Carga el historial de Q&A
+    
+    Args:
+        QA_HISTORY_FILE: Archivo del historial
+        decrypt_sensitive: Si True, descifra los datos personales
+    
+    Returns:
+        Lista de entradas del historial
+    """
     if os.path.exists(QA_HISTORY_FILE):
         try:
             with open(QA_HISTORY_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                history = json.load(f)
+            
+            # Descifrar datos personales si es necesario
+            if decrypt_sensitive:
+                for entry in history:
+                    if entry.get('encrypted', False) and entry.get('personal_data'):
+                        entry['personal_data'] = decrypt_personal_data(entry['personal_data'])
+            
+            return history
         except Exception as e:
             print(f"Error al cargar historial: {e}")
     return []

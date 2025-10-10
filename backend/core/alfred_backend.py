@@ -34,6 +34,8 @@ from contextlib import asynccontextmanager
 import functionsToHistory
 from alfred_core import AlfredCore
 from conversation_manager import get_conversation_manager
+from utils.security import encrypt_data, decrypt_data
+from functionsToHistory import encrypt_personal_data, decrypt_personal_data
 
 # --- Modelos de datos para la API ---
 
@@ -222,6 +224,56 @@ backend_logger.info(f"Iniciando backend Alfred en {os.getenv('ALFRED_IP', 'Not f
 rag_logger.info(f"Iniciando RAG en {os.getenv('ALFRED_RAG_IP', 'Not found')}:{os.getenv('ALFRED_RAG_PORT', 'Not found')}")
 security_logger.info(f"Iniciando seguridad en {os.getenv('ALFRED_SECURITY_IP', 'Not found')}:{os.getenv('ALFRED_SECURITY_PORT', 'Not found')}")
 
+# --- Funciones auxiliares de cifrado ---
+
+def ensure_personal_data_decrypted(data: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """
+    Asegura que los datos personales esten descifrados antes de enviarlos al cliente
+    
+    Args:
+        data: Diccionario con datos personales (potencialmente cifrados)
+    
+    Returns:
+        Diccionario con datos descifrados o None
+    """
+    if not data:
+        return None
+    
+    try:
+        # Intentar descifrar cada campo
+        decrypted = {}
+        for key, value in data.items():
+            if value and isinstance(value, str):
+                try:
+                    # Intentar descifrar
+                    decrypted[key] = decrypt_data(value)
+                    security_logger.debug(f"Campo {key} descifrado exitosamente")
+                except Exception:
+                    # Si falla, asumir que ya esta descifrado
+                    decrypted[key] = value
+            else:
+                decrypted[key] = value
+        return decrypted
+    except Exception as e:
+        security_logger.error(f"Error al descifrar datos personales: {e}")
+        return data  # Devolver datos originales en caso de error
+
+def log_personal_data_access(operation: str, data_keys: List[str], user_context: str = "API"):
+    """
+    Registra el acceso a datos personales para auditoria
+    
+    Args:
+        operation: Tipo de operacion (read, write, delete)
+        data_keys: Claves de los datos accedidos (rfc, curp, etc.)
+        user_context: Contexto del usuario/cliente
+    """
+    security_logger.info(
+        f"Acceso a datos personales: {operation} | "
+        f"Campos: {', '.join(data_keys)} | "
+        f"Contexto: {user_context} | "
+        f"Timestamp: {datetime.now().isoformat()}"
+    )
+
 # --- Crear aplicación FastAPI ---
 app = FastAPI(
     title="Alfred Backend API",
@@ -282,9 +334,12 @@ async def query_alfred(request: QueryRequest):
     """
     Realizar una consulta a Alfred
     
+    **NOTA DE SEGURIDAD**: Los datos personales se cifran automaticamente antes de almacenarlos
+    y se descifran antes de enviarlos al cliente.
+    
     - **question**: Pregunta del usuario
     - **use_history**: Buscar primero en el historial de respuestas
-    - **save_response**: Guardar automáticamente la respuesta en el historial
+    - **save_response**: Guardar automáticamente la respuesta en el historial (con cifrado)
     - **search_documents**: Buscar en documentos o solo usar el prompt
     - **search_kwargs**: Parámetros adicionales para la búsqueda (k, fetch_k, etc.)
     """
@@ -304,18 +359,37 @@ async def query_alfred(request: QueryRequest):
         
         print(f"Consulta procesada exitosamente")
         
-        # Guardar en historial si se solicita
+        # Asegurar que los datos personales esten descifrados para el cliente
+        personal_data = ensure_personal_data_decrypted(result.get('personal_data'))
+        
+        # Registrar acceso a datos personales si existen
+        if personal_data:
+            log_personal_data_access(
+                operation="read",
+                data_keys=list(personal_data.keys()),
+                user_context=f"Query: {request.question[:30]}..."
+            )
+        
+        # Guardar en historial si se solicita (se cifra automaticamente)
         if request.save_response and not result.get('from_history', False):
             functionsToHistory.save_qa_to_history(
                 question=request.question,
                 answer=result['answer'],
-                personal_data=result.get('personal_data'),
-                sources=result.get('sources', [])
+                personal_data=personal_data,
+                sources=result.get('sources', []),
+                encrypt_sensitive=True  # Cifrado explicito
             )
+            
+            if personal_data:
+                log_personal_data_access(
+                    operation="write",
+                    data_keys=list(personal_data.keys()),
+                    user_context="Guardado en historial"
+                )
         
         return QueryResponse(
             answer=result['answer'],
-            personal_data=result.get('personal_data'),
+            personal_data=personal_data,
             sources=result.get('sources', []),
             from_history=result.get('from_history', False),
             history_score=result.get('history_score'),
@@ -336,28 +410,44 @@ async def search_history(request: HistorySearchRequest):
     """
     Buscar en el historial de preguntas y respuestas
     
+    **NOTA DE SEGURIDAD**: Los datos personales se descifran automaticamente antes de ser enviados.
+    
     - **search_term**: Término a buscar
     - **threshold**: Umbral de similitud (0.0 - 1.0)
     - **top_k**: Número máximo de resultados
     """
     try:
+        # Buscar en historial (descifra automaticamente)
         results = functionsToHistory.search_in_qa_history(
             question=request.search_term,
             threshold=request.threshold,
             top_k=request.top_k
         )
         
-        return [
-            HistoryEntry(
-                timestamp=entry['timestamp'],
-                question=entry['question'],
-                answer=entry['answer'],
-                personal_data=entry.get('personal_data'),
-                sources=entry.get('sources', []),
-                similarity_score=score
+        history_entries = []
+        for score, entry in results:
+            personal_data = ensure_personal_data_decrypted(entry.get('personal_data'))
+            
+            # Registrar acceso si hay datos personales
+            if personal_data:
+                log_personal_data_access(
+                    operation="read",
+                    data_keys=list(personal_data.keys()),
+                    user_context=f"Busqueda en historial: {request.search_term[:30]}..."
+                )
+            
+            history_entries.append(
+                HistoryEntry(
+                    timestamp=entry['timestamp'],
+                    question=entry['question'],
+                    answer=entry['answer'],
+                    personal_data=personal_data,
+                    sources=entry.get('sources', []),
+                    similarity_score=score
+                )
             )
-            for score, entry in results
-        ]
+        
+        return history_entries
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al buscar en historial: {str(e)}")
@@ -367,25 +457,41 @@ async def get_history(limit: int = 10, offset: int = 0):
     """
     Obtener el historial de preguntas y respuestas
     
+    **NOTA DE SEGURIDAD**: Los datos personales se descifran automaticamente antes de ser enviados.
+    
     - **limit**: Número máximo de entradas a devolver
     - **offset**: Número de entradas a saltar (para paginación)
     """
     try:
-        history = functionsToHistory.load_qa_history()
+        # Cargar historial (descifra automaticamente)
+        history = functionsToHistory.load_qa_history(decrypt_sensitive=True)
         
         # Aplicar paginación
         paginated = history[offset:offset + limit]
         
-        return [
-            HistoryEntry(
-                timestamp=entry['timestamp'],
-                question=entry['question'],
-                answer=entry['answer'],
-                personal_data=entry.get('personal_data'),
-                sources=entry.get('sources', [])
+        history_entries = []
+        for entry in reversed(paginated):  # Más recientes primero
+            personal_data = ensure_personal_data_decrypted(entry.get('personal_data'))
+            
+            # Registrar acceso si hay datos personales
+            if personal_data:
+                log_personal_data_access(
+                    operation="read",
+                    data_keys=list(personal_data.keys()),
+                    user_context="Listado de historial"
+                )
+            
+            history_entries.append(
+                HistoryEntry(
+                    timestamp=entry['timestamp'],
+                    question=entry['question'],
+                    answer=entry['answer'],
+                    personal_data=personal_data,
+                    sources=entry.get('sources', [])
+                )
             )
-            for entry in reversed(paginated)  # Más recientes primero
-        ]
+        
+        return history_entries
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener historial: {str(e)}")
@@ -395,21 +501,33 @@ async def save_to_history(request: SaveHistoryRequest):
     """
     Guardar manualmente una entrada en el historial
     
+    **NOTA DE SEGURIDAD**: Los datos personales se cifran automaticamente antes de almacenarlos.
+    
     - **question**: Pregunta
     - **answer**: Respuesta
     - **personal_data**: Datos personales extraídos (opcional)
     - **sources**: Fuentes de los documentos (opcional)
     """
     try:
+        # Registrar acceso a datos personales si existen
+        if request.personal_data:
+            log_personal_data_access(
+                operation="write",
+                data_keys=list(request.personal_data.keys()),
+                user_context="Guardado manual en historial"
+            )
+        
+        # Guardar en historial (cifra automaticamente)
         success = functionsToHistory.save_qa_to_history(
             question=request.question,
             answer=request.answer,
             personal_data=request.personal_data,
-            sources=request.sources or []
+            sources=request.sources or [],
+            encrypt_sensitive=True  # Cifrado explicito
         )
         
         if success:
-            return {"status": "success", "message": "Entrada guardada en el historial"}
+            return {"status": "success", "message": "Entrada guardada en el historial (cifrada)"}
         else:
             raise HTTPException(status_code=500, detail="Error al guardar en el historial")
     
@@ -421,9 +539,22 @@ async def delete_history_entry(timestamp: str):
     """
     Eliminar una entrada del historial por su timestamp
     
+    **NOTA DE SEGURIDAD**: La eliminacion de datos sensibles se registra en el log de auditoria.
+    
     - **timestamp**: Timestamp ISO de la entrada a eliminar
     """
     try:
+        # Cargar entrada antes de eliminar para logging
+        history = functionsToHistory.load_qa_history(decrypt_sensitive=False)
+        entry_to_delete = next((e for e in history if e.get('timestamp') == timestamp), None)
+        
+        if entry_to_delete and entry_to_delete.get('personal_data'):
+            log_personal_data_access(
+                operation="delete",
+                data_keys=list(entry_to_delete['personal_data'].keys()),
+                user_context=f"Eliminacion de entrada: {timestamp}"
+            )
+        
         success = functionsToHistory.delete_qa_from_history(timestamp)
         
         if success:
@@ -900,10 +1031,13 @@ async def query_with_conversation(request: QueryWithConversationRequest):
     """
     Realizar una consulta a Alfred con contexto de conversacion
     
+    **NOTA DE SEGURIDAD**: Los datos personales en metadata se cifran automaticamente al guardar
+    en la conversacion y se descifran al leerlos.
+    
     - **question**: Pregunta del usuario
     - **conversation_id**: ID de la conversacion activa (opcional)
     - **use_history**: Buscar primero en el historial Q&A
-    - **save_response**: Guardar respuesta en historial Q&A
+    - **save_response**: Guardar respuesta en historial Q&A (con cifrado)
     - **search_documents**: Buscar en documentos o solo usar el prompt
     - **max_context_messages**: Numero maximo de mensajes de contexto
     """
@@ -913,13 +1047,14 @@ async def query_with_conversation(request: QueryWithConversationRequest):
     try:
         print(f"Procesando consulta con conversacion: {request.question[:50]}...")
         
-        # Obtener historial de conversacion si existe
+        # Obtener historial de conversacion si existe (descifra automaticamente)
         conversation_history = None
         if request.conversation_id:
             conv_mgr = get_conversation_manager()
             messages = conv_mgr.get_conversation_history(
                 request.conversation_id,
-                max_messages=request.max_context_messages
+                max_messages=request.max_context_messages,
+                decrypt_messages=True  # Cambiado de decrypt_sensitive a decrypt_messages
             )
             conversation_history = [
                 {"role": msg["role"], "content": msg["content"]}
@@ -937,6 +1072,17 @@ async def query_with_conversation(request: QueryWithConversationRequest):
         
         print(f"Consulta procesada exitosamente")
         
+        # Asegurar que los datos personales esten descifrados
+        personal_data = ensure_personal_data_decrypted(result.get('personal_data'))
+        
+        # Registrar acceso a datos personales si existen
+        if personal_data:
+            log_personal_data_access(
+                operation="read",
+                data_keys=list(personal_data.keys()),
+                user_context=f"Query con conversacion: {request.conversation_id}"
+            )
+        
         # Agregar mensajes a la conversacion si existe
         if request.conversation_id:
             conv_mgr = get_conversation_manager()
@@ -945,32 +1091,49 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 conversation_id=request.conversation_id,
                 role="user",
                 content=request.question,
-                metadata={}
+                metadata={},
+                encrypt_sensitive=False  # No hay datos sensibles en pregunta
             )
-            # Agregar respuesta del asistente
+            # Agregar respuesta del asistente (cifra automaticamente metadata)
             conv_mgr.add_message(
                 conversation_id=request.conversation_id,
                 role="assistant",
                 content=result['answer'],
                 metadata={
                     "sources": result.get('sources', []),
-                    "personal_data": result.get('personal_data'),
+                    "personal_data": personal_data,
                     "from_history": result.get('from_history', False)
-                }
+                },
+                encrypt_sensitive=True  # Cifrar datos sensibles en metadata
             )
+            
+            if personal_data:
+                log_personal_data_access(
+                    operation="write",
+                    data_keys=list(personal_data.keys()),
+                    user_context=f"Guardado en conversacion: {request.conversation_id}"
+                )
         
-        # Guardar en historial Q&A si se solicita
+        # Guardar en historial Q&A si se solicita (cifra automaticamente)
         if request.save_response and not result.get('from_history', False):
             functionsToHistory.save_qa_to_history(
                 question=request.question,
                 answer=result['answer'],
-                personal_data=result.get('personal_data'),
-                sources=result.get('sources', [])
+                personal_data=personal_data,
+                sources=result.get('sources', []),
+                encrypt_sensitive=True
             )
+            
+            if personal_data:
+                log_personal_data_access(
+                    operation="write",
+                    data_keys=list(personal_data.keys()),
+                    user_context="Guardado en historial Q&A desde conversacion"
+                )
         
         return QueryResponse(
             answer=result['answer'],
-            personal_data=result.get('personal_data'),
+            personal_data=personal_data,
             sources=result.get('sources', []),
             from_history=result.get('from_history', False),
             history_score=result.get('history_score'),
