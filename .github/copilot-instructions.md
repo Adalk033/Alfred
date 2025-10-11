@@ -32,6 +32,7 @@ ChromaDB       Ollama (gemma2:9b)    gpu_manager.py
 - `alfred_core.py`: `AlfredCore` class handles document loading, vector search, and LLM chains
 - `config.py`: Prompt templates (Spanish responses, explicit consent for personal data extraction)
 - `functionsToHistory.py`: Q&A history with keyword-based similarity scoring using Spanish stopwords
+- `db_manager.py`: SQLite database manager for persistent storage (conversations, Q&A history, encrypted data)
 - `gpu_manager.py`: Auto-detects NVIDIA/AMD/Apple Silicon GPUs and configures Ollama accordingly
 
 ### Frontend (`AlfredElectron/`)
@@ -175,10 +176,11 @@ Frontend shows visual notifications via `window.alfredAPI.onBackendNotification(
 - Directory: `Alfred/chroma_db/` (SQLite + HNSW indexes)
 - Reset: Delete directory and restart backend with `ALFRED_FORCE_RELOAD=true`
 
-### Q&A History
-- JSON file: `Alfred/alfred_qa_history.json`
-- Format: `[{timestamp, question, answer, personal_data, sources, verified}]`
-- Searchable via `/history/search` endpoint with keyword similarity scoring
+### Q&A History (SQLite)
+- Database: `%AppData%/Alfred/db/alfred.db` (tabla `qa_history`)
+- Cifrado: AES-256-GCM para todos los campos (pregunta, respuesta, datos personales)
+- Searchable via `/history/search` endpoint con similitud de keywords
+- Migracion legacy: `python backend/migrate_json_to_sqlite.py` para convertir JSON antiguo
 
 ### Ollama Communication
 - HTTP API: `http://localhost:11434` (default Ollama port)
@@ -197,7 +199,7 @@ Frontend shows visual notifications via `window.alfredAPI.onBackendNotification(
 
 1. **Spanish Language**: All user-facing responses are in Spanish (configured in `config.py` prompts)
 2. **Windows-First**: Project assumes Windows (`pwsh.exe`, `\` paths) but includes cross-platform fallbacks
-3. **No Database Migrations**: ChromaDB is schema-less; delete `chroma_db/` to reset
+3. **SQLite Database**: All persistent data (conversations, Q&A history, metadata) stored in `alfred.db` with AES-256-GCM encryption
 4. **LangChain Version**: Uses community integrations (`langchain_community`, `langchain_ollama`)
 5. **CORS Enabled**: `allow_origins=["*"]` in FastAPI for C# client compatibility
 

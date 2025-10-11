@@ -33,7 +33,7 @@ from contextlib import asynccontextmanager
 
 # Importar módulos locales
 import functionsToHistory
-from alfred_core_refactored import AlfredCore as AlfredCoreRefactored
+from alfred_core import AlfredCore
 from conversation_manager import get_conversation_manager
 from utils.security import encrypt_data, decrypt_data
 from functionsToHistory import encrypt_personal_data, decrypt_personal_data
@@ -219,7 +219,7 @@ class OllamaKeepAliveResponse(BaseModel):
     description: str = Field(..., description="Descripcion del comportamiento")
 
 # --- Inicialización del núcleo de Alfred ---
-alfred_core: Optional[AlfredCoreRefactored] = None
+alfred_core: Optional[AlfredCore] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -236,8 +236,8 @@ async def lifespan(app: FastAPI):
     
     try:
         # Inicializar el núcleo de Alfred con version refactorizada (async + optimizaciones)
-        print("Creando instancia de AlfredCoreRefactored...", flush=True)
-        alfred_core = AlfredCoreRefactored()
+        print("Creando instancia de AlfredCore...", flush=True)
+        alfred_core = AlfredCore()
         
         print("Inicializando componentes async (lazy loading)...", flush=True)
         await alfred_core.initialize_async()

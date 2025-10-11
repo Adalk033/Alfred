@@ -10,9 +10,20 @@ chroma_db/
 *.env
 *.env.*
 
-# Archivos con información personal sensible
+# Archivos con informacion personal sensible
 .notReadable
 alfred_qa_history.json
 alfred_qa_history_backup_*.json
-# <-- Ignorar todos los archivos JSON en la carpeta conversations
+
+# Conversaciones (JSON legacy)
 conversations/*.json
+
+# Base de datos SQLite (contiene datos cifrados)
+*.db
+*.sqlite
+*.sqlite3
+db/
+
+# Claves de cifrado
+*.key
+secret.key
