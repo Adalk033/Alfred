@@ -55,13 +55,35 @@ class AlfredCore:
         """Inicializar Alfred Core con lazy loading"""
         load_dotenv()
         
-        # Configuracion desde variables de entorno
+        # Configuracion desde variables de entorno (valores por defecto)
         self.docs_path = os.getenv('ALFRED_DOCS_PATH')
         self.chroma_db_path = os.getenv('ALFRED_CHROMA_PATH', './chroma_db')
         self.force_reload = os.getenv('ALFRED_FORCE_RELOAD', 'false').lower() == 'true'
         # qa_history_file OBSOLETO - ahora se usa SQLite (db_manager.py)
         self.user_name = os.getenv('ALFRED_USER_NAME', 'Usuario')
-        self.model_name = os.getenv('ALFRED_MODEL', 'gemma2:9b')
+        
+        # Modelo LLM: Prioridad BD > .env
+        # Cargar desde base de datos si existe, sino desde .env
+        from db_manager import get_model_setting, set_model_setting, init_db
+        
+        # Asegurar que BD este inicializada
+        try:
+            init_db()
+        except:
+            pass  # BD ya existe
+        
+        env_model = os.getenv('ALFRED_MODEL', 'gemma2:9b')
+        db_model = get_model_setting('last_used_model')
+        
+        if db_model:
+            logger.info(f"Cargando modelo desde BD: {db_model}")
+            self.model_name = db_model
+        else:
+            logger.info(f"No hay modelo en BD, usando .env: {env_model}")
+            self.model_name = env_model
+            # Guardar en BD para proximas ejecuciones
+            set_model_setting('last_used_model', env_model)
+        
         self.embedding_model = os.getenv('ALFRED_EMBEDDING_MODEL', 'nomic-embed-text:v1.5')
         self.ollama_keep_alive = int(os.getenv('ALFRED_OLLAMA_KEEP_ALIVE', '30'))
         
@@ -338,36 +360,53 @@ class AlfredCore:
     
     def change_model(self, new_model: str) -> bool:
         """
-        Cambiar el modelo LLM dinamicamente (lazy - solo guarda config)
+        Cambiar el modelo LLM dinamicamente
         
-        El modelo no se carga hasta que se use en la proxima consulta.
-        Esto permite cambiar entre modelos sin esperas ni verificaciones.
+        Proceso:
+        1. Mata proceso Ollama para liberar modelo anterior de memoria
+        2. Guarda nuevo modelo en base de datos SQLite
+        3. Invalida instancia LLM para forzar recarga
         
         Args:
-            new_model: Nombre del nuevo modelo a utilizar
+            new_model: Nombre del nuevo modelo a utilizar (ej: 'gemma2:9b', 'llama3.2:3b')
         
         Returns:
             True si el cambio fue exitoso, False en caso contrario
         """
         try:
-            logger.info(f"Cambiando configuracion de modelo: {self.model_name} -> {new_model}")
-            print(f"[DEBUG] Guardando configuracion de modelo: {new_model}")
+            from db_manager import set_model_setting
+            from utils.process_utils import kill_ollama_process
             
-            # SOLO actualizar la configuracion - NO crear instancia ni verificar
-            # El modelo se cargara automaticamente en la proxima consulta (lazy loading)
             old_model = self.model_name
+            logger.info(f"Iniciando cambio de modelo: {old_model} -> {new_model}")
+            
+            # 1. Matar proceso Ollama para liberar memoria del modelo anterior
+            logger.info("Matando proceso Ollama para liberar modelo anterior...")
+            if kill_ollama_process():
+                logger.info("Proceso Ollama terminado exitosamente")
+            else:
+                logger.warning("No se pudo terminar proceso Ollama (podria no estar corriendo)")
+            
+            # 2. Guardar nuevo modelo en base de datos
+            logger.info(f"Guardando modelo en base de datos: {new_model}")
+            if not set_model_setting('last_used_model', new_model):
+                logger.error("Error al guardar modelo en base de datos")
+                return False
+            
+            # 3. Actualizar configuracion en memoria
             self.model_name = new_model
             
-            # Invalidar LLM actual para forzar recarga en proxima consulta
+            # 4. Invalidar instancia LLM para forzar recarga en proxima consulta
             self._llm = None
             
-            logger.info(f"Configuracion de modelo actualizada: {old_model} -> {new_model}")
-            print(f"[DEBUG] Modelo configurado como: {new_model} (se cargara en la proxima consulta)")
+            logger.info(f"Modelo cambiado exitosamente: {old_model} -> {new_model}")
+            logger.info("El nuevo modelo se cargara automaticamente en la proxima consulta")
             return True
             
         except Exception as e:
-            logger.error(f"Error al cambiar configuracion de modelo: {e}")
-            print(f"[DEBUG ERROR] Error: {e}")
+            logger.error(f"Error al cambiar modelo: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def _expand_query_async(self, question: str) -> str:

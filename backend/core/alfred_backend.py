@@ -827,6 +827,55 @@ async def change_model(request: ChangeModelRequest):
         print(f"[BACKEND ERROR] {error_detail}")
         raise HTTPException(status_code=500, detail=error_detail)
 
+@app.get("/model/current", tags=["Configuración"])
+async def get_current_model():
+    """
+    Obtener el modelo LLM actualmente configurado
+    
+    Retorna el modelo activo almacenado en base de datos SQLite.
+    Este es el modelo que se cargara en la proxima consulta.
+    
+    Returns:
+        {
+            "model_name": "gemma2:9b",
+            "source": "database" | "env" | "default",
+            "is_loaded": true | false
+        }
+    """
+    if not alfred_core:
+        raise HTTPException(status_code=503, detail="Alfred Core no está inicializado")
+    
+    try:
+        from db_manager import get_model_setting
+        
+        # Modelo actualmente configurado en memoria
+        current_model = alfred_core.get_current_model()
+        
+        # Modelo guardado en BD (puede ser diferente si acaba de iniciar)
+        db_model = get_model_setting('last_used_model')
+        
+        # Verificar si LLM esta cargado en memoria
+        is_loaded = alfred_core._llm is not None
+        
+        # Determinar fuente del modelo
+        if db_model and db_model == current_model:
+            source = "database"
+        elif current_model == os.getenv('ALFRED_MODEL', 'gemma2:9b'):
+            source = "env"
+        else:
+            source = "memory"
+        
+        return {
+            "model_name": current_model,
+            "source": source,
+            "is_loaded": is_loaded,
+            "db_model": db_model,
+            "env_model": os.getenv('ALFRED_MODEL', 'gemma2:9b')
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener modelo actual: {str(e)}")
+
 @app.get("/gpu/status", response_model=GPUStatus, tags=["Sistema"])
 async def get_gpu_status():
     """

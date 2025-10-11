@@ -133,6 +133,20 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_documents_meta_indexed_at ON documents_meta(indexed_at DESC);
     """)
 
+    # Tabla para configuracion de modelos (persistir ultimo modelo usado)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS model_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        setting_key TEXT UNIQUE NOT NULL,
+        setting_value TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_model_settings_key ON model_settings(setting_key);
+    """)
+
     conn.commit()
     conn.close()
     db_logger.info("Base de datos inicializada correctamente")
@@ -531,6 +545,118 @@ def delete_memory(key: str):
         return deleted
     except Exception as e:
         db_logger.error(f"Error al eliminar de memoria: {e}")
+        return False
+    finally:
+        conn.close()
+
+# --- Funciones para Model Settings (persistir configuracion de modelos) ---
+
+def set_model_setting(key: str, value: str):
+    """
+    Guarda una configuracion de modelo (sin cifrar, es metadata del sistema)
+    
+    Args:
+        key: Clave de configuracion (ej: 'last_used_model', 'last_embedding_model')
+        value: Valor de configuracion (ej: 'gemma2:9b')
+    
+    Returns:
+        True si se guardo exitosamente, False en caso contrario
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute(
+            """INSERT OR REPLACE INTO model_settings (setting_key, setting_value, updated_at) 
+               VALUES (?, ?, CURRENT_TIMESTAMP)""",
+            (key, value)
+        )
+        conn.commit()
+        db_logger.info(f"Model setting guardado: {key} = {value}")
+        return True
+    except Exception as e:
+        db_logger.error(f"Error al guardar model setting: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_model_setting(key: str, default: str = None):
+    """
+    Obtiene una configuracion de modelo
+    
+    Args:
+        key: Clave de configuracion
+        default: Valor por defecto si no existe
+    
+    Returns:
+        Valor de configuracion o default si no existe
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT setting_value FROM model_settings WHERE setting_key = ?", (key,))
+        row = cursor.fetchone()
+        
+        if row and row["setting_value"]:
+            return row["setting_value"]
+        return default
+    except Exception as e:
+        db_logger.error(f"Error al obtener model setting: {e}")
+        return default
+    finally:
+        conn.close()
+
+def get_all_model_settings():
+    """
+    Obtiene todas las configuraciones de modelos
+    
+    Returns:
+        Diccionario con todas las configuraciones {key: value}
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT setting_key, setting_value, updated_at FROM model_settings")
+        rows = cursor.fetchall()
+        
+        settings = {}
+        for row in rows:
+            settings[row["setting_key"]] = {
+                "value": row["setting_value"],
+                "updated_at": row["updated_at"]
+            }
+        
+        return settings
+    except Exception as e:
+        db_logger.error(f"Error al obtener model settings: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def delete_model_setting(key: str):
+    """
+    Elimina una configuracion de modelo
+    
+    Args:
+        key: Clave a eliminar
+    
+    Returns:
+        True si se elimino, False en caso contrario
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM model_settings WHERE setting_key = ?", (key,))
+        conn.commit()
+        deleted = cursor.rowcount > 0
+        if deleted:
+            db_logger.info(f"Model setting eliminado: {key}")
+        return deleted
+    except Exception as e:
+        db_logger.error(f"Error al eliminar model setting: {e}")
         return False
     finally:
         conn.close()
