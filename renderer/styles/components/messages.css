@@ -211,6 +211,13 @@
     font-size: 10px;
 }
 
+.message-tag.time-tag {
+    background: linear-gradient(135deg, rgba(0, 123, 255, 0.2), rgba(0, 123, 255, 0.1));
+    border: 1px solid rgba(0, 123, 255, 0.3);
+    color: var(--primary);
+    font-weight: 600;
+}
+
 .message-sources {
     margin-top: 8px;
     padding: 8px;

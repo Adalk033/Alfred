@@ -351,6 +351,9 @@ async function sendMessage() {
     State.typingIndicator.style.display = 'flex';
     scrollToBottom();
 
+    // Capturar tiempo de inicio
+    const startTime = performance.now();
+
     try {
         // Enviar consulta a Alfred con el modo de busqueda seleccionado y el ID de conversacion
         const searchDocuments = State.searchMode === 'documents';
@@ -358,10 +361,18 @@ async function sendMessage() {
 
         const result = await window.alfredAPI.sendQueryWithConversation(message, getCurrentConversationId(), searchDocuments);
 
+        // Capturar tiempo de fin y calcular duracion
+        const endTime = performance.now();
+        const responseTime = ((endTime - startTime) / 1000).toFixed(2); // Convertir a segundos
+
         console.log('📥 Respuesta recibida:', result);
+        console.log('⏱️ Tiempo de respuesta:', responseTime + 's');
 
         if (result.success) {
             const response = result.data;
+
+            // Agregar tiempo de respuesta al metadata
+            response.response_time = responseTime;
 
             // Ocultar indicador de escritura
             State.typingIndicator.style.display = 'none';
@@ -436,6 +447,14 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
             if (metadata) {
                 const meta = document.createElement('div');
                 meta.className = 'message-meta';
+
+                // Mostrar tiempo de respuesta
+                if (metadata.response_time) {
+                    const timeTag = document.createElement('span');
+                    timeTag.className = 'message-tag time-tag';
+                    timeTag.textContent = `⏱️ ${metadata.response_time}s`;
+                    meta.appendChild(timeTag);
+                }
 
                 if (metadata.from_history) {
                     const tag = document.createElement('span');
