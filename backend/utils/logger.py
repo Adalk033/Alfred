@@ -1,6 +1,6 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler
-from paths import get_log_path
+from utils.paths import get_log_path
 
 def get_logger(name):
     log_path = get_log_path() / f"{name}.log"

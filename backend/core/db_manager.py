@@ -104,6 +104,35 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_conversation_threads_updated ON conversation_threads(updated_at DESC);
     """)
 
+    # Tabla para metadatos de documentos indexados (indexacion incremental)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS documents_meta (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_path TEXT UNIQUE NOT NULL,
+        file_hash TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        last_modified REAL NOT NULL,
+        indexed_at TEXT NOT NULL,
+        doc_type TEXT,
+        chunk_count INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'indexed',
+        error_message TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_documents_meta_file_hash ON documents_meta(file_hash);
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_documents_meta_status ON documents_meta(status);
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_documents_meta_indexed_at ON documents_meta(indexed_at DESC);
+    """)
+
     conn.commit()
     conn.close()
     db_logger.info("Base de datos inicializada correctamente")
@@ -1081,5 +1110,203 @@ def get_conversation_stats():
         return {"total_conversations": 0, "total_messages": 0, "avg_messages_per_conversation": 0}
     finally:
         conn.close()
+
+
+# --- Funciones para Document Metadata (indexacion incremental) ---
+
+def insert_document_meta(file_path: str, file_hash: str, file_size: int, 
+                        last_modified: float, indexed_at: str, doc_type: str = None,
+                        chunk_count: int = 0, status: str = "indexed"):
+    """
+    Inserta o actualiza metadata de un documento indexado
+    
+    Args:
+        file_path: Ruta completa del archivo
+        file_hash: Hash SHA256 del archivo
+        file_size: Tamano del archivo en bytes
+        last_modified: Timestamp de ultima modificacion
+        indexed_at: Timestamp ISO de indexacion
+        doc_type: Extension del archivo (.pdf, .txt, etc)
+        chunk_count: Numero de chunks generados
+        status: Estado del documento (indexed, error, deleted)
+    
+    Returns:
+        ID de la entrada insertada/actualizada o None en caso de error
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute(
+            """INSERT INTO documents_meta 
+               (file_path, file_hash, file_size, last_modified, indexed_at, doc_type, chunk_count, status) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(file_path) DO UPDATE SET
+                   file_hash = excluded.file_hash,
+                   file_size = excluded.file_size,
+                   last_modified = excluded.last_modified,
+                   indexed_at = excluded.indexed_at,
+                   chunk_count = excluded.chunk_count,
+                   status = excluded.status,
+                   updated_at = CURRENT_TIMESTAMP""",
+            (file_path, file_hash, file_size, last_modified, indexed_at, doc_type, chunk_count, status)
+        )
+        conn.commit()
+        row_id = cursor.lastrowid
+        db_logger.info(f"Metadata de documento guardada: {file_path}")
+        return row_id
+    except Exception as e:
+        db_logger.error(f"Error al insertar metadata de documento: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def get_document_meta(file_path: str = None):
+    """
+    Obtiene metadata de documentos
+    
+    Args:
+        file_path: Ruta del archivo especifico (opcional)
+    
+    Returns:
+        Dict con metadata del documento o lista de todos si no se especifica file_path
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        if file_path:
+            cursor.execute(
+                "SELECT * FROM documents_meta WHERE file_path = ?",
+                (file_path,)
+            )
+            row = cursor.fetchone()
+            
+            if row:
+                return dict(row)
+            return None
+        else:
+            cursor.execute("SELECT * FROM documents_meta ORDER BY indexed_at DESC")
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
+    finally:
+        conn.close()
+
+
+def get_all_document_hashes():
+    """
+    Obtiene un diccionario con todos los hashes de documentos indexados
+    
+    Returns:
+        Dict {file_path: file_hash}
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT file_path, file_hash FROM documents_meta WHERE status = 'indexed'")
+        rows = cursor.fetchall()
+        return {row['file_path']: row['file_hash'] for row in rows}
+    
+    finally:
+        conn.close()
+
+
+def delete_document_meta(file_path: str):
+    """
+    Elimina metadata de un documento
+    
+    Args:
+        file_path: Ruta del archivo a eliminar
+    
+    Returns:
+        True si se elimino correctamente
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM documents_meta WHERE file_path = ?", (file_path,))
+        conn.commit()
+        db_logger.info(f"Metadata de documento eliminada: {file_path}")
+        return True
+    except Exception as e:
+        db_logger.error(f"Error al eliminar metadata de documento: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def update_document_status(file_path: str, status: str, error_message: str = None):
+    """
+    Actualiza el estado de un documento
+    
+    Args:
+        file_path: Ruta del archivo
+        status: Nuevo estado (indexed, error, deleted)
+        error_message: Mensaje de error si aplica
+    
+    Returns:
+        True si se actualizo correctamente
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute(
+            """UPDATE documents_meta 
+               SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE file_path = ?""",
+            (status, error_message, file_path)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        db_logger.error(f"Error al actualizar estado de documento: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_document_stats():
+    """
+    Obtiene estadisticas de documentos indexados
+    
+    Returns:
+        Dict con estadisticas
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT COUNT(*) as total FROM documents_meta")
+        total = cursor.fetchone()['total']
+        
+        cursor.execute("SELECT COUNT(*) as indexed FROM documents_meta WHERE status = 'indexed'")
+        indexed = cursor.fetchone()['indexed']
+        
+        cursor.execute("SELECT COUNT(*) as errors FROM documents_meta WHERE status = 'error'")
+        errors = cursor.fetchone()['errors']
+        
+        cursor.execute("SELECT SUM(chunk_count) as total_chunks FROM documents_meta WHERE status = 'indexed'")
+        total_chunks = cursor.fetchone()['total_chunks'] or 0
+        
+        cursor.execute("SELECT SUM(file_size) as total_size FROM documents_meta WHERE status = 'indexed'")
+        total_size = cursor.fetchone()['total_size'] or 0
+        
+        return {
+            'total_documents': total,
+            'indexed_documents': indexed,
+            'error_documents': errors,
+            'total_chunks': total_chunks,
+            'total_size_bytes': total_size,
+            'total_size_mb': round(total_size / (1024 * 1024), 2)
+        }
+    
+    finally:
+        conn.close()
+
 
 

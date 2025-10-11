@@ -26,14 +26,14 @@ if sys.platform == 'win32':
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 
 # Importar módulos locales
 import functionsToHistory
-from alfred_core import AlfredCore
+from alfred_core_refactored import AlfredCore as AlfredCoreRefactored
 from conversation_manager import get_conversation_manager
 from utils.security import encrypt_data, decrypt_data
 from functionsToHistory import encrypt_personal_data, decrypt_personal_data
@@ -41,15 +41,42 @@ from functionsToHistory import encrypt_personal_data, decrypt_personal_data
 # --- Modelos de datos para la API ---
 
 class QueryRequest(BaseModel):
-    """Solicitud de consulta al asistente"""
-    question: str = Field(..., description="Pregunta del usuario", min_length=1)
+    """Solicitud de consulta al asistente con validacion mejorada"""
+    question: str = Field(
+        ..., 
+        description="Pregunta del usuario", 
+        min_length=1,
+        max_length=2000
+    )
     use_history: bool = Field(True, description="Buscar primero en el historial")
-    save_response: bool = Field(False, description="Guardar respuesta automáticamente")
+    save_response: bool = Field(False, description="Guardar respuesta automaticamente")
     search_documents: bool = Field(True, description="Buscar en documentos o solo usar el prompt")
     search_kwargs: Optional[Dict[str, Any]] = Field(
         None, 
-        description="Parámetros adicionales de búsqueda (k, fetch_k, etc.)"
+        description="Parametros adicionales de busqueda (k, fetch_k, search_type)"
     )
+    
+    @field_validator('question')
+    @classmethod
+    def validate_question(cls, v: str) -> str:
+        """Validar que la pregunta no este vacia despues de strip"""
+        if not v or not v.strip():
+            raise ValueError('La pregunta no puede estar vacia')
+        return v.strip()
+    
+    @field_validator('search_kwargs')
+    @classmethod
+    def validate_search_kwargs(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Validar que search_kwargs solo contenga claves permitidas"""
+        if v is not None:
+            allowed_keys = {'k', 'fetch_k', 'search_type', 'score_threshold'}
+            invalid_keys = set(v.keys()) - allowed_keys
+            if invalid_keys:
+                raise ValueError(
+                    f'Claves no permitidas en search_kwargs: {invalid_keys}. '
+                    f'Claves permitidas: {allowed_keys}'
+                )
+        return v
 
 class QueryResponse(BaseModel):
     """Respuesta del asistente"""
@@ -60,6 +87,11 @@ class QueryResponse(BaseModel):
     history_score: Optional[float] = Field(None, description="Score de similitud con historial")
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     context_count: int = Field(0, description="Número de fragmentos recuperados")
+    from_cache: Optional[bool] = Field(None, description="Si la respuesta proviene del cache en memoria")
+    cache_age_seconds: Optional[float] = Field(None, description="Edad del cache en segundos")
+    
+    class Config:
+        extra = "allow"  # Permitir campos adicionales para compatibilidad futura
 
 class HistorySearchRequest(BaseModel):
     """Solicitud de búsqueda en historial"""
@@ -76,13 +108,6 @@ class HistoryEntry(BaseModel):
     sources: List[str] = Field(default_factory=list)
     similarity_score: Optional[float] = None
 
-class SaveHistoryRequest(BaseModel):
-    """Solicitud para guardar en historial"""
-    question: str
-    answer: str
-    personal_data: Optional[Dict[str, str]] = None
-    sources: Optional[List[str]] = None
-
 class DatabaseStats(BaseModel):
     """Estadísticas de la base de datos"""
     total_documents: int
@@ -92,6 +117,21 @@ class DatabaseStats(BaseModel):
     user_name: str
     model_name: str
     status: str
+
+class OptimizationStats(BaseModel):
+    """Estadisticas de optimizaciones RAG"""
+    embedding_model: str = Field(..., description="Modelo de embeddings en uso")
+    embedding_dimension: int = Field(..., description="Dimension de los vectores")
+    vram_available: float = Field(..., description="VRAM disponible en GB")
+    cache_enabled: bool = Field(..., description="Si el cache LRU esta activo")
+    cache_hits: int = Field(0, description="Numero de hits del cache")
+    cache_misses: int = Field(0, description="Numero de misses del cache")
+    cache_hit_rate: float = Field(0.0, description="Tasa de acierto del cache")
+    cache_size: int = Field(0, description="Entradas actuales en cache")
+    total_documents_indexed: int = Field(0, description="Documentos en vector store")
+    chunking_strategies: Dict[str, int] = Field(default_factory=dict, description="Estrategias de chunking aplicadas")
+    optimized_storage: bool = Field(False, description="Si usa DuckDB+Parquet")
+    storage_path: str = Field(..., description="Ruta del almacenamiento ChromaDB")
 
 class ModelInfo(BaseModel):
     """Información del modelo actual"""
@@ -111,12 +151,13 @@ class GPUStatus(BaseModel):
     memory_usage: Optional[Dict[str, float]] = None
 
 class HealthResponse(BaseModel):
-    """Estado de salud del servicio"""
-    status: str
-    timestamp: str
-    alfred_core_initialized: bool
-    vectorstore_loaded: bool
-    gpu_status: Optional[GPUStatus] = None
+    """Estado de salud del servicio con detalles de componentes"""
+    status: str = Field(..., description="Estado general: healthy, degraded, unhealthy")
+    timestamp: str = Field(..., description="Timestamp del health check")
+    components: Dict[str, str] = Field(default_factory=dict, description="Estado de cada componente")
+    alfred_core_initialized: bool = Field(..., description="Si Alfred Core esta inicializado")
+    vectorstore_loaded: bool = Field(..., description="Si la base vectorial esta cargada")
+    gpu_status: Optional[GPUStatus] = Field(None, description="Estado detallado de GPU")
 
 # --- Modelos de Conversaciones ---
 
@@ -178,7 +219,7 @@ class OllamaKeepAliveResponse(BaseModel):
     description: str = Field(..., description="Descripcion del comportamiento")
 
 # --- Inicialización del núcleo de Alfred ---
-alfred_core: Optional[AlfredCore] = None
+alfred_core: Optional[AlfredCoreRefactored] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -194,11 +235,18 @@ async def lifespan(app: FastAPI):
     sys.stdout.flush()
     
     try:
-        # Inicializar el núcleo de Alfred
-        print("Creando instancia de AlfredCore...", flush=True)
-        alfred_core = AlfredCore()
+        # Inicializar el núcleo de Alfred con version refactorizada (async + optimizaciones)
+        print("Creando instancia de AlfredCoreRefactored...", flush=True)
+        alfred_core = AlfredCoreRefactored()
+        
+        print("Inicializando componentes async (lazy loading)...", flush=True)
+        await alfred_core.initialize_async()
+        
         print("\n" + "="*60, flush=True)
-        print("Alfred Core inicializado correctamente", flush=True)
+        print("Alfred Core Refactored inicializado correctamente", flush=True)
+        print(f"  - Embedding Model: {alfred_core.embedding_model}", flush=True)
+        print(f"  - Vector Store: {alfred_core.chroma_db_path}", flush=True)
+        print(f"  - Optimizations: Incremental indexing + LRU cache + Adaptive chunking", flush=True)
         print("="*60 + "\n", flush=True)
         sys.stdout.flush()
         yield
@@ -312,9 +360,50 @@ async def root():
 
 @app.get("/health", response_model=HealthResponse, tags=["General"])
 async def health_check():
-    """Verificar el estado de salud del servicio"""
+    """
+    Verificar el estado de salud del servicio con detalles de componentes
+    
+    Retorna el estado de:
+    - Alfred Core (inicializacion)
+    - ChromaDB (base vectorial con conteo de documentos)
+    - Ollama (LLM disponible)
+    - GPU (si esta disponible y configurada)
+    """
+    health_status = "healthy"
+    components = {}
     gpu_status_data = None
     
+    # Check Alfred Core
+    if alfred_core and alfred_core.is_initialized():
+        components["alfred_core"] = "healthy"
+    else:
+        health_status = "unhealthy"
+        components["alfred_core"] = "not_initialized"
+    
+    # Check ChromaDB
+    try:
+        if alfred_core and alfred_core.vector_manager and alfred_core.vector_manager.vectorstore:
+            count = alfred_core.vector_manager.vectorstore._collection.count()
+            components["chroma_db"] = f"healthy ({count} docs)"
+        else:
+            health_status = "degraded"
+            components["chroma_db"] = "not_available"
+    except Exception as e:
+        health_status = "degraded"
+        components["chroma_db"] = f"error: {str(e)[:50]}"
+    
+    # Check Ollama LLM
+    try:
+        if alfred_core and alfred_core.llm:
+            components["ollama_llm"] = f"healthy (model: {alfred_core.model_name})"
+        else:
+            health_status = "degraded"
+            components["ollama_llm"] = "not_available"
+    except Exception as e:
+        health_status = "degraded"
+        components["ollama_llm"] = f"error: {str(e)[:50]}"
+    
+    # Check GPU
     if alfred_core:
         gpu_mgr = alfred_core.gpu_manager
         gpu_status_data = GPUStatus(
@@ -324,11 +413,19 @@ async def health_check():
             gpu_info=gpu_mgr.gpu_info,
             memory_usage=gpu_mgr.get_memory_usage()
         )
+        
+        if gpu_mgr.has_gpu:
+            components["gpu"] = f"available ({gpu_mgr.device_type})"
+        else:
+            components["gpu"] = "cpu_fallback"
+    else:
+        components["gpu"] = "unknown"
     
     return HealthResponse(
-        status="healthy" if alfred_core and alfred_core.is_initialized() else "unhealthy",
+        status=health_status,
         timestamp=datetime.now().isoformat(),
-        alfred_core_initialized=alfred_core is not None,
+        components=components,
+        alfred_core_initialized=alfred_core is not None and alfred_core.is_initialized(),
         vectorstore_loaded=alfred_core.is_initialized() if alfred_core else False,
         gpu_status=gpu_status_data
     )
@@ -353,8 +450,8 @@ async def query_alfred(request: QueryRequest):
     try:
         print(f"Procesando consulta: {request.question[:50]}...")
         
-        # Ejecutar consulta
-        result = alfred_core.query(
+        # Ejecutar consulta con version async optimizada
+        result = await alfred_core.query_async(
             question=request.question,
             use_history=request.use_history,
             search_documents=request.search_documents,
@@ -500,44 +597,6 @@ async def get_history(limit: int = 10, offset: int = 0):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener historial: {str(e)}")
 
-@app.post("/history/save", tags=["Historial"])
-async def save_to_history(request: SaveHistoryRequest):
-    """
-    Guardar manualmente una entrada en el historial
-    
-    **NOTA DE SEGURIDAD**: Los datos personales se cifran automaticamente antes de almacenarlos.
-    
-    - **question**: Pregunta
-    - **answer**: Respuesta
-    - **personal_data**: Datos personales extraídos (opcional)
-    - **sources**: Fuentes de los documentos (opcional)
-    """
-    try:
-        # Registrar acceso a datos personales si existen
-        if request.personal_data:
-            log_personal_data_access(
-                operation="write",
-                data_keys=list(request.personal_data.keys()),
-                user_context="Guardado manual en historial"
-            )
-        
-        # Guardar en historial (cifra automaticamente)
-        success = functionsToHistory.save_qa_to_history(
-            question=request.question,
-            answer=request.answer,
-            personal_data=request.personal_data,
-            sources=request.sources or [],
-            encrypt_sensitive=True  # Cifrado explicito
-        )
-        
-        if success:
-            return {"status": "success", "message": "Entrada guardada en el historial (cifrada)"}
-        else:
-            raise HTTPException(status_code=500, detail="Error al guardar en el historial")
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-
 @app.delete("/history/{timestamp}", tags=["Historial"])
 async def delete_history_entry(timestamp: str):
     """
@@ -579,10 +638,89 @@ async def get_stats():
     
     try:
         stats = alfred_core.get_stats()
-        return DatabaseStats(**stats)
+        
+        # Mapear los campos correctamente al modelo DatabaseStats
+        return DatabaseStats(
+            total_documents=stats.get('documents_indexed', 0),
+            total_qa_history=stats.get('qa_history_total', 0),
+            chroma_db_path=stats.get('chroma_db_path', ''),
+            docs_path=stats.get('docs_path', ''),
+            user_name=stats.get('user_name', ''),
+            model_name=stats.get('model_name', ''),
+            status=stats.get('status', 'unknown')
+        )
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
+
+@app.get("/optimizations/stats", response_model=OptimizationStats, tags=["Optimizaciones"])
+async def get_optimization_stats():
+    """
+    Obtener estadisticas de optimizaciones RAG
+    
+    Retorna informacion sobre:
+    - Modelo de embeddings seleccionado automaticamente
+    - Estadisticas de cache LRU (hits, misses, hit rate)
+    - Estrategias de chunking aplicadas
+    - Almacenamiento optimizado DuckDB+Parquet
+    """
+    if not alfred_core or not alfred_core.is_initialized():
+        raise HTTPException(status_code=503, detail="Alfred Core no está inicializado")
+    
+    try:
+        # Obtener info del embedding manager
+        embedding_manager = alfred_core._embedding_manager
+        embedding_model = embedding_manager.select_best_model()
+        vram_gb = embedding_manager.get_available_vram()
+        
+        # Dimension segun modelo
+        model_dims = {
+            "nomic-embed-text:v1.5": 768,
+            "bge-large-en-v1.5": 1024,
+            "gte-small": 384,
+            "all-minilm:l6-v2": 384
+        }
+        embedding_dim = model_dims.get(embedding_model, 768)
+        
+        # Estadisticas de cache
+        cache_stats = {"hits": 0, "misses": 0, "hit_rate": 0.0, "size": 0}
+        if hasattr(alfred_core, '_retrieval_cache') and alfred_core._retrieval_cache:
+            cache_stats = alfred_core._retrieval_cache.get_stats()
+        
+        # Info del vector manager
+        vector_manager = alfred_core.vector_manager
+        total_docs = 0
+        if vector_manager and vector_manager._vectorstore:
+            try:
+                # Intentar obtener conteo de documentos
+                total_docs = vector_manager._vectorstore._collection.count()
+            except:
+                total_docs = 0
+        
+        # Estrategias de chunking (placeholder - requiere tracking en chunking_manager)
+        chunking_strategies = {
+            "text": 0,
+            "code": 0, 
+            "document": 0
+        }
+        
+        return OptimizationStats(
+            embedding_model=embedding_model,
+            embedding_dimension=embedding_dim,
+            vram_available=vram_gb,
+            cache_enabled=cache_stats.get("size", 0) >= 0,
+            cache_hits=cache_stats.get("hits", 0),
+            cache_misses=cache_stats.get("misses", 0),
+            cache_hit_rate=cache_stats.get("hit_rate", 0.0),
+            cache_size=cache_stats.get("size", 0),
+            total_documents_indexed=total_docs,
+            chunking_strategies=chunking_strategies,
+            optimized_storage=vector_manager.use_optimized_storage if vector_manager else False,
+            storage_path=vector_manager.chroma_db_path if vector_manager else ""
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener estadisticas de optimizaciones: {str(e)}")
 
 @app.post("/reload", tags=["Mantenimiento"])
 async def reload_documents(background_tasks: BackgroundTasks):
@@ -656,7 +794,10 @@ async def get_current_model():
 @app.post("/model", tags=["Configuración"])
 async def change_model(request: ChangeModelRequest):
     """
-    Cambiar el modelo LLM actual
+    Cambiar el modelo LLM actual (lazy loading)
+    
+    El modelo se configura pero NO se carga hasta la proxima consulta.
+    Esto permite cambiar entre modelos instantaneamente sin esperas.
     
     - **model_name**: Nombre del nuevo modelo a utilizar
     """
@@ -664,19 +805,27 @@ async def change_model(request: ChangeModelRequest):
         raise HTTPException(status_code=503, detail="Alfred Core no está inicializado")
     
     try:
+        print(f"[BACKEND] Configurando modelo: {request.model_name}")
         success = alfred_core.change_model(request.model_name)
         
         if success:
+            print(f"[BACKEND] Modelo configurado: {request.model_name}")
             return {
                 "status": "success",
-                "message": f"Modelo cambiado exitosamente a {request.model_name}",
+                "message": f"Modelo configurado como {request.model_name}. Se cargará en la próxima consulta.",
                 "model_name": request.model_name
             }
         else:
-            raise HTTPException(status_code=500, detail="Error al cambiar el modelo")
+            error_msg = f"No se pudo configurar el modelo {request.model_name}"
+            print(f"[BACKEND] {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
     
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al cambiar modelo: {str(e)}")
+        error_detail = f"Error al configurar modelo: {str(e)}"
+        print(f"[BACKEND ERROR] {error_detail}")
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @app.get("/gpu/status", response_model=GPUStatus, tags=["Sistema"])
 async def get_gpu_status():
@@ -1066,7 +1215,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
             ]
         
         # Ejecutar consulta con contexto de conversacion
-        result = alfred_core.query(
+        result = await alfred_core.query_async(
             question=request.question,
             use_history=request.use_history,
             search_documents=request.search_documents,
@@ -1156,12 +1305,51 @@ async def query_with_conversation(request: QueryWithConversationRequest):
 # --- Manejo de errores global ---
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    """Manejador global de excepciones"""
-    return {
-        "error": "Internal Server Error",
-        "detail": str(exc),
-        "timestamp": datetime.now().isoformat()
-    }
+    """
+    Manejador global de excepciones mejorado
+    
+    Proporciona:
+    - Error IDs unicos para tracking
+    - Logging estructurado completo
+    - Respuestas sanitizadas (sin stack traces sensibles)
+    - Timestamp ISO para auditoria
+    """
+    import traceback
+    
+    # Generar ID unico para el error
+    error_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    
+    # Log completo del error con stack trace
+    backend_logger.error(
+        f"[{error_id}] Excepcion no manejada capturada",
+        extra={
+            "error_id": error_id,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "request_path": str(request.url) if hasattr(request, 'url') else "unknown",
+            "request_method": request.method if hasattr(request, 'method') else "unknown"
+        }
+    )
+    backend_logger.error(f"[{error_id}] Stack trace:\n{traceback.format_exc()}")
+    
+    # Sanitizar mensaje de error para el cliente
+    # Eliminar caracteres no-ASCII que puedan causar problemas
+    error_msg = str(exc).encode('ascii', 'ignore').decode('ascii')
+    if not error_msg or len(error_msg.strip()) == 0:
+        error_msg = "Error interno del servidor"
+    
+    # Respuesta estructurada
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "detail": error_msg,
+            "error_id": error_id,
+            "timestamp": datetime.now().isoformat(),
+            "message": f"Error registrado con ID: {error_id}. Revisa los logs para mas detalles."
+        }
+    )
 
 if __name__ == "__main__":
     import uvicorn
