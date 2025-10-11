@@ -213,8 +213,13 @@ async function waitForBackendReady() {
             if (response.ok) {
                 const data = await response.json();
                 
-                // Verificar que el status sea "healthy" y que alfred_core este inicializado
-                if (data.status === 'healthy' && data.alfred_core_initialized && data.vectorstore_loaded) {
+                // Verificar que alfred_core este inicializado y vectorstore cargado
+                // Aceptar tanto "healthy" como "degraded" (degraded = componentes opcionales fallan)
+                const isReady = (data.status === 'healthy' || data.status === 'degraded') 
+                    && data.alfred_core_initialized 
+                    && data.vectorstore_loaded;
+                
+                if (isReady) {
                     // Backend esta listo!
                     if (progressBar) {
                         progressBar.style.width = '100%';
