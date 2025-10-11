@@ -55,3 +55,8 @@ conversations/*.json
 
 # .key
 *.key
+
+# Archivos de base de datos
+*.sqlite
+*.db
+db/

@@ -17,6 +17,7 @@ sys.path.insert(0, str(backend_root / "gpu"))
 sys.path.insert(0, str(backend_root / "utils"))
 
 from utils.logger import get_logger
+from db_manager import init_db
 
 # Configurar encoding UTF-8 para evitar errores con caracteres especiales en Windows
 if sys.platform == 'win32':
@@ -223,6 +224,9 @@ security_logger = get_logger("security")
 backend_logger.info(f"Iniciando backend Alfred en {os.getenv('ALFRED_IP', 'Not found')}:{os.getenv('ALFRED_PORT', 'Not found')}")
 rag_logger.info(f"Iniciando RAG en {os.getenv('ALFRED_RAG_IP', 'Not found')}:{os.getenv('ALFRED_RAG_PORT', 'Not found')}")
 security_logger.info(f"Iniciando seguridad en {os.getenv('ALFRED_SECURITY_IP', 'Not found')}:{os.getenv('ALFRED_SECURITY_PORT', 'Not found')}")
+
+# Inicio de la base de datos
+init_db()
 
 # --- Funciones auxiliares de cifrado ---
 

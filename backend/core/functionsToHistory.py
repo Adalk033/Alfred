@@ -3,6 +3,11 @@ import os
 import json
 import re
 from utils.security import encrypt_data, decrypt_data
+from db_manager import (
+    insert_qa_history, 
+    get_qa_history as db_get_qa_history,
+    delete_qa_history as db_delete_qa_history
+)
 
 # Stopwords en español (palabras comunes sin significado relevante)
 SPANISH_STOPWORDS = {
@@ -106,117 +111,67 @@ def decrypt_personal_data(encrypted_data: dict) -> dict:
 # --- Función para guardar Q&A verificadas ---
 def save_qa_to_history(question, answer, personal_data=None, sources=None, QA_HISTORY_FILE='alfred_qa_history.json', encrypt_sensitive=True):
     """
-    Guarda una pregunta y respuesta verificada en el historial
+    Guarda una pregunta y respuesta verificada en el historial (ahora usa SQLite)
     
     Args:
         question: Pregunta del usuario
         answer: Respuesta de Alfred
         personal_data: Datos personales extraidos
         sources: Fuentes utilizadas
-        QA_HISTORY_FILE: Archivo del historial
+        QA_HISTORY_FILE: (OBSOLETO) Se mantiene por compatibilidad pero ya no se usa
         encrypt_sensitive: Si True, cifra los datos personales
     
     Returns:
         True si se guardo exitosamente, False en caso contrario
     """
-    # Cifrar datos personales si es necesario
-    stored_personal_data = personal_data or {}
-    if encrypt_sensitive and stored_personal_data:
-        stored_personal_data = encrypt_personal_data(stored_personal_data)
-    
-    qa_entry = {
-        "timestamp": datetime.now().isoformat(),
-        "question": question,
-        "answer": answer,
-        "personal_data": stored_personal_data,
-        "sources": sources or [],
-        "verified": True,
-        "encrypted": encrypt_sensitive
-    }
-    
-    # Cargar historial existente
-    history = []
-    if os.path.exists(QA_HISTORY_FILE):
-        try:
-            with open(QA_HISTORY_FILE, 'r', encoding='utf-8') as f:
-                history = json.load(f)
-        except Exception as e:
-            print(f"Error al cargar historial: {e}")
-    
-    # Agregar nueva entrada
-    history.append(qa_entry)
-    
-    # Guardar historial actualizado
     try:
-        with open(QA_HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-        return True
+        timestamp = datetime.now().isoformat()
+        row_id = insert_qa_history(
+            timestamp=timestamp,
+            question=question,
+            answer=answer,
+            personal_data=personal_data or {},
+            sources=sources or [],
+            verified=True,
+            encrypt_sensitive=encrypt_sensitive
+        )
+        return row_id is not None
     except Exception as e:
-        print(f"Error al guardar historial: {e}")
+        print(f"Error al guardar en historial SQLite: {e}")
         return False
 
 def load_qa_history(QA_HISTORY_FILE='alfred_qa_history.json', decrypt_sensitive=True):
     """
-    Carga el historial de Q&A
+    Carga el historial de Q&A desde SQLite
     
     Args:
-        QA_HISTORY_FILE: Archivo del historial
+        QA_HISTORY_FILE: (OBSOLETO) Se mantiene por compatibilidad pero ya no se usa
         decrypt_sensitive: Si True, descifra los datos personales
     
     Returns:
         Lista de entradas del historial
     """
-    if os.path.exists(QA_HISTORY_FILE):
-        try:
-            with open(QA_HISTORY_FILE, 'r', encoding='utf-8') as f:
-                history = json.load(f)
-            
-            # Descifrar datos personales si es necesario
-            if decrypt_sensitive:
-                for entry in history:
-                    if entry.get('encrypted', False) and entry.get('personal_data'):
-                        entry['personal_data'] = decrypt_personal_data(entry['personal_data'])
-            
-            return history
-        except Exception as e:
-            print(f"Error al cargar historial: {e}")
-    return []
+    try:
+        return db_get_qa_history(decrypt_sensitive=decrypt_sensitive)
+    except Exception as e:
+        print(f"Error al cargar historial desde SQLite: {e}")
+        return []
 
 def delete_qa_from_history(timestamp, QA_HISTORY_FILE='alfred_qa_history.json'):
     """
-    Elimina una entrada del historial de Q&A por su timestamp
+    Elimina una entrada del historial de Q&A por su timestamp (ahora usa SQLite)
     
     Args:
         timestamp: Timestamp ISO de la entrada a eliminar
-        QA_HISTORY_FILE: Archivo del historial
+        QA_HISTORY_FILE: (OBSOLETO) Se mantiene por compatibilidad pero ya no se usa
     
     Returns:
         True si se elimino exitosamente, False en caso contrario
     """
-    # Cargar historial existente
-    history = load_qa_history(QA_HISTORY_FILE)
-    
-    if not history:
-        print("Historial vacio, no hay nada que eliminar")
-        return False
-    
-    # Filtrar la entrada con el timestamp especificado
-    original_length = len(history)
-    history = [entry for entry in history if entry.get('timestamp') != timestamp]
-    
-    # Verificar si se elimino algo
-    if len(history) == original_length:
-        print(f"No se encontro entrada con timestamp: {timestamp}")
-        return False
-    
-    # Guardar historial actualizado
     try:
-        with open(QA_HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-        print(f"Entrada eliminada del historial: {timestamp}")
-        return True
+        return db_delete_qa_history(timestamp)
     except Exception as e:
-        print(f"Error al guardar historial después de eliminar: {e}")
+        print(f"Error al eliminar del historial SQLite: {e}")
         return False
 
 def search_in_qa_history(question, history=None, threshold=0.3, top_k=3):

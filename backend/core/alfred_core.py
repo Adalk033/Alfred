@@ -519,11 +519,13 @@ class AlfredCore:
         except Exception:
             doc_count = 0
         
-        history = functionsToHistory.load_qa_history(self.qa_history_file)
+        # Obtener estadisticas del historial Q&A desde SQLite
+        from db_manager import get_qa_history_stats
+        qa_stats = get_qa_history_stats()
         
         return {
             'total_documents': doc_count,
-            'total_qa_history': len(history),
+            'total_qa_history': qa_stats['total'],
             'chroma_db_path': self.chroma_db_path,
             'docs_path': self.docs_path,
             'user_name': self.user_name,
