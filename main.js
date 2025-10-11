@@ -700,7 +700,7 @@ ipcMain.handle('stop-ollama', async () => {
 ipcMain.handle('get-ollama-keep-alive', async () => {
     try {
         console.log('[MAIN] Obteniendo keep_alive de Ollama...');
-        const result = await makeRequest('http://127.0.0.1:8000/ollama/keep-alive');
+        const result = await makeRequest('http://127.0.0.1:8000/user/ollama-keep-alive');
         console.log('[MAIN] Keep alive actual:', result.data);
         return { success: true, data: result.data };
     } catch (error) {
@@ -709,16 +709,133 @@ ipcMain.handle('get-ollama-keep-alive', async () => {
     }
 });
 
+// ============================================================================
+// HANDLERS DE CONFIGURACIONES DE USUARIO
+// ============================================================================
+
+// Obtener todas las configuraciones
+ipcMain.handle('get-user-settings', async () => {
+    try {
+        console.log('[MAIN] Obteniendo configuraciones de usuario...');
+        const result = await makeRequest('http://127.0.0.1:8000/user/settings', {
+            method: 'GET'
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al obtener configuraciones:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Obtener una configuracion especifica
+ipcMain.handle('get-user-setting', async (event, key) => {
+    try {
+        console.log('[MAIN] Obteniendo configuracion:', key);
+        const result = await makeRequest(`http://127.0.0.1:8000/user/setting/${key}`, {
+            method: 'GET'
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al obtener configuracion:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Guardar configuracion de usuario
+ipcMain.handle('set-user-setting', async (event, key, value, type = 'string') => {
+    try {
+        console.log('[MAIN] Guardando configuracion:', key, '=', value, `(${type})`);
+        const result = await makeRequest('http://127.0.0.1:8000/user/setting', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                key: key, 
+                value: value, 
+                setting_type: type 
+            })
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al guardar configuracion:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Eliminar configuracion de usuario
+ipcMain.handle('delete-user-setting', async (event, key) => {
+    try {
+        console.log('[MAIN] Eliminando configuracion:', key);
+        const result = await makeRequest(`http://127.0.0.1:8000/user/setting/${key}`, {
+            method: 'DELETE'
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al eliminar configuracion:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// ============================================================================
+// HANDLERS DE FOTO DE PERFIL
+// ============================================================================
+
+// Obtener foto de perfil
+ipcMain.handle('get-profile-picture', async () => {
+    try {
+        console.log('[MAIN] Obteniendo foto de perfil...');
+        const result = await makeRequest('http://127.0.0.1:8000/user/profile-picture', {
+            method: 'GET'
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al obtener foto de perfil:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Guardar foto de perfil
+ipcMain.handle('set-profile-picture', async (event, pictureData) => {
+    try {
+        console.log('[MAIN] Guardando foto de perfil...');
+        const result = await makeRequest('http://127.0.0.1:8000/user/profile-picture', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ picture_data: pictureData })
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al guardar foto de perfil:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Eliminar foto de perfil
+ipcMain.handle('delete-profile-picture', async () => {
+    try {
+        console.log('[MAIN] Eliminando foto de perfil...');
+        const result = await makeRequest('http://127.0.0.1:8000/user/profile-picture', {
+            method: 'DELETE'
+        });
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error al eliminar foto de perfil:', error);
+        return { success: false, error: error.message };
+    }
+});
+
 // Handler para actualizar keep_alive de Ollama
 ipcMain.handle('set-ollama-keep-alive', async (event, seconds) => {
     try {
         console.log('[MAIN] Actualizando keep_alive a', seconds, 'segundos...');
-        const result = await makeRequest('http://127.0.0.1:8000/ollama/keep-alive', {
-            method: 'PUT',
+        const result = await makeRequest(`http://127.0.0.1:8000/user/ollama-keep-alive?seconds=${seconds}`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ seconds: seconds })
+            }
         });
         console.log('[MAIN] Keep alive actualizado:', result.data);
         return { success: true, data: result.data };

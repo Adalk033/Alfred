@@ -85,7 +85,20 @@ class AlfredCore:
             set_model_setting('last_used_model', env_model)
         
         self.embedding_model = os.getenv('ALFRED_EMBEDDING_MODEL', 'nomic-embed-text:v1.5')
-        self.ollama_keep_alive = int(os.getenv('ALFRED_OLLAMA_KEEP_ALIVE', '30'))
+        
+        # Cargar keep_alive desde BD (prioridad: BD > .env > default 30)
+        from db_manager import get_user_setting
+        db_keep_alive = get_user_setting('ollama_keep_alive', default=None, setting_type='int')
+        if db_keep_alive:
+            logger.info(f"Usando keep_alive desde BD: {db_keep_alive}s")
+            self.ollama_keep_alive = db_keep_alive
+        else:
+            env_keep_alive = int(os.getenv('ALFRED_OLLAMA_KEEP_ALIVE', '30'))
+            logger.info(f"No hay keep_alive en BD, usando .env: {env_keep_alive}s")
+            self.ollama_keep_alive = env_keep_alive
+            # Guardar en BD para proximas ejecuciones
+            from db_manager import set_user_setting
+            set_user_setting('ollama_keep_alive', env_keep_alive, 'int')
         
         # Validar configuracion
         if not self.docs_path:
@@ -761,8 +774,13 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
             
             logger.info(f"Cambiando keep_alive de {self.ollama_keep_alive}s a {seconds}s")
             
-            # Actualizar valor
+            # Actualizar valor en memoria
             self.ollama_keep_alive = seconds
+            
+            # Guardar en base de datos
+            from db_manager import set_user_setting
+            set_user_setting('ollama_keep_alive', seconds, 'int')
+            logger.info(f"Keep_alive guardado en BD: {seconds}s")
             
             # Recrear LLM con nuevo keep_alive
             from langchain_ollama import OllamaLLM

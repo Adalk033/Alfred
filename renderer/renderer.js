@@ -1023,12 +1023,47 @@ function updateConnectionStatus(connected) {
 
 // ==================== FUNCIONES DE FOTO DE PERFIL ====================
 
-// Cargar foto de perfil y actualizar UI
-function loadProfilePicture() {
-    if (State.settings.profilePicture) {
-        updateProfilePictureDisplay(State.settings.profilePicture);
+// Cargar foto de perfil desde backend y actualizar UI
+async function loadProfilePicture() {
+    try {
+        console.log('🖼️ Cargando foto de perfil desde backend...');
+        const result = await window.alfredAPI.getProfilePicture();
+        
+        if (result.success && result.data) {
+            const { current, history } = result.data;
+            
+            // Actualizar estado local
+            State.updateSettings({ 
+                profilePicture: current,
+                profilePictureHistory: history || []
+            });
+            
+            // Actualizar UI
+            if (current) {
+                updateProfilePictureDisplay(current);
+            }
+            updateProfileHistory();
+            
+            console.log('✅ Foto de perfil cargada:', {
+                hasCurrent: !!current,
+                historyCount: history?.length || 0
+            });
+        } else {
+            console.log('ℹ️ No hay foto de perfil guardada');
+            // Inicializar historial vacio
+            State.updateSettings({ 
+                profilePicture: null,
+                profilePictureHistory: []
+            });
+        }
+    } catch (error) {
+        console.error('❌ Error al cargar foto de perfil:', error);
+        // Fallback a estado vacio
+        State.updateSettings({ 
+            profilePicture: null,
+            profilePictureHistory: []
+        });
     }
-    updateProfileHistory();
 }
 
 // Actualizar visualización de foto de perfil
@@ -1044,11 +1079,6 @@ function updateProfilePictureDisplay(imageDataUrl) {
 async function changeProfilePicture() {
     try {
         console.log('🖼️ Iniciando seleccion de foto de perfil...');
-
-        // Asegurar que el historial existe
-        if (!State.settings.profilePictureHistory) {
-            State.updateSettings({ profilePictureHistory: [] });
-        }
 
         const result = await window.alfredAPI.selectProfilePicture();
 
@@ -1069,7 +1099,7 @@ async function changeProfilePicture() {
         if (result.success && result.data) {
             const newImageData = result.data;
 
-            // Validar tamaño de la imagen (localStorage tiene limite ~5-10MB)
+            // Validar tamaño de la imagen (max ~5MB en base64)
             const imageSizeKB = Math.round(newImageData.length / 1024);
             console.log(`📊 Tamaño de imagen: ${imageSizeKB} KB`);
 
@@ -1078,44 +1108,29 @@ async function changeProfilePicture() {
                 return;
             }
 
-            // Guardar la foto actual al historial antes de cambiarla
-            const currentPicture = State.settings.profilePicture;
-            const currentHistory = State.settings.profilePictureHistory;
-            if (currentPicture && !currentHistory.includes(currentPicture)) {
-                const newHistory = [currentPicture, ...currentHistory];
-                // Limitar el historial a 20 fotos
-                if (newHistory.length > 20) {
-                    newHistory.pop();
-                }
-                State.updateSettings({ profilePictureHistory: newHistory });
+            // Guardar en backend
+            console.log('💾 Guardando foto en backend...');
+            const saveResult = await window.alfredAPI.setProfilePicture(newImageData);
+            
+            if (!saveResult.success) {
+                throw new Error(saveResult.error || 'Error al guardar foto');
             }
 
-            // Establecer nueva foto de perfil
+            // Actualizar estado local
             State.updateSettings({ profilePicture: newImageData });
 
             // Actualizar UI
             updateProfilePictureDisplay(newImageData);
-            updateProfileHistory();
+            
+            // Recargar historial desde backend
+            await loadProfilePicture();
 
-            // Guardar en localStorage con manejo de errores
-            try {
-                localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
-                console.log('✅ Configuracion guardada correctamente');
-                showNotification('success', 'Foto de perfil actualizada correctamente');
-            } catch (storageError) {
-                console.error('❌ Error al guardar en localStorage:', storageError);
-                // Revertir cambios
-                const currentHistory = State.settings.profilePictureHistory;
-                State.updateSettings({
-                    profilePicture: currentHistory[0] || null,
-                    profilePictureHistory: currentHistory.slice(1)
-                });
-                showNotification('error', 'La imagen es demasiado grande para guardar. Por favor, usa una imagen mas pequeña.');
-            }
+            console.log('✅ Foto de perfil guardada correctamente');
+            showNotification('success', 'Foto de perfil actualizada correctamente');
         }
     } catch (error) {
         console.error('❌ Error al cambiar foto de perfil:', error);
-        showNotification('error', `Error al seleccionar la foto: ${error.message}`);
+        showNotification('error', `Error al guardar la foto: ${error.message}`);
     }
 }
 
@@ -1171,60 +1186,72 @@ function updateProfileHistory() {
 }
 
 // Restaurar foto de perfil del historial
-function restoreProfilePicture(imageData, index) {
-    const currentPicture = State.settings.profilePicture;
-    const currentHistory = [...State.settings.profilePictureHistory];
+async function restoreProfilePicture(imageData, index) {
+    try {
+        console.log('🔄 Restaurando foto del historial...');
+        
+        // Guardar directamente la foto seleccionada del historial
+        const saveResult = await window.alfredAPI.setProfilePicture(imageData);
+        
+        if (!saveResult.success) {
+            throw new Error(saveResult.error || 'Error al restaurar foto');
+        }
 
-    // Guardar la foto actual al historial si no esta ya
-    if (currentPicture && currentPicture !== imageData) {
-        // Remover la imagen que vamos a restaurar del historial
-        currentHistory.splice(index, 1);
+        // Actualizar estado local
+        State.updateSettings({ profilePicture: imageData });
 
-        // Agregar la foto actual al principio del historial
-        currentHistory.unshift(currentPicture);
-    } else {
-        // Solo remover la imagen del historial si ya es la actual
-        currentHistory.splice(index, 1);
+        // Actualizar UI
+        updateProfilePictureDisplay(imageData);
+        
+        // Recargar historial desde backend
+        await loadProfilePicture();
+
+        console.log('✅ Foto restaurada correctamente');
+        showNotification('success', 'Foto de perfil restaurada');
+    } catch (error) {
+        console.error('❌ Error al restaurar foto:', error);
+        showNotification('error', `Error al restaurar foto: ${error.message}`);
     }
-
-    // Establecer como foto actual
-    State.updateSettings({
-        profilePicture: imageData,
-        profilePictureHistory: currentHistory
-    });
-
-    // Actualizar UI
-    updateProfilePictureDisplay(imageData);
-    updateProfileHistory();
-
-    // Guardar
-    localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
-
-    showNotification('success', 'Foto de perfil restaurada');
 }
 
 // Eliminar foto del historial
-function deleteProfilePicture(index) {
-    const imageToDelete = State.settings.profilePictureHistory[index];
+async function deleteProfilePicture(index) {
+    try {
+        console.log('🗑️ Eliminando foto del historial...');
+        
+        const imageToDelete = State.settings.profilePictureHistory[index];
 
-    // Si es la foto actual, resetear a default
-    if (imageToDelete === State.settings.profilePicture) {
-        State.updateSettings({ profilePicture: null });
-        currentProfilePicture.innerHTML = '<span class="default-avatar">👤</span>';
+        // Si es la foto actual, eliminar desde backend
+        if (imageToDelete === State.settings.profilePicture) {
+            const deleteResult = await window.alfredAPI.deleteProfilePicture();
+            
+            if (!deleteResult.success) {
+                throw new Error(deleteResult.error || 'Error al eliminar foto');
+            }
+            
+            State.updateSettings({ profilePicture: null });
+            currentProfilePicture.innerHTML = '<span class="default-avatar">👤</span>';
+        }
+
+        // Eliminar del historial local
+        const newHistory = [...State.settings.profilePictureHistory];
+        newHistory.splice(index, 1);
+        
+        // Guardar historial actualizado en backend
+        await window.alfredAPI.setUserSetting('profile_picture_history', newHistory, 'json');
+        
+        // Actualizar estado local
+        State.updateSettings({ profilePictureHistory: newHistory });
+
+        // Actualizar UI
+        updateProfileHistory();
+
+        console.log('✅ Foto eliminada correctamente');
+        showNotification('success', 'Foto eliminada del historial');
+    } catch (error) {
+        console.error('❌ Error al eliminar foto:', error);
+        showNotification('error', `Error al eliminar foto: ${error.message}`);
     }
-
-    // Eliminar del historial
-    const newHistory = [...State.settings.profilePictureHistory];
-    newHistory.splice(index, 1);
-    State.updateSettings({ profilePictureHistory: newHistory });
-
-    // Actualizar UI
-    updateProfileHistory();
-
-    // Guardar
-    localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
-
-    showNotification('success', 'Foto eliminada del historial');
 }
 
 // Exponer funciones globalmente para los botones HTML

@@ -199,6 +199,31 @@ class UpdateTitleRequest(BaseModel):
     """Solicitud para actualizar el titulo de una conversacion"""
     title: str = Field(..., description="Nuevo titulo", min_length=1)
 
+# --- Modelos de Configuracion de Usuario ---
+
+class UserSettingRequest(BaseModel):
+    """Solicitud para guardar configuracion de usuario"""
+    key: str = Field(..., description="Clave de configuracion")
+    value: Any = Field(..., description="Valor de configuracion")
+    setting_type: str = Field('string', description="Tipo: string, int, float, bool, json")
+
+class UserSettingResponse(BaseModel):
+    """Respuesta con configuracion de usuario"""
+    key: str
+    value: Any
+    type: str
+    updated_at: Optional[str] = None
+
+class ProfilePictureRequest(BaseModel):
+    """Solicitud para guardar foto de perfil"""
+    picture_data: str = Field(..., description="Datos de imagen en Base64")
+
+class ProfilePictureHistoryResponse(BaseModel):
+    """Respuesta con historial de fotos de perfil"""
+    current: Optional[str] = None
+    history: List[str] = Field(default_factory=list)
+    history_count: int = 0
+
 class QueryWithConversationRequest(BaseModel):
     """Solicitud de consulta con historial de conversacion"""
     question: str = Field(..., description="Pregunta del usuario", min_length=1)
@@ -1399,6 +1424,276 @@ async def global_exception_handler(request, exc):
             "message": f"Error registrado con ID: {error_id}. Revisa los logs para mas detalles."
         }
     )
+
+# ============================================================================
+# ENDPOINTS DE CONFIGURACION DE USUARIO
+# ============================================================================
+
+@app.get("/user/settings", tags=["Usuario"])
+async def get_user_settings():
+    """
+    Obtener todas las configuraciones de usuario
+    
+    Returns:
+        Diccionario con todas las configuraciones guardadas
+    """
+    try:
+        from db_manager import get_all_user_settings
+        
+        settings = get_all_user_settings()
+        return {
+            "success": True,
+            "settings": settings,
+            "count": len(settings)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener configuraciones: {str(e)}")
+
+@app.get("/user/setting/{key}", response_model=UserSettingResponse, tags=["Usuario"])
+async def get_user_setting(key: str):
+    """
+    Obtener una configuracion especifica de usuario
+    
+    Args:
+        key: Clave de la configuracion (ej: 'profile_picture', 'ollama_keep_alive')
+    """
+    try:
+        from db_manager import get_user_setting, get_connection
+        
+        # Obtener valor con metadata
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT setting_value, setting_type, updated_at FROM user_settings WHERE setting_key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Configuracion '{key}' no encontrada")
+        
+        import json
+        value_str = row["setting_value"]
+        setting_type = row["setting_type"]
+        
+        # Convertir valor
+        if setting_type == 'json':
+            value = json.loads(value_str) if value_str else None
+        elif setting_type == 'int':
+            value = int(value_str) if value_str else None
+        elif setting_type == 'float':
+            value = float(value_str) if value_str else None
+        elif setting_type == 'bool':
+            value = value_str == '1' or value_str.lower() == 'true'
+        else:
+            value = value_str
+        
+        return {
+            "key": key,
+            "value": value,
+            "type": setting_type,
+            "updated_at": row["updated_at"]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener configuracion: {str(e)}")
+
+@app.post("/user/setting", tags=["Usuario"])
+async def set_user_setting(request: UserSettingRequest):
+    """
+    Guardar una configuracion de usuario
+    
+    Ejemplos:
+    - Foto de perfil: key='profile_picture', value=<base64>, type='string'
+    - Keep alive: key='ollama_keep_alive', value=300, type='int'
+    - Historial de fotos: key='profile_picture_history', value=[], type='json'
+    """
+    try:
+        from db_manager import set_user_setting
+        
+        success = set_user_setting(request.key, request.value, request.setting_type)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"Configuracion '{request.key}' guardada exitosamente",
+                "key": request.key
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Error al guardar configuracion")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.delete("/user/setting/{key}", tags=["Usuario"])
+async def delete_user_setting(key: str):
+    """
+    Eliminar una configuracion de usuario
+    
+    Args:
+        key: Clave de la configuracion a eliminar
+    """
+    try:
+        from db_manager import delete_user_setting
+        
+        success = delete_user_setting(key)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"Configuracion '{key}' eliminada exitosamente"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Configuracion '{key}' no encontrada")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# --- Endpoints especificos para foto de perfil ---
+
+@app.post("/user/profile-picture", tags=["Usuario"])
+async def set_profile_picture(request: ProfilePictureRequest):
+    """
+    Guardar foto de perfil en Base64
+    
+    Guarda la foto actual y mueve la anterior al historial automaticamente
+    """
+    try:
+        from db_manager import get_user_setting, set_user_setting
+        
+        # Validar tamaño (max ~5MB cuando se decodifica)
+        if len(request.picture_data) > 7000000:  # ~5MB en base64
+            raise HTTPException(status_code=400, detail="Imagen demasiado grande (max 5MB)")
+        
+        # Obtener foto actual
+        current_picture = get_user_setting('profile_picture', default=None)
+        
+        # Obtener historial actual
+        history = get_user_setting('profile_picture_history', default=[], setting_type='json')
+        
+        # Si hay foto actual y no esta en historial, agregarla
+        if current_picture and current_picture not in history:
+            history.insert(0, current_picture)
+            # Limitar historial a 20 fotos
+            if len(history) > 20:
+                history = history[:20]
+            # Guardar historial actualizado
+            set_user_setting('profile_picture_history', history, 'json')
+        
+        # Guardar nueva foto de perfil
+        success = set_user_setting('profile_picture', request.picture_data, 'string')
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Foto de perfil actualizada",
+                "history_count": len(history)
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Error al guardar foto")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/user/profile-picture", response_model=ProfilePictureHistoryResponse, tags=["Usuario"])
+async def get_profile_picture():
+    """
+    Obtener foto de perfil actual y su historial
+    """
+    try:
+        from db_manager import get_user_setting
+        
+        current = get_user_setting('profile_picture', default=None)
+        history = get_user_setting('profile_picture_history', default=[], setting_type='json')
+        
+        return {
+            "current": current,
+            "history": history,
+            "history_count": len(history)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.delete("/user/profile-picture", tags=["Usuario"])
+async def delete_profile_picture():
+    """
+    Eliminar foto de perfil actual (el historial se mantiene)
+    """
+    try:
+        from db_manager import delete_user_setting
+        
+        success = delete_user_setting('profile_picture')
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Foto de perfil eliminada"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No habia foto de perfil"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# --- Endpoints para Ollama keep_alive ---
+
+@app.get("/user/ollama-keep-alive", tags=["Usuario"])
+async def get_ollama_keep_alive_setting():
+    """
+    Obtener configuracion actual de Ollama keep_alive desde BD
+    
+    Returns:
+        Tiempo en segundos que Ollama mantiene el modelo en memoria
+    """
+    try:
+        from db_manager import get_user_setting
+        
+        # Default: 30 segundos
+        keep_alive = get_user_setting('ollama_keep_alive', default=30, setting_type='int')
+        
+        return {
+            "keep_alive_seconds": keep_alive,
+            "keep_alive_minutes": keep_alive / 60,
+            "formatted": f"{keep_alive}s" if keep_alive < 60 else f"{keep_alive/60:.1f}m"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.post("/user/ollama-keep-alive", tags=["Usuario"])
+async def set_ollama_keep_alive_setting(seconds: int):
+    """
+    Guardar configuracion de Ollama keep_alive en BD
+    
+    Args:
+        seconds: Tiempo en segundos (1-3600)
+    """
+    try:
+        from db_manager import set_user_setting
+        
+        if seconds < 1 or seconds > 3600:
+            raise HTTPException(status_code=400, detail="keep_alive debe estar entre 1 y 3600 segundos")
+        
+        success = set_user_setting('ollama_keep_alive', seconds, 'int')
+        
+        if success:
+            # También actualizar en Alfred Core si esta inicializado
+            if alfred_core and alfred_core.is_initialized():
+                alfred_core.set_ollama_keep_alive(seconds)
+            
+            return {
+                "success": True,
+                "message": f"keep_alive configurado a {seconds}s",
+                "keep_alive_seconds": seconds
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Error al guardar configuracion")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

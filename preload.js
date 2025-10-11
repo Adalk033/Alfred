@@ -17,6 +17,17 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   setOllamaKeepAlive: (seconds) => ipcRenderer.invoke('set-ollama-keep-alive', seconds),
   selectProfilePicture: () => ipcRenderer.invoke('select-profile-picture'),
   
+  // API de configuraciones de usuario
+  getUserSettings: () => ipcRenderer.invoke('get-user-settings'),
+  getUserSetting: (key) => ipcRenderer.invoke('get-user-setting', key),
+  setUserSetting: (key, value, type) => ipcRenderer.invoke('set-user-setting', key, value, type),
+  deleteUserSetting: (key) => ipcRenderer.invoke('delete-user-setting', key),
+  
+  // API de foto de perfil
+  getProfilePicture: () => ipcRenderer.invoke('get-profile-picture'),
+  setProfilePicture: (pictureData) => ipcRenderer.invoke('set-profile-picture', pictureData),
+  deleteProfilePicture: () => ipcRenderer.invoke('delete-profile-picture'),
+  
   // API de Conversaciones
   createConversation: (title) => ipcRenderer.invoke('create-conversation', title),
   listConversations: (limit, offset) => ipcRenderer.invoke('list-conversations', limit, offset),

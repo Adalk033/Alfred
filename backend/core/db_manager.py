@@ -147,6 +147,21 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_model_settings_key ON model_settings(setting_key);
     """)
 
+    # Tabla para configuracion de usuario (foto de perfil, preferencias UI, etc)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        setting_key TEXT UNIQUE NOT NULL,
+        setting_value TEXT,
+        setting_type TEXT DEFAULT 'string',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_user_settings_key ON user_settings(setting_key);
+    """)
+
     conn.commit()
     conn.close()
     db_logger.info("Base de datos inicializada correctamente")
@@ -657,6 +672,165 @@ def delete_model_setting(key: str):
         return deleted
     except Exception as e:
         db_logger.error(f"Error al eliminar model setting: {e}")
+        return False
+    finally:
+        conn.close()
+
+# --- Funciones para User Settings (configuracion de usuario) ---
+
+def set_user_setting(key: str, value: any, setting_type: str = 'string'):
+    """
+    Guarda una configuracion de usuario
+    
+    Args:
+        key: Clave de configuracion (ej: 'profile_picture', 'ollama_keep_alive')
+        value: Valor de configuracion (se convierte a string si es necesario)
+        setting_type: Tipo de dato ('string', 'int', 'float', 'bool', 'json')
+    
+    Returns:
+        True si se guardo exitosamente, False en caso contrario
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        import json
+        
+        # Convertir valor segun tipo
+        if setting_type == 'json':
+            value_str = json.dumps(value, ensure_ascii=False)
+        elif setting_type == 'bool':
+            value_str = '1' if value else '0'
+        else:
+            value_str = str(value)
+        
+        cursor.execute(
+            """INSERT OR REPLACE INTO user_settings (setting_key, setting_value, setting_type, updated_at) 
+               VALUES (?, ?, ?, CURRENT_TIMESTAMP)""",
+            (key, value_str, setting_type)
+        )
+        conn.commit()
+        db_logger.info(f"User setting guardado: {key} ({setting_type})")
+        return True
+    except Exception as e:
+        db_logger.error(f"Error al guardar user setting: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_user_setting(key: str, default: any = None, setting_type: str = 'string'):
+    """
+    Obtiene una configuracion de usuario
+    
+    Args:
+        key: Clave de configuracion
+        default: Valor por defecto si no existe
+        setting_type: Tipo esperado ('string', 'int', 'float', 'bool', 'json')
+    
+    Returns:
+        Valor de configuracion convertido al tipo correcto, o default si no existe
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT setting_value, setting_type FROM user_settings WHERE setting_key = ?", (key,))
+        row = cursor.fetchone()
+        
+        if not row or row["setting_value"] is None:
+            return default
+        
+        value_str = row["setting_value"]
+        stored_type = row["setting_type"]
+        
+        # Convertir valor segun tipo almacenado
+        import json
+        
+        if stored_type == 'json':
+            return json.loads(value_str)
+        elif stored_type == 'int':
+            return int(value_str)
+        elif stored_type == 'float':
+            return float(value_str)
+        elif stored_type == 'bool':
+            return value_str == '1' or value_str.lower() == 'true'
+        else:
+            return value_str
+    
+    except Exception as e:
+        db_logger.error(f"Error al obtener user setting: {e}")
+        return default
+    finally:
+        conn.close()
+
+def get_all_user_settings():
+    """
+    Obtiene todas las configuraciones de usuario
+    
+    Returns:
+        Diccionario con todas las configuraciones {key: {value, type, updated_at}}
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        import json
+        
+        cursor.execute("SELECT setting_key, setting_value, setting_type, updated_at FROM user_settings")
+        rows = cursor.fetchall()
+        
+        settings = {}
+        for row in rows:
+            value_str = row["setting_value"]
+            setting_type = row["setting_type"]
+            
+            # Convertir valor
+            if setting_type == 'json':
+                value = json.loads(value_str) if value_str else None
+            elif setting_type == 'int':
+                value = int(value_str) if value_str else None
+            elif setting_type == 'float':
+                value = float(value_str) if value_str else None
+            elif setting_type == 'bool':
+                value = value_str == '1' or value_str.lower() == 'true'
+            else:
+                value = value_str
+            
+            settings[row["setting_key"]] = {
+                "value": value,
+                "type": setting_type,
+                "updated_at": row["updated_at"]
+            }
+        
+        return settings
+    except Exception as e:
+        db_logger.error(f"Error al obtener user settings: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def delete_user_setting(key: str):
+    """
+    Elimina una configuracion de usuario
+    
+    Args:
+        key: Clave a eliminar
+    
+    Returns:
+        True si se elimino, False en caso contrario
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM user_settings WHERE setting_key = ?", (key,))
+        conn.commit()
+        deleted = cursor.rowcount > 0
+        if deleted:
+            db_logger.info(f"User setting eliminado: {key}")
+        return deleted
+    except Exception as e:
+        db_logger.error(f"Error al eliminar user setting: {e}")
         return False
     finally:
         conn.close()
