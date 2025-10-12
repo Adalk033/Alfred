@@ -116,8 +116,8 @@ async function ensurePythonEnv(backendPath) {
     try {
         if (!fs.existsSync(venvPath)) {
             console.log("Creando entorno virtual...");
-            execSync("python -m venv venv", { 
-                cwd: backendPath, 
+            execSync("python -m venv venv", {
+                cwd: backendPath,
                 encoding: 'utf8',
                 stdio: 'pipe'
             });
@@ -127,15 +127,15 @@ async function ensurePythonEnv(backendPath) {
 
         // Verificar pip
         try {
-            const pipVersion = execSync(`"${pythonCmd}" -m pip --version`, { 
+            const pipVersion = execSync(`"${pythonCmd}" -m pip --version`, {
                 encoding: 'utf8',
                 stdio: 'pipe'
             });
             console.log(pipVersion.trim());
         } catch {
             console.log("Instalando pip...");
-            execSync(`"${pythonCmd}" -m ensurepip --upgrade`, { 
-                cwd: backendPath, 
+            execSync(`"${pythonCmd}" -m ensurepip --upgrade`, {
+                cwd: backendPath,
                 encoding: 'utf8',
                 stdio: 'pipe'
             });
@@ -143,11 +143,11 @@ async function ensurePythonEnv(backendPath) {
 
         // Verificar dependencias instaladas
         console.log("Verificando dependencias...");
-        const installedPkgs = execSync(`"${pythonCmd}" -m pip freeze`, { 
+        const installedPkgs = execSync(`"${pythonCmd}" -m pip freeze`, {
             encoding: "utf8",
             stdio: 'pipe'
         }).toLowerCase();
-        
+
         const reqs = fs.readFileSync(requirementsPath, "utf8")
             .split("\n")
             .filter(line => line.trim() && !line.trim().startsWith('#'))
@@ -171,15 +171,15 @@ async function ensurePythonEnv(backendPath) {
 
             await new Promise((resolve, reject) => {
                 const proc = spawn(pythonCmd, [
-                    "-m", "pip", "install", 
+                    "-m", "pip", "install",
                     "--no-color",  // Deshabilitar colores ANSI
                     "--progress-bar", "off",  // Deshabilitar barra de progreso
                     "-r", "requirements.txt"
                 ], {
                     cwd: backendPath,
                     stdio: ["ignore", "pipe", "pipe"],
-                    env: { 
-                        ...process.env, 
+                    env: {
+                        ...process.env,
                         PYTHONIOENCODING: 'utf-8',  // Forzar UTF-8
                         PYTHONUNBUFFERED: '1'  // Sin buffer
                     }
@@ -194,7 +194,7 @@ async function ensurePythonEnv(backendPath) {
                         console.log(`[pip] ${output}`);
                     }
                 });
-                
+
                 proc.stderr.on("data", (data) => {
                     const error = data.toString('utf8').trim();
                     if (error) console.error(`[pip error] ${error}`);
@@ -236,10 +236,10 @@ async function ensurePythonEnv(backendPath) {
 async function checkPyTorchCuda(pythonCmd) {
     try {
         console.log("Verificando soporte GPU de PyTorch...");
-        
+
         // Verificar si hay GPU NVIDIA
         const hasNvidiaGpu = await checkNvidiaGpu();
-        
+
         if (!hasNvidiaGpu) {
             console.log("No se detecto GPU NVIDIA, usando version CPU de PyTorch");
             return;
@@ -356,16 +356,16 @@ async function startBackend() {
     try {
         // Preparar entorno Python
         const pythonPath = await ensurePythonEnv(BACKEND_CONFIG.path);
-        
+
         // Pequena pausa para asegurar que pip libere recursos
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         console.log('Iniciando servidor FastAPI...');
 
         // Ejecutar backend en modo sin buffer (-u)
         backendProcess = spawn(pythonPath, ['-u', scriptPath], {
             cwd: BACKEND_CONFIG.path,
-            env: { 
+            env: {
                 ...process.env,
                 PYTHONIOENCODING: 'utf-8',  // Forzar UTF-8
                 PYTHONUNBUFFERED: '1'  // Sin buffer
@@ -750,10 +750,10 @@ ipcMain.handle('set-user-setting', async (event, key, value, type = 'string') =>
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                key: key, 
-                value: value, 
-                setting_type: type 
+            body: JSON.stringify({
+                key: key,
+                value: value,
+                setting_type: type
             })
         });
         return { success: true, data: result.data };
@@ -859,8 +859,8 @@ ipcMain.handle('select-profile-picture', async () => {
         });
 
         if (result.canceled || result.filePaths.length === 0) {
-            console.log('[MAIN] Selección cancelada');
-            return { success: false, error: 'Selección cancelada' };
+            console.log('[MAIN] Seleccion cancelada');
+            return { success: false, error: 'Seleccion cancelada' };
         }
 
         const filePath = result.filePaths[0];
@@ -929,8 +929,8 @@ ipcMain.handle('select-folder', async () => {
         });
 
         if (result.canceled || result.filePaths.length === 0) {
-            console.log('[MAIN] Selección cancelada');
-            return { success: false, error: 'Selección cancelada' };
+            console.log('[MAIN] Seleccion cancelada');
+            return { success: false, error: 'Seleccion cancelada' };
         }
 
         const folderPath = result.filePaths[0];

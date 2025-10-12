@@ -488,7 +488,7 @@ export async function deleteSelectedConversations() {
         }
     }
     
-    // Salir del modo selección
+    // Salir del modo Seleccion
     State.setConversationSelectionMode(false);
     State.setSelectedConversations(new Set());
     
