@@ -72,6 +72,8 @@
     --mode-primary-transparent-hover: rgba(0, 184, 219, 0.2);
     --mode-text-color: var(--mode-work-base);
     --mode-gradient: linear-gradient(135deg, var(--mode-primary) 0%, var(--mode-primary-light) 100%);
+    --mode-text-on-primary: #FFFFFF;
+    --mode-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /* Mode: Work */
@@ -84,7 +86,9 @@ body[data-mode="work"] {
     --mode-primary-transparent: rgba(0, 184, 219, 0.1);
     --mode-primary-transparent-hover: rgba(0, 184, 219, 0.2);
     --mode-text-color: #00B8DB;
-    --mode-gradient: linear-gradient(135deg, #00B8DB 0%, #33C9E5 100%);
+    --mode-gradient: linear-gradient(135deg, #0097B3 0%, #00B8DB 100%);
+    --mode-text-on-primary: #FFFFFF;
+    --mode-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /* Mode: Focus */
@@ -97,7 +101,9 @@ body[data-mode="focus"] {
     --mode-primary-transparent: rgba(108, 99, 255, 0.1);
     --mode-primary-transparent-hover: rgba(108, 99, 255, 0.2);
     --mode-text-color: #6C63FF;
-    --mode-gradient: linear-gradient(135deg, #6C63FF 0%, #8A82FF 100%);
+    --mode-gradient: linear-gradient(135deg, #5649E6 0%, #6C63FF 100%);
+    --mode-text-on-primary: #FFFFFF;
+    --mode-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 /* Mode: Personal */
@@ -110,7 +116,9 @@ body[data-mode="personal"] {
     --mode-primary-transparent: rgba(255, 101, 132, 0.1);
     --mode-primary-transparent-hover: rgba(255, 101, 132, 0.2);
     --mode-text-color: #FF6584;
-    --mode-gradient: linear-gradient(135deg, #FF6584 0%, #FF849D 100%);
+    --mode-gradient: linear-gradient(135deg, #E6456B 0%, #FF6584 100%);
+    --mode-text-on-primary: #FFFFFF;
+    --mode-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 /* Mode: Creative */
@@ -123,7 +131,9 @@ body[data-mode="creative"] {
     --mode-primary-transparent: rgba(255, 159, 28, 0.1);
     --mode-primary-transparent-hover: rgba(255, 159, 28, 0.2);
     --mode-text-color: #FF9F1C;
-    --mode-gradient: linear-gradient(135deg, #FF9F1C 0%, #FFB249 100%);
+    --mode-gradient: linear-gradient(135deg, #E68600 0%, #FF9F1C 100%);
+    --mode-text-on-primary: #FFFFFF;
+    --mode-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 * {

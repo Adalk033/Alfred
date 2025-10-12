@@ -249,7 +249,8 @@
 
 .button.primary {
     background: var(--mode-gradient);
-    color: white;
+    color: var(--mode-text-on-primary);
+    text-shadow: var(--mode-text-shadow);
 }
 
 .button.primary:hover {

@@ -642,6 +642,7 @@
 /* Estilos para inputs y selects en las secciones */
 .settings-section input[type="text"],
 .settings-section input[type="email"],
+.settings-section input[type="number"],
 .settings-section textarea,
 .settings-section select {
     width: 100%;
@@ -656,6 +657,7 @@
 
 .settings-section input[type="text"]:focus,
 .settings-section input[type="email"]:focus,
+.settings-section input[type="number"]:focus,
 .settings-section textarea:focus,
 .settings-section select:focus {
     outline: none;

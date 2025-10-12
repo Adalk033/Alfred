@@ -124,7 +124,8 @@
     border-radius: 12px;
     border: none;
     background: var(--mode-gradient);
-    color: white;
+    color: var(--mode-text-on-primary);
+    text-shadow: var(--mode-text-shadow);
     cursor: pointer;
     display: flex;
     align-items: center;

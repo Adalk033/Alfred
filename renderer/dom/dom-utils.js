@@ -12,11 +12,11 @@ export function scrollToBottom() {
     }
 }
 
-// Convertir Markdown a HTML (simplificado)
+// Convertir Markdown a HTML (mejorado)
 export function markdownToHtml(text) {
     let html = text;
 
-    // Codigo en bloque
+    // Codigo en bloque (debe procesarse primero)
     html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
         return `<pre><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre>`;
     });
@@ -24,17 +24,102 @@ export function markdownToHtml(text) {
     // Codigo inline
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // Negrita
+    // Negrita (debe procesarse antes que cursiva)
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-    // Cursiva
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    // Cursiva (solo asteriscos que no sean parte de listas)
+    html = html.replace(/(?<!\*)\*(?!\*)([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
 
     // Enlaces
     html = html.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>');
 
-    // Saltos de linea
-    html = html.replace(/\n/g, '<br>');
+    // Titulos (h1-h6)
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // Separar contenido en lineas para procesamiento de listas
+    let lines = html.split('\n');
+    let inUnorderedList = false;
+    let inOrderedList = false;
+    let processedLines = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const isUnorderedItem = /^[\*\-\+] (.+)$/.test(line);
+        const isOrderedItem = /^\d+\. (.+)$/.test(line);
+        const isEmpty = line === '';
+
+        // Lista no ordenada
+        if (isUnorderedItem) {
+            if (!inUnorderedList) {
+                processedLines.push('<ul>');
+                inUnorderedList = true;
+            }
+            if (inOrderedList) {
+                processedLines.push('</ol>');
+                inOrderedList = false;
+                processedLines.push('<ul>');
+                inUnorderedList = true;
+            }
+            processedLines.push(line.replace(/^[\*\-\+] (.+)$/, '<li>$1</li>'));
+        }
+        // Lista ordenada
+        else if (isOrderedItem) {
+            if (!inOrderedList) {
+                processedLines.push('<ol>');
+                inOrderedList = true;
+            }
+            if (inUnorderedList) {
+                processedLines.push('</ul>');
+                inUnorderedList = false;
+                processedLines.push('<ol>');
+                inOrderedList = true;
+            }
+            processedLines.push(line.replace(/^\d+\. (.+)$/, '<li>$1</li>'));
+        }
+        // Linea vacia
+        else if (isEmpty) {
+            // Cerrar listas si hay linea vacia
+            if (inUnorderedList) {
+                processedLines.push('</ul>');
+                inUnorderedList = false;
+                processedLines.push('<br>'); // Solo un <br> para parrafo
+            } else if (inOrderedList) {
+                processedLines.push('</ol>');
+                inOrderedList = false;
+                processedLines.push('<br>');
+            } else {
+                // Linea vacia fuera de lista = salto de parrafo
+                processedLines.push('<br>');
+            }
+        }
+        // Linea normal
+        else {
+            if (inUnorderedList) {
+                processedLines.push('</ul>');
+                inUnorderedList = false;
+            }
+            if (inOrderedList) {
+                processedLines.push('</ol>');
+                inOrderedList = false;
+            }
+            processedLines.push(line + '<br>');
+        }
+    }
+
+    // Cerrar listas abiertas al final
+    if (inUnorderedList) processedLines.push('</ul>');
+    if (inOrderedList) processedLines.push('</ol>');
+
+    html = processedLines.join('');
+
+    // Limpiar <br> excesivos (mas de 2 consecutivos)
+    html = html.replace(/(<br>){3,}/g, '<br><br>');
+    
+    // Eliminar <br> justo antes/despues de tags de bloque
+    html = html.replace(/<br>(<ul>|<ol>|<\/ul>|<\/ol>|<h1>|<h2>|<h3>|<pre>)/g, '$1');
+    html = html.replace(/(<\/ul>|<\/ol>|<\/h1>|<\/h2>|<\/h3>|<\/pre>)<br>/g, '$1');
 
     return html;
 }

@@ -60,13 +60,25 @@ class AlfredCore:
         self.chroma_db_path = os.getenv('ALFRED_CHROMA_PATH', './chroma_db')
         self.force_reload = os.getenv('ALFRED_FORCE_RELOAD', 'false').lower() == 'true'
         # qa_history_file OBSOLETO - ahora se usa SQLite (db_manager.py)
-        self.user_name = os.getenv('ALFRED_USER_NAME', 'Usuario')
+        
+        # Obtener nombre y edad del usuario desde BD
+        from db_manager import get_user_setting, init_db
+        
+        # Asegurar que BD este inicializada
+        try:
+            init_db()
+        except:
+            pass
+        
+        # Cargar nombre y edad del usuario desde BD o usar valores por defecto
+        self.user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
+        self.user_age = get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada'))
         
         # Modelo LLM: Prioridad BD > .env
         # Cargar desde base de datos si existe, sino desde .env
-        from db_manager import get_model_setting, set_model_setting, init_db
+        from db_manager import get_model_setting, set_model_setting
         
-        # Asegurar que BD este inicializada
+        # Asegurar que BD este inicializada (por si acaso)
         try:
             init_db()
         except:
@@ -524,7 +536,13 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         """Generar respuesta sin buscar documentos"""
         current_datetime = get_current_datetime_spanish()
         
-        prompt_template = config.PROMPT_TEMPLATE_NO_DOCUMENTS.replace("{USER_NAME}", self.user_name)
+        # Obtener nombre y edad actuales desde BD (en cada generacion)
+        from db_manager import get_user_setting
+        user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
+        user_age = get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada'))
+        
+        prompt_template = config.PROMPT_TEMPLATE_NO_DOCUMENTS.replace("{USER_NAME}", user_name)
+        prompt_template = prompt_template.replace("{USER_AGE}", str(user_age))
         prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
         
         # Construir contexto con historial
@@ -627,10 +645,17 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         # 3. Generar prompt
         current_datetime = get_current_datetime_spanish()
         
+        # Obtener nombre y edad actuales desde BD (en cada generacion)
+        from db_manager import get_user_setting
+        user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
+        user_age = get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada'))
+        
         if self.model_name in ["gpt-oss:20b"]:
-            prompt_template = config.PROMPT_TEMPLATE_GPT_ONLY.replace("{USER_NAME}", self.user_name)
+            prompt_template = config.PROMPT_TEMPLATE_GPT_ONLY.replace("{USER_NAME}", user_name)
+            prompt_template = prompt_template.replace("{USER_AGE}", str(user_age))
         else:
-            prompt_template = config.PROMPT_TEMPLATE_WITH_DOCUMENTS.replace("{USER_NAME}", self.user_name)
+            prompt_template = config.PROMPT_TEMPLATE_WITH_DOCUMENTS.replace("{USER_NAME}", user_name)
+            prompt_template = prompt_template.replace("{USER_AGE}", str(user_age))
         
         prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
         

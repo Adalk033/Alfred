@@ -118,6 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadCurrentModel();
     await loadOllamaKeepAlive(); // Cargar configuracion de keep_alive
     loadProfilePicture();
+    await loadUserInfo(); // Cargar informacion personal del usuario
     await loadConversations(); // Cargar conversaciones al inicio
 
     // Auto-ajustar altura del textarea
@@ -237,6 +238,12 @@ function setupEventListeners() {
 
     // Event listener para cambiar foto de perfil
     changeProfilePictureBtn.addEventListener('click', changeProfilePicture);
+    
+    // Event listener para guardar informacion personal
+    const saveUserInfoBtn = document.getElementById('saveUserInfoBtn');
+    if (saveUserInfoBtn) {
+        saveUserInfoBtn.addEventListener('click', saveUserInfo);
+    }
     
     // Event listeners para Keep Alive de Ollama
     if (ollamaKeepAliveSlider) {
@@ -540,21 +547,43 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
     messageDiv.appendChild(contentDiv);
     State.messagesContainer.appendChild(messageDiv);
 
-    // Efecto de escritura
+    // Efecto de escritura mejorado con renderizado progresivo
     let index = 0;
     const speed = 10; // ms por caracter
+    let lastRenderedText = '';
 
     function typeChar() {
-        const newContent = markdownToHtml(content);
         if (index < content.length) {
-            bubble.textContent += content.charAt(index);
             index++;
+            
+            // Obtener texto acumulado hasta este punto
+            const currentText = content.substring(0, index);
+            
+            // Si es asistente, renderizar Markdown solo si cambio significativamente
+            // Esto evita re-renderizar en cada caracter individual
+            if (role === 'assistant') {
+                // Renderizar cada 5 caracteres o al final de palabra/linea
+                const shouldRender = 
+                    index % 5 === 0 || 
+                    content.charAt(index - 1) === ' ' ||
+                    content.charAt(index - 1) === '\n' ||
+                    content.charAt(index - 1) === '*' ||
+                    content.charAt(index - 1) === '`';
+                
+                if (shouldRender || index === content.length) {
+                    bubble.innerHTML = markdownToHtml(currentText);
+                    lastRenderedText = currentText;
+                }
+            } else {
+                bubble.textContent = currentText;
+            }
+            
             scrollToBottom();
             setTimeout(typeChar, speed);
         } else {
-            // Al terminar de escribir, renderizar Markdown si es asistente
+            // Al terminar de escribir, asegurar renderizado final
             if (role === 'assistant') {
-                bubble.innerHTML = newContent;
+                bubble.innerHTML = markdownToHtml(content);
             }
 
             // Agregar metadata después de terminar de escribir
@@ -1014,7 +1043,7 @@ function saveSettingsHandler() {
     
     settingsModal.classList.add('none');
 
-    showNotification('Configuracion guardada', 'success');
+    showNotification('Configuración guardada', 'success');
 }
 
 // ===============================================
@@ -1066,7 +1095,7 @@ async function saveOllamaKeepAlive() {
         
         if (result.success) {
             console.log('Keep alive actualizado a', seconds, 'segundos');
-            showNotification('Configuracion de Ollama actualizada', 'success');
+            showNotification('Configuración de Ollama actualizada', 'success');
         } else {
             console.error('Error al actualizar keep_alive:', result.error);
             showNotification('Error al actualizar configuracion de Ollama', 'error');
@@ -1721,6 +1750,69 @@ async function restoreProfilePicture(imageData, index) {
     } catch (error) {
         console.error('❌ Error al restaurar foto:', error);
         showNotification('error', `Error al restaurar foto: ${error.message}`);
+    }
+}
+
+// ===============================================
+// FUNCIONES DE INFORMACION PERSONAL (NOMBRE Y EDAD)
+// ===============================================
+
+// Cargar informacion personal del usuario
+async function loadUserInfo() {
+    try {
+        console.log('📋 Cargando informacion personal...');
+        
+        // Cargar nombre
+        const nameResult = await window.alfredAPI.getUserSetting('user_name');
+        if (nameResult.success && nameResult.data) {
+            const userName = nameResult.data.value || '';
+            document.getElementById('userName').value = userName;
+            console.log('✅ Nombre cargado:', userName);
+        }
+        
+        // Cargar edad
+        const ageResult = await window.alfredAPI.getUserSetting('user_age');
+        if (ageResult.success && ageResult.data) {
+            const userAge = ageResult.data.value || '';
+            document.getElementById('userAge').value = userAge;
+            console.log('✅ Edad cargada:', userAge);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al cargar informacion personal:', error);
+    }
+}
+
+// Guardar informacion personal
+async function saveUserInfo() {
+    try {
+        const userName = document.getElementById('userName').value.trim();
+        const userAge = document.getElementById('userAge').value;
+        
+        console.log('💾 Guardando informacion personal...', { userName, userAge });
+        
+        // Guardar nombre
+        if (userName) {
+            const nameResult = await window.alfredAPI.setUserSetting('user_name', userName, 'string');
+            if (!nameResult.success) {
+                throw new Error('Error al guardar nombre');
+            }
+        }
+        
+        // Guardar edad
+        if (userAge) {
+            const ageResult = await window.alfredAPI.setUserSetting('user_age', userAge, 'integer');
+            if (!ageResult.success) {
+                throw new Error('Error al guardar edad');
+            }
+        }
+        
+        console.log('✅ Informacion personal guardada');
+        showNotification('success', 'Informacion personal actualizada. Los cambios se aplicaran en tu proxima conversacion.');
+        
+    } catch (error) {
+        console.error('❌ Error al guardar informacion personal:', error);
+        showNotification('error', `Error al guardar: ${error.message}`);
     }
 }
 

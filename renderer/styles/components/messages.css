@@ -139,7 +139,8 @@
 
 .message.user .message-bubble {
     background: var(--mode-gradient);
-    color: white;
+    color: var(--mode-text-on-primary);
+    text-shadow: var(--mode-text-shadow);
     border-bottom-right-radius: 4px;
 }
 
