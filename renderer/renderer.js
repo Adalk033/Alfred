@@ -36,6 +36,10 @@ let conversationsBtn;
 let profilePictureTopbar;
 let activeNavItem = null;
 
+// Indicador de modo en topbar
+let modeIndicator;
+let modeIndicatorName;
+
 // Botones de modo de busqueda
 let searchDocsBtn;
 let promptOnlyBtn;
@@ -98,6 +102,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     newChatBtn = document.getElementById('newChatBtn');
     conversationsBtn = document.getElementById('conversationsBtn');
     profilePictureTopbar = document.getElementById('profilePictureTopbar');
+    
+    // Indicador de modo en topbar
+    modeIndicator = document.getElementById('modeIndicator');
+    modeIndicatorName = modeIndicator ? modeIndicator.querySelector('.mode-name') : null;
 
     // Esperar a que el backend este listo antes de habilitar el chat
     await waitForBackendReady();
@@ -172,6 +180,21 @@ function setupEventListeners() {
     // Event listener para foto de perfil en el topbar
     profilePictureTopbar.addEventListener('click', () => {
         settingsModal.classList.remove('none');
+    });
+
+    // Event listeners para botones de modo
+    const modeButtons = document.querySelectorAll('.mode-btn');
+    modeButtons.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const mode = btn.dataset.mode;
+            
+            // Cambiar clase active
+            modeButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Cambiar modo en la aplicacion
+            await window.setMode(mode);
+        });
     });
 
     closeSettings.addEventListener('click', () => settingsModal.classList.add('none'));
@@ -1350,9 +1373,148 @@ async function deleteProfilePicture(index) {
     }
 }
 
+// ====================================
+// SISTEMA DE MODOS
+// ====================================
+
+// Modos disponibles
+const MODES = {
+    WORK: 'work',
+    FOCUS: 'focus',
+    PERSONAL: 'personal',
+    CREATIVE: 'creative'
+};
+
+// Nombres de modos para mostrar
+const MODE_NAMES = {
+    work: 'Work',
+    focus: 'Focus',
+    personal: 'Personal',
+    creative: 'Creative'
+};
+
+// Estado actual del modo
+let currentMode = MODES.WORK;
+
+/**
+ * Actualiza el indicador visual de modo en el topbar
+ * @param {string} mode - Modo activo
+ */
+function updateModeIndicator(mode) {
+    if (!modeIndicatorName) return;
+    
+    const modeName = MODE_NAMES[mode] || 'Work';
+    modeIndicatorName.textContent = modeName;
+}
+
+/**
+ * Cambia el modo de la aplicacion
+ * @param {string} mode - Modo a activar (work, focus, personal, creative)
+ */
+async function setMode(mode) {
+    if (!Object.values(MODES).includes(mode)) {
+        console.error(`Modo invalido: ${mode}`);
+        return;
+    }
+
+    // Actualizar modo actual
+    currentMode = mode;
+
+    // Aplicar el modo al body
+    document.body.setAttribute('data-mode', mode);
+    
+    // Actualizar indicador de modo en topbar
+    updateModeIndicator(mode);
+
+    // Guardar en base de datos
+    try {
+        const response = await fetch('http://localhost:8000/settings/mode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ mode })
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al guardar el modo');
+        }
+
+        showNotification('success', `Modo ${mode} activado`);
+    } catch (error) {
+        console.error('Error al guardar modo:', error);
+        showNotification('error', 'Error al guardar el modo');
+    }
+}
+
+/**
+ * Obtiene el modo actual desde la base de datos
+ */
+async function loadMode() {
+    try {
+        const response = await fetch('http://localhost:8000/settings/mode');
+        
+        if (!response.ok) {
+            throw new Error('Error al cargar el modo');
+        }
+
+        const data = await response.json();
+        const savedMode = data.mode || MODES.WORK;
+
+        // Aplicar el modo guardado
+        currentMode = savedMode;
+        document.body.setAttribute('data-mode', savedMode);
+        
+        // Actualizar indicador de modo en topbar
+        updateModeIndicator(savedMode);
+
+        // Marcar el boton activo en la UI
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        modeButtons.forEach(btn => {
+            if (btn.dataset.mode === savedMode) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        console.log(`Modo cargado: ${savedMode}`);
+    } catch (error) {
+        console.error('Error al cargar modo:', error);
+        // Si falla, usar modo por defecto (work)
+        document.body.setAttribute('data-mode', MODES.WORK);
+        updateModeIndicator(MODES.WORK);
+        
+        // Marcar work como activo por defecto
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        modeButtons.forEach(btn => {
+            if (btn.dataset.mode === 'work') {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+}
+
+/**
+ * Obtiene el modo actual
+ */
+function getCurrentMode() {
+    return currentMode;
+}
+
+// Cargar el modo al iniciar la aplicacion
+document.addEventListener('DOMContentLoaded', () => {
+    loadMode();
+});
+
 // Exponer funciones globalmente para los botones HTML
 window.loadConversation = loadConversation;
 window.deleteConversationById = deleteConversationById;
 window.createNewConversation = createNewConversation;
 window.stopOllama = stopOllama;
 window.restartBackend = restartBackend;
+window.setMode = setMode;
+window.getCurrentMode = getCurrentMode;
+window.MODES = MODES;

@@ -1,8 +1,8 @@
 /* styles.css - Estilos modernos para Alfred Electron */
 :root {
     /* Colores */
-    --primary-color: #4a9eff;
-    --primary-hover: #3a8eef;
+    --primary-color: var(--mode-primary);
+    --primary-hover: var(--mode-primary-dark);
     --secondary-color: #6c757d;
     --success-color: #28a745;
     --green-dot-status: #34c759;
@@ -13,7 +13,7 @@
     --text-secondary: #b0b0b0;
     --border-color: #262626;
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    --message-user-bg: #4a9eff;
+    --message-user-bg: var(--mode-primary);
     --message-assistant-bg: #2d2d2d;
     --transition: all 0.3s ease;
 
@@ -23,18 +23,74 @@
     --bg-tertiary: #2d2d2d;
     --bg-hover: #333333;
 
-    /* Mode WORK */
+    /* Mode Colors Base */
     --mode-work-base: #00B8DB;
-    --mode-text-color: #00B8DB;
-
-    /* Mode FOCUS */
     --mode-focus-base: #6C63FF;
+    --mode-personal-base: #FF6584;
+    --mode-creative-base: #FF9F1C;
 
-    /* Mode REST */
-    --mode-rest-base: #FF6584;
+    /* Active Mode Colors - Default: Work */
+    --mode-primary: var(--mode-work-base);
+    --mode-primary-light: #33C9E5;
+    --mode-primary-lighter: #66D6ED;
+    --mode-primary-dark: #0097B3;
+    --mode-primary-darker: #00768C;
+    --mode-primary-transparent: rgba(0, 184, 219, 0.1);
+    --mode-primary-transparent-hover: rgba(0, 184, 219, 0.2);
+    --mode-text-color: var(--mode-work-base);
+    --mode-gradient: linear-gradient(135deg, var(--mode-primary) 0%, var(--mode-primary-light) 100%);
+}
 
-    /*  Mode Entertainment */
-    --mode-entertainment-base: #FF9F1C;
+/* Mode: Work */
+body[data-mode="work"] {
+    --mode-primary: #00B8DB;
+    --mode-primary-light: #33C9E5;
+    --mode-primary-lighter: #66D6ED;
+    --mode-primary-dark: #0097B3;
+    --mode-primary-darker: #00768C;
+    --mode-primary-transparent: rgba(0, 184, 219, 0.1);
+    --mode-primary-transparent-hover: rgba(0, 184, 219, 0.2);
+    --mode-text-color: #00B8DB;
+    --mode-gradient: linear-gradient(135deg, #00B8DB 0%, #33C9E5 100%);
+}
+
+/* Mode: Focus */
+body[data-mode="focus"] {
+    --mode-primary: #6C63FF;
+    --mode-primary-light: #8A82FF;
+    --mode-primary-lighter: #A8A1FF;
+    --mode-primary-dark: #5649E6;
+    --mode-primary-darker: #4037CC;
+    --mode-primary-transparent: rgba(108, 99, 255, 0.1);
+    --mode-primary-transparent-hover: rgba(108, 99, 255, 0.2);
+    --mode-text-color: #6C63FF;
+    --mode-gradient: linear-gradient(135deg, #6C63FF 0%, #8A82FF 100%);
+}
+
+/* Mode: Personal */
+body[data-mode="personal"] {
+    --mode-primary: #FF6584;
+    --mode-primary-light: #FF849D;
+    --mode-primary-lighter: #FFA3B6;
+    --mode-primary-dark: #E6456B;
+    --mode-primary-darker: #CC2E52;
+    --mode-primary-transparent: rgba(255, 101, 132, 0.1);
+    --mode-primary-transparent-hover: rgba(255, 101, 132, 0.2);
+    --mode-text-color: #FF6584;
+    --mode-gradient: linear-gradient(135deg, #FF6584 0%, #FF849D 100%);
+}
+
+/* Mode: Creative */
+body[data-mode="creative"] {
+    --mode-primary: #FF9F1C;
+    --mode-primary-light: #FFB249;
+    --mode-primary-lighter: #FFC576;
+    --mode-primary-dark: #E68600;
+    --mode-primary-darker: #CC7600;
+    --mode-primary-transparent: rgba(255, 159, 28, 0.1);
+    --mode-primary-transparent-hover: rgba(255, 159, 28, 0.2);
+    --mode-text-color: #FF9F1C;
+    --mode-gradient: linear-gradient(135deg, #FF9F1C 0%, #FFB249 100%);
 }
 
 * {
@@ -51,9 +107,5 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-}
-
-
-.mode {
-    color: var(--mode-text-color);
+    transition: var(--transition);
 }

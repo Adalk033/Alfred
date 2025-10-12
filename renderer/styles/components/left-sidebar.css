@@ -24,25 +24,7 @@
     opacity: 0;
 }
 
-.left-sidebar-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border-color);
-    flex-shrink: 0;
-    min-height: 60px;
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.left-sidebar.collapsed .left-sidebar-header {
-    opacity: 0;
-    transform: translateX(-20px);
-}
-
-.left-sidebar-header h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
+/* Navegacion del sidebar */
 .left-sidebar-nav {
     display: flex;
     flex-direction: column;
@@ -105,6 +87,75 @@
 .left-sidebar-content {
     scrollbar-width: thin;
     scrollbar-color: var(--border-color) var(--bg-secondary);
+}
+
+/* Selector de Modo */
+.mode-selector {
+    padding: 16px;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    margin: 0;
+    background: var(--bg-primary);
+}
+
+.mode-selector-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mode-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 8px;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.mode-btn svg {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+    transition: all 0.3s ease;
+}
+
+.mode-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--mode-primary);
+    color: var(--mode-primary);
+    transform: translateY(-2px);
+}
+
+.mode-btn:hover svg {
+    opacity: 1;
+}
+
+.mode-btn.active {
+    background: var(--mode-primary-transparent);
+    border-color: var(--mode-primary);
+    color: var(--mode-primary);
+}
+
+.mode-btn.active svg {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px currentColor);
 }
 
 /* Estilos para el contenido dinamico */

@@ -249,7 +249,7 @@
 }
 
 .button.primary {
-    background: linear-gradient(135deg, var(--primary-color), #6a5acd);
+    background: var(--mode-gradient);
     color: white;
 }
 

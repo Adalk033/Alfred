@@ -243,6 +243,26 @@ class OllamaKeepAliveResponse(BaseModel):
     keep_alive_seconds: int = Field(..., description="Tiempo en segundos")
     description: str = Field(..., description="Descripcion del comportamiento")
 
+# --- Modelos de Modo de Aplicacion ---
+
+class ModeRequest(BaseModel):
+    """Solicitud para cambiar el modo de la aplicacion"""
+    mode: str = Field(..., description="Modo: work, focus, personal, creative")
+    
+    @field_validator('mode')
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        """Validar que el modo sea valido"""
+        allowed_modes = ['work', 'focus', 'personal', 'creative']
+        if v not in allowed_modes:
+            raise ValueError(f'Modo invalido. Modos permitidos: {allowed_modes}')
+        return v
+
+class ModeResponse(BaseModel):
+    """Respuesta con el modo actual"""
+    mode: str = Field(..., description="Modo actual")
+    updated_at: Optional[str] = Field(None, description="Fecha de ultima actualizacion")
+
 # --- Inicialización del núcleo de Alfred ---
 alfred_core: Optional[AlfredCore] = None
 
@@ -900,6 +920,70 @@ async def get_current_model():
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener modelo actual: {str(e)}")
+
+# ====================================
+# ENDPOINTS DE MODO DE APLICACION
+# ====================================
+
+@app.post("/settings/mode", response_model=ModeResponse, tags=["Configuración"])
+async def set_mode(request: ModeRequest):
+    """
+    Guardar el modo actual de la aplicacion
+    
+    Modos disponibles:
+    - work: Modo trabajo (cyan)
+    - focus: Modo concentracion (morado)
+    - personal: Modo personal (rosa)
+    - creative: Modo creativo (naranja)
+    
+    El modo se guarda en la base de datos y se carga automaticamente
+    al iniciar la aplicacion.
+    """
+    try:
+        from db_manager import set_user_setting
+        from datetime import datetime
+        
+        # Guardar en base de datos
+        success = set_user_setting('app_mode', request.mode, 'string')
+        
+        if not success:
+            raise Exception("No se pudo guardar el modo en la base de datos")
+        
+        backend_logger.info(f"Modo cambiado a: {request.mode}")
+        
+        return ModeResponse(
+            mode=request.mode,
+            updated_at=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        error_detail = f"Error al guardar modo: {str(e)}"
+        backend_logger.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
+
+@app.get("/settings/mode", response_model=ModeResponse, tags=["Configuración"])
+async def get_mode():
+    """
+    Obtener el modo actual de la aplicacion
+    
+    Retorna el modo guardado en la base de datos.
+    Si no hay modo guardado, retorna 'work' como valor por defecto.
+    """
+    try:
+        from db_manager import get_user_setting
+        
+        # Obtener de base de datos (retorna directamente el valor string)
+        mode = get_user_setting('app_mode', default='work')
+        
+        return ModeResponse(
+            mode=mode,
+            updated_at=None  # Opcional: podriamos consultar updated_at si es necesario
+        )
+        
+    except Exception as e:
+        error_detail = f"Error al obtener modo: {str(e)}"
+        backend_logger.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @app.get("/gpu/status", response_model=GPUStatus, tags=["Sistema"])
 async def get_gpu_status():
