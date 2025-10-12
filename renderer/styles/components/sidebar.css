@@ -427,7 +427,6 @@
     color: var(--text-primary);
     font-size: 14px;
     font-weight: 600;
-    font-family: inherit;
 }
 
 .conversation-title-edit:focus {

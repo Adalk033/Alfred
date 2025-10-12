@@ -1,3 +1,4 @@
+/* Importacion de estilos - DEBE IR PRIMERO */
 @import './themes/base.css';
 @import './themes/dark.css';
 @import './themes/light.css';
@@ -10,17 +11,6 @@
 @import './components/sidebar.css';
 @import './components/left-sidebar.css';
 @import './components/loading.css';
-
-/* Contenedor principal */
-body {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    width: 100vw;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-}
 
 .container {
     flex: 1;

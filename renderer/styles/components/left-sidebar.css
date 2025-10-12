@@ -173,6 +173,9 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    padding-bottom: 150px; /* Espacio extra para el menu desplegable */
+    position: relative;
+    z-index: 0;
 }
 
 /* Estilos de historial */
@@ -368,4 +371,272 @@
     /* .menu-toggle {
         display: none;
     } */
+}
+
+/* ====================================
+   CONVERSACIONES - MEJORAS
+   ==================================== */
+
+.conversations-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.conversations-header h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.conversations-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.icon-btn-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.icon-btn-small:hover {
+    background: var(--bg-hover);
+    border-color: var(--mode-primary);
+    color: var(--mode-primary);
+    transform: scale(1.05);
+}
+
+.icon-btn-small.active {
+    background: var(--mode-primary-transparent);
+    border-color: var(--mode-primary);
+    color: var(--mode-primary);
+}
+
+.icon-btn-small.danger {
+    width: auto;
+    color: var(--danger-color);
+    padding: 0 8px;
+
+}
+
+.icon-btn-small.danger:hover {
+    background: rgba(220, 53, 69, 0.1);
+    border-color: var(--danger-color);
+}
+
+.icon-btn-small:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.selected-count {
+    font-size: 16px;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+/* Conversacion Item */
+.conversation-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
+}
+
+.conversation-item:hover {
+    border-color: var(--mode-primary);
+    background-color: var(--bg-hover);
+    transform: translateX(2px);
+    z-index: 2;
+}
+
+/* Item con menu abierto debe estar encima de todo */
+.conversation-item.menu-open {
+    z-index: 9999;
+}
+
+.conversation-item.active {
+    border-color: var(--mode-primary);
+    background: var(--mode-primary-transparent);
+}
+
+/* Checkbox para seleccion multiple */
+.conversation-checkbox {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.conv-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--mode-primary);
+}
+
+/* Info de conversacion */
+.conversation-info {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.conversation-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Acciones de conversacion */
+.conversation-actions {
+    position: relative;
+    flex-shrink: 0;
+    opacity: 1 !important; /* Siempre visible, anula regla de sidebar.css */
+    transition: opacity 0.2s ease;
+}
+
+.menu-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    opacity: 1 !important; /* Siempre visible */
+}
+
+.menu-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Menu desplegable */
+.conversation-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 4px;
+    min-width: 160px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+    z-index: 99999;
+    animation: slideDown 0.2s ease;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    pointer-events: all; /* Asegurar que siempre reciba eventos */
+}
+
+/* Cuando el menu esta visible (display: block desde JS), mantenerlo visible */
+.conversation-menu[style*="display: block"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Menu hacia arriba cuando no hay espacio abajo */
+.conversation-menu.menu-up {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--mode-primary);
+}
+
+.menu-item.danger {
+    color: var(--danger-color);
+}
+
+.menu-item.danger:hover {
+    background: rgba(220, 53, 69, 0.1);
+}
+
+.menu-item svg {
+    flex-shrink: 0;
 }

@@ -28,6 +28,8 @@ export function setDOMElements(elements) {
 export let conversations = [];
 export let conversationHistory = [];
 export let currentConversationId = null;
+export let conversationSelectionMode = false;
+export let selectedConversations = new Set();
 
 export function setConversations(newConversations) {
     conversations = newConversations;
@@ -39,6 +41,14 @@ export function setConversationHistory(history) {
 
 export function setCurrentConversationId(id) {
     currentConversationId = id;
+}
+
+export function setConversationSelectionMode(mode) {
+    conversationSelectionMode = mode;
+}
+
+export function setSelectedConversations(selected) {
+    selectedConversations = selected;
 }
 
 export function addToConversationHistory(message) {

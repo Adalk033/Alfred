@@ -92,27 +92,68 @@ export function updateConversationsList() {
 
     const conversations = State.conversations;
     const currentConversationId = State.currentConversationId;
+    const isSelectionMode = State.conversationSelectionMode || false;
 
     conversations.forEach(conv => {
         const convDiv = document.createElement('div');
         convDiv.className = 'conversation-item';
-        if (conv.id === currentConversationId) {
+        convDiv.dataset.conversationId = conv.id;
+        
+        if (conv.id === currentConversationId && !isSelectionMode) {
             convDiv.classList.add('active');
         }
 
         convDiv.innerHTML = `
-            <div class="conversation-info">
+            ${isSelectionMode ? `
+                <div class="conversation-checkbox">
+                    <input type="checkbox" 
+                           class="conv-checkbox" 
+                           data-conv-id="${conv.id}"
+                           onchange="window.conversationActions.toggleSelection('${conv.id}')">
+                </div>
+            ` : ''}
+            <div class="conversation-info" onclick="${!isSelectionMode ? `window.conversationActions.load('${conv.id}')` : ''}">
                 <div class="conversation-title">${conv.title}</div>
                 <div class="conversation-meta">
                     <span class="message-count">${conv.message_count} mensajes</span>
                     <span class="conversation-date">${formatDate(conv.updated_at)}</span>
                 </div>
             </div>
-            <div class="conversation-actions">
-                <button class="icon-btn" onclick="window.conversationActions.load('${conv.id}')" title="Cargar">📂</button>
-                <button class="icon-btn" onclick="window.conversationActions.rename('${conv.id}')" title="Renombrar">✏️</button>
-                <button class="icon-btn" onclick="window.conversationActions.delete('${conv.id}')" title="Eliminar">🗑️</button>
-            </div>
+            ${!isSelectionMode ? `
+                <div class="conversation-actions">
+                    <button class="icon-btn menu-btn" 
+                            onclick="window.conversationActions.toggleMenu(event, '${conv.id}')" 
+                            title="Opciones">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="5" r="2"/>
+                            <circle cx="12" cy="12" r="2"/>
+                            <circle cx="12" cy="19" r="2"/>
+                        </svg>
+                    </button>
+                    <div class="conversation-menu" id="menu-${conv.id}" style="display: none;">
+                        <button class="menu-item" onclick="window.conversationActions.load('${conv.id}')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                            </svg>
+                            Cargar
+                        </button>
+                        <button class="menu-item" onclick="window.conversationActions.rename('${conv.id}')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Renombrar
+                        </button>
+                        <button class="menu-item danger" onclick="window.conversationActions.delete('${conv.id}')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            </svg>
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+            ` : ''}
         `;
 
         conversationsList.appendChild(convDiv);
@@ -124,13 +165,96 @@ window.conversationActions = {
     load: (conversationId) => loadConversation(conversationId),
     delete: (conversationId) => deleteConversationById(conversationId),
     rename: (conversationId) => {
-        const convItem = document.querySelector(`.conversation-item .conversation-actions button[onclick*="${conversationId}"]`)?.closest('.conversation-item');
+        const convItem = document.querySelector(`.conversation-item[data-conversation-id="${conversationId}"]`);
         if (convItem) {
             const titleElement = convItem.querySelector('.conversation-title');
             enableEditMode(conversationId, titleElement);
+            // Cerrar el menú y quitar clase
+            const menu = document.getElementById(`menu-${conversationId}`);
+            if (menu) {
+                menu.style.display = 'none';
+                convItem.classList.remove('menu-open');
+            }
         }
-    }
+    },
+    toggleMenu: (event, conversationId) => {
+        event.stopPropagation();
+        
+        // Cerrar todos los menús abiertos y quitar clase menu-open
+        document.querySelectorAll('.conversation-menu').forEach(menu => {
+            if (menu.id !== `menu-${conversationId}`) {
+                menu.style.display = 'none';
+                const item = menu.closest('.conversation-item');
+                if (item) item.classList.remove('menu-open');
+            }
+        });
+        
+        // Toggle del menú actual
+        const menu = document.getElementById(`menu-${conversationId}`);
+        if (menu) {
+            const isVisible = menu.style.display === 'block';
+            const conversationItem = menu.closest('.conversation-item');
+            
+            menu.style.display = isVisible ? 'none' : 'block';
+            
+            // Agregar/quitar clase menu-open al item
+            if (conversationItem) {
+                if (isVisible) {
+                    conversationItem.classList.remove('menu-open');
+                } else {
+                    conversationItem.classList.add('menu-open');
+                }
+            }
+            
+            // Si se abrió, ajustar posición para que no salga del viewport
+            if (!isVisible) {
+                const sidebar = document.getElementById('leftSidebarContent');
+                
+                if (conversationItem && sidebar) {
+                    const itemRect = conversationItem.getBoundingClientRect();
+                    const sidebarRect = sidebar.getBoundingClientRect();
+                    const menuHeight = 130; // Altura aproximada del menú
+                    
+                    // Si no hay espacio abajo, mostrar arriba
+                    const spaceBelow = sidebarRect.bottom - itemRect.bottom;
+                    if (spaceBelow < menuHeight) {
+                        menu.classList.add('menu-up');
+                    } else {
+                        menu.classList.remove('menu-up');
+                    }
+                }
+            }
+        }
+    },
+    toggleSelection: (conversationId) => {
+        const checkbox = document.querySelector(`input[data-conv-id="${conversationId}"]`);
+        if (!checkbox) return;
+        
+        const selectedConvs = State.selectedConversations || new Set();
+        
+        if (checkbox.checked) {
+            selectedConvs.add(conversationId);
+        } else {
+            selectedConvs.delete(conversationId);
+        }
+        
+        State.setSelectedConversations(selectedConvs);
+        updateDeleteButtonState();
+    },
+    toggleSelectionMode: () => toggleSelectionMode(),
+    deleteSelected: () => deleteSelectedConversations()
 };
+
+// Cerrar menús al hacer clic fuera
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('.conversation-actions')) {
+        document.querySelectorAll('.conversation-menu').forEach(menu => {
+            menu.style.display = 'none';
+            const item = menu.closest('.conversation-item');
+            if (item) item.classList.remove('menu-open');
+        });
+    }
+});
 
 // Cargar una conversacion especifica
 export async function loadConversation(conversationId) {
@@ -258,6 +382,125 @@ export async function renameConversation(conversationId, newTitle) {
         showNotification('error', 'Error al renombrar conversacion');
         console.error('Error al renombrar conversacion:', error);
         return false;
+    }
+}
+
+// ====================================
+// MODO DE SELECCION MULTIPLE
+// ====================================
+
+export function toggleSelectionMode() {
+    const isCurrentlyInSelectionMode = State.conversationSelectionMode || false;
+    State.setConversationSelectionMode(!isCurrentlyInSelectionMode);
+    State.setSelectedConversations(new Set());
+    
+    updateConversationsList();
+    updateSelectionModeUI();
+}
+
+export function updateSelectionModeUI() {
+    const selectionModeBtn = document.getElementById('selectionModeBtn');
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    const conversationsTitle = document.getElementById('conversationsTitle');
+    
+    if (State.conversationSelectionMode) {
+        if (selectionModeBtn) {
+            selectionModeBtn.classList.add('active');
+            selectionModeBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            `;
+            selectionModeBtn.title = 'Cancelar seleccion';
+        }
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.style.display = 'flex';
+        }
+        if (conversationsTitle) {
+            conversationsTitle.textContent = 'Seleccionar conversaciones';
+        }
+    } else {
+        if (selectionModeBtn) {
+            selectionModeBtn.classList.remove('active');
+            selectionModeBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l3 3L22 4"/>
+                    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                </svg>
+            `;
+            selectionModeBtn.title = 'Seleccionar multiples';
+        }
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.style.display = 'none';
+        }
+        if (conversationsTitle) {
+            conversationsTitle.textContent = 'Conversaciones';
+        }
+    }
+}
+
+export function updateDeleteButtonState() {
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    const selectedCount = State.selectedConversations ? State.selectedConversations.size : 0;
+    
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.disabled = selectedCount === 0;
+        const countSpan = deleteSelectedBtn.querySelector('.selected-count');
+        if (countSpan && selectedCount > 0) {
+            countSpan.textContent = `(${selectedCount})`;
+            countSpan.style.display = 'inline';
+        } else if (countSpan) {
+            countSpan.style.display = 'none';
+        }
+    }
+}
+
+export async function deleteSelectedConversations() {
+    const selectedConvs = State.selectedConversations;
+    if (!selectedConvs || selectedConvs.size === 0) {
+        showNotification('warning', 'No hay conversaciones seleccionadas');
+        return;
+    }
+    
+    const confirmed = await new Promise(resolve => {
+        setTimeout(() => {
+            resolve(confirm(`Estas seguro de eliminar ${selectedConvs.size} conversacion(es)?`));
+        }, 0);
+    });
+    
+    if (!confirmed) return;
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const convId of selectedConvs) {
+        try {
+            const result = await window.alfredAPI.deleteConversation(convId);
+            if (result.success) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+        } catch (error) {
+            errorCount++;
+            console.error('Error al eliminar conversacion:', error);
+        }
+    }
+    
+    // Salir del modo selección
+    State.setConversationSelectionMode(false);
+    State.setSelectedConversations(new Set());
+    
+    // Recargar conversaciones
+    await loadConversations();
+    updateSelectionModeUI();
+    
+    if (successCount > 0) {
+        showNotification('success', `${successCount} conversacion(es) eliminada(s)`);
+    }
+    if (errorCount > 0) {
+        showNotification('error', `Error al eliminar ${errorCount} conversacion(es)`);
     }
 }
 

@@ -883,7 +883,35 @@ async function showConversations() {
     try {
         await loadConversations();
 
-        State.sidebarContent.innerHTML = '<h4 style="margin-bottom: 16px; color: var(--text-primary);">Conversaciones</h4><div id="conversationsList" class="conversations-list"></div>';
+        State.sidebarContent.innerHTML = `
+            <div class="conversations-header">
+                <h4 id="conversationsTitle">Conversaciones</h4>
+                <div class="conversations-actions">
+                    <button id="selectionModeBtn" 
+                            class="icon-btn-small" 
+                            onclick="window.conversationActions.toggleSelectionMode()"
+                            title="Seleccionar multiples">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                        </svg>
+                    </button>
+                    <button id="deleteSelectedBtn" 
+                            class="icon-btn-small danger" 
+                            onclick="window.conversationActions.deleteSelected()"
+                            title="Eliminar seleccionadas"
+                            style="display: none;"
+                            disabled>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
+                        <span class="selected-count" style="display: none;"></span>
+                    </button>
+                </div>
+            </div>
+            <div id="conversationsList" class="conversations-list"></div>
+        `;
 
         updateConversationsList();
         showLeftSidebarContent();

@@ -31,6 +31,47 @@
     font-weight: 600;
 }
 
+.separator-vertical {
+    width: 2px;
+    height: 32px;
+    background: linear-gradient(180deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.1) 10%,
+            rgba(255, 255, 255, 0.2) 50%,
+            rgba(255, 255, 255, 0.1) 90%,
+            transparent 100%);
+    position: relative;
+    box-shadow:
+        0 0 8px rgba(255, 255, 255, 0.05),
+        inset 0 0 2px rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+body[data-theme="dark"] .separator-vertical {
+    background: linear-gradient(180deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.15) 10%,
+            rgba(255, 255, 255, 0.25) 50%,
+            rgba(255, 255, 255, 0.15) 90%,
+            transparent 100%);
+}
+
+body[data-theme="light"] .separator-vertical {
+    background: linear-gradient(180deg,
+            transparent 0%,
+            rgba(0, 0, 0, 0.08) 10%,
+            rgba(0, 0, 0, 0.12) 50%,
+            rgba(0, 0, 0, 0.08) 90%,
+            transparent 100%);
+}
+
+.separator-vertical:hover {
+    box-shadow:
+        0 0 12px rgba(255, 255, 255, 0.1),
+        inset 0 0 3px rgba(255, 255, 255, 0.2);
+    transform: scaleY(1.05);
+}
+
 /* Indicador de Modo */
 .mode-indicator {
     display: flex;
@@ -48,20 +89,14 @@
     letter-spacing: 0.5px;
 }
 
-.mode-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--mode-primary);
-    box-shadow: 0 0 8px var(--mode-primary);
-    animation: pulse 2s infinite;
-}
-
 @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
         transform: scale(1);
     }
+
     50% {
         opacity: 0.7;
         transform: scale(1.1);
