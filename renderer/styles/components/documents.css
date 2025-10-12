@@ -1,0 +1,234 @@
+/* ===============================================
+   SECCION DOCUMENTOS
+   =============================================== */
+
+/* Header con boton de agregar */
+.setting-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.button-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: var(--mode-primary-transparent);
+    border: 1px solid var(--mode-primary);
+    border-radius: 6px;
+    color: var(--mode-primary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.button-icon:hover {
+    background: var(--mode-primary);
+    color: white;
+    transform: scale(1.05);
+}
+
+/* Lista de paths */
+.doc-paths-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.doc-path-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.doc-path-item:hover {
+    border-color: var(--mode-primary);
+    background: var(--mode-primary-transparent);
+}
+
+.doc-path-icon {
+    flex-shrink: 0;
+    color: var(--mode-primary);
+}
+
+.doc-path-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.doc-path-text {
+    font-size: 14px;
+    color: var(--text-primary);
+    word-break: break-all;
+    margin-bottom: 4px;
+}
+
+.doc-path-stats {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.doc-path-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.doc-path-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.doc-path-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--mode-primary);
+    color: var(--mode-primary);
+}
+
+.doc-path-btn.delete:hover {
+    border-color: var(--danger-color);
+    color: var(--danger-color);
+}
+
+/* Estado de indexacion */
+.indexation-status {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+.status-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.status-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mode-primary);
+}
+
+/* Botones de accion */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.action-buttons .button {
+    flex: 1;
+    min-width: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Configuracion avanzada */
+.advanced-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+}
+
+.setting-row span:first-child {
+    min-width: 180px;
+    color: var(--text-secondary);
+}
+
+.setting-row .setting-value {
+    color: var(--mode-primary);
+    font-weight: 500;
+}
+
+.input-small {
+    width: 100px;
+    padding: 6px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.input-small:focus {
+    outline: none;
+    border-color: var(--mode-primary);
+}
+
+.setting-row small {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+/* Empty state */
+.doc-paths-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    text-align: center;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+}
+
+.doc-paths-empty svg {
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.doc-paths-empty p {
+    margin: 4px 0;
+    font-size: 14px;
+}

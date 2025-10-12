@@ -104,12 +104,6 @@
                     </svg>
                     <span>Historial</span>
                 </button>
-                <button class="nav-item" id="statsBtn">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M3 17h14v-2H3v2zm0-4h14v-2H3v2zm0-6v2h14V7H3z" />
-                    </svg>
-                    <span>Estadisticas</span>
-                </button>
                 <button class="nav-item" id="settingsBtn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path
@@ -246,6 +240,13 @@
                                 <path d="M12 2v6M12 18v4M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M18 12h4M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"></path>
                             </svg>
                             <span>Personalización</span>
+                        </button>
+                        <button class="settings-nav-item" data-section="documentos">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                                <polyline points="13 2 13 9 20 9"></polyline>
+                            </svg>
+                            <span>Documentos</span>
                         </button>
                         <button class="settings-nav-item" data-section="aplicaciones">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -456,6 +457,96 @@
                             <p class="setting-description">
                                 Esta informacion ayudara al asistente a personalizar sus respuestas.
                             </p>
+                        </div>
+                    </div>
+
+                    <!-- Seccion Documentos -->
+                    <div class="settings-section" data-section="documentos">
+                        <h3 class="section-title">Documentos</h3>
+                        <p class="section-description">Gestiona las rutas de documentos para el sistema de busqueda RAG y la indexacion de embeddings.</p>
+
+                        <!-- Paths de documentos -->
+                        <div class="setting-group">
+                            <div class="setting-header">
+                                <label>Rutas de documentos</label>
+                                <button class="button-icon" id="addDocPathBtn" title="Agregar nueva ruta">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            <small>Carpetas donde Alfred buscara documentos para responder tus preguntas</small>
+                            
+                            <div id="docPathsList" class="doc-paths-list">
+                                <!-- Lista dinamica de paths -->
+                            </div>
+                        </div>
+
+                        <!-- Estado de indexacion -->
+                        <div class="setting-group">
+                            <label>Estado de indexacion</label>
+                            <div class="indexation-status" id="indexationStatus">
+                                <div class="status-item">
+                                    <span class="status-label">Documentos indexados:</span>
+                                    <span class="status-value" id="indexedDocsCount">0</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">Fragmentos (chunks):</span>
+                                    <span class="status-value" id="chunksCount">0</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">Vectores:</span>
+                                    <span class="status-value" id="vectorsCount">0</span>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-label">Ultima actualizacion:</span>
+                                    <span class="status-value" id="lastIndexUpdate">Nunca</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Acciones de indexacion -->
+                        <div class="setting-group">
+                            <label>Acciones de indexacion</label>
+                            <div class="action-buttons">
+                                <button class="button primary" id="reindexDocsBtn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                    </svg>
+                                    Reindexar documentos
+                                </button>
+                                <button class="button secondary" id="clearIndexBtn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                    Limpiar indice
+                                </button>
+                            </div>
+                            <small>La reindexacion puede tardar varios minutos dependiendo del numero de documentos</small>
+                        </div>
+
+                        <!-- Configuracion avanzada -->
+                        <div class="setting-group">
+                            <label>Configuracion de embeddings</label>
+                            <div class="advanced-settings">
+                                <div class="setting-row">
+                                    <span>Modelo de embeddings:</span>
+                                    <span class="setting-value" id="embeddingModelName">nomic-embed-text:v1.5</span>
+                                </div>
+                                <div class="setting-row">
+                                    <span>Tamano de chunk:</span>
+                                    <input type="number" id="chunkSize" value="1000" min="100" max="5000" step="100" class="input-small">
+                                    <small>caracteres</small>
+                                </div>
+                                <div class="setting-row">
+                                    <span>Overlap de chunks:</span>
+                                    <input type="number" id="chunkOverlap" value="200" min="0" max="1000" step="50" class="input-small">
+                                    <small>caracteres</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

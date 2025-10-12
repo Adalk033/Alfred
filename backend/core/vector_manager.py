@@ -399,6 +399,60 @@ class VectorManager:
         
         return deleted
     
+    def delete_documents_by_path_sync(self, directory_path: str) -> int:
+        """
+        Eliminar todos los documentos de un directorio especifico (SINCRONO)
+        
+        Args:
+            directory_path: Ruta del directorio cuyos documentos se deben eliminar
+            
+        Returns:
+            Numero de chunks eliminados
+        """
+        if not self._vectorstore:
+            logger.warning("Vectorstore no inicializado, inicializando...")
+            self.initialize_vectorstore()
+        
+        if not self._vectorstore:
+            logger.error("No se pudo inicializar vectorstore")
+            return 0
+        
+        try:
+            # Normalizar ruta para comparacion
+            directory_path = str(Path(directory_path).resolve())
+            logger.info(f"Eliminando documentos de: {directory_path}")
+            
+            # Obtener todos los documentos de ChromaDB
+            collection = self._vectorstore._collection
+            all_data = collection.get(include=['metadatas'])
+            
+            if not all_data or not all_data.get('ids'):
+                logger.warning("No hay documentos en ChromaDB")
+                return 0
+            
+            # Filtrar IDs de documentos que pertenecen al directorio
+            ids_to_delete = []
+            for i, metadata in enumerate(all_data.get('metadatas', [])):
+                source = metadata.get('source', '')
+                if source:
+                    source_path = str(Path(source).resolve())
+                    # Verificar si el archivo esta dentro del directorio
+                    if source_path.startswith(directory_path):
+                        ids_to_delete.append(all_data['ids'][i])
+            
+            if ids_to_delete:
+                logger.info(f"Eliminando {len(ids_to_delete)} chunks de ChromaDB")
+                collection.delete(ids=ids_to_delete)
+                logger.info(f"Eliminados exitosamente {len(ids_to_delete)} chunks")
+                return len(ids_to_delete)
+            else:
+                logger.info(f"No se encontraron documentos de {directory_path} en ChromaDB")
+                return 0
+        
+        except Exception as e:
+            logger.error(f"Error eliminando documentos de {directory_path}: {e}", exc_info=True)
+            return 0
+    
     async def reindex_all(self, docs_path: Path) -> Dict[str, any]:
         """
         Reindexar todos los documentos desde cero

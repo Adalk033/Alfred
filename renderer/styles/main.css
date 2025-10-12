@@ -7,10 +7,12 @@
 @import './components/messages.css';
 @import './components/notifications.css';
 @import './components/profile.css';
+@import './components/documents.css';
 @import './components/topbar.css';
 @import './components/sidebar.css';
 @import './components/left-sidebar.css';
 @import './components/loading.css';
+@import './components/progress.css';
 
 .container {
     flex: 1;

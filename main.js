@@ -918,6 +918,41 @@ ipcMain.handle('select-profile-picture', async () => {
     }
 });
 
+// Handler para seleccionar carpeta
+ipcMain.handle('select-folder', async () => {
+    try {
+        console.log('[MAIN] Abriendo selector de carpeta...');
+
+        const result = await dialog.showOpenDialog(mainWindow, {
+            title: 'Seleccionar carpeta de documentos',
+            properties: ['openDirectory']
+        });
+
+        if (result.canceled || result.filePaths.length === 0) {
+            console.log('[MAIN] Selección cancelada');
+            return { success: false, error: 'Selección cancelada' };
+        }
+
+        const folderPath = result.filePaths[0];
+        console.log('[MAIN] Carpeta seleccionada:', folderPath);
+
+        // Verificar que la carpeta existe y es accesible
+        if (!fs.existsSync(folderPath)) {
+            return { success: false, error: 'La carpeta no existe' };
+        }
+
+        const stats = fs.statSync(folderPath);
+        if (!stats.isDirectory()) {
+            return { success: false, error: 'La ruta seleccionada no es una carpeta' };
+        }
+
+        return { success: true, path: folderPath };
+    } catch (error) {
+        console.error('[MAIN] Error al seleccionar carpeta:', error);
+        return { success: false, error: error.message };
+    }
+});
+
 // --- IPC Handlers para Conversaciones ---
 
 ipcMain.handle('create-conversation', async (event, title) => {

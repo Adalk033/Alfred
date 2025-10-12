@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   getOllamaKeepAlive: () => ipcRenderer.invoke('get-ollama-keep-alive'),
   setOllamaKeepAlive: (seconds) => ipcRenderer.invoke('set-ollama-keep-alive', seconds),
   selectProfilePicture: () => ipcRenderer.invoke('select-profile-picture'),
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
   
   // API de configuraciones de usuario
   getUserSettings: () => ipcRenderer.invoke('get-user-settings'),

@@ -184,57 +184,6 @@ export function loadHistoryItem(item) {
     });
 }
 
-// Mostrar estadisticas
-export async function showStats() {
-    if (checkSidebar()) {
-        hideSidebar();
-        return;
-    }
-    
-    try {
-        const result = await window.alfredAPI.getStats();
-
-        if (result.success) {
-            const stats = result.data;
-            const content = renderStatsContent(stats);
-            showSidebar('Estadisticas del sistema', content);
-        }
-    } catch (error) {
-        showNotification('error', 'Error al cargar las estadisticas');
-        console.error('Error:', error);
-    }
-}
-
-// Renderizar contenido de estadisticas
-function renderStatsContent(stats) {
-    return `
-        <div class="stat-card">
-            <div class="stat-label">👤 Usuario</div>
-            <div class="stat-value">${stats.user_name || 'N/A'}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">📄 Documentos indexados</div>
-            <div class="stat-value">${stats.total_documents}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">💬 Consultas guardadas</div>
-            <div class="stat-value">${stats.total_qa_history}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">🤖 Modelo</div>
-            <div class="stat-value" style="font-size: 14px;">${stats.model_name}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">📁 Ruta de documentos</div>
-            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; word-break: break-all;">${stats.docs_path}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">✅ Estado</div>
-            <div class="stat-value" style="font-size: 16px; color: var(--success-color);">${stats.status}</div>
-        </div>
-    `;
-}
-
 // Cargar modelo actual
 export async function loadCurrentModel() {
     try {

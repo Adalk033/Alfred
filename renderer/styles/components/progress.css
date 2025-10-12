@@ -1,0 +1,224 @@
+/* Estilos para el progreso de reindexacion */
+
+/* Overlay de fondo para bloquear interaccion */
+.reindex-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.3s ease-out;
+    cursor: not-allowed;
+    user-select: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.reindex-progress-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--background-color, #1e1e1e);
+    border: 2px solid var(--border-color, #333);
+    border-radius: 12px;
+    padding: 24px;
+    width: 500px;
+    max-width: 90vw;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    animation: fadeInScale 0.3s ease-out;
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.progress-header h3 {
+    margin: 0;
+    font-size: 20px;
+    color: var(--text-color, #fff);
+}
+
+.close-progress-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-color-secondary, #aaa);
+    font-size: 28px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.close-progress-btn:hover:not(:disabled) {
+    background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+    color: var(--text-color, #fff);
+}
+
+.close-progress-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 32px;
+    background: var(--input-bg, #2a2a2a);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4a9eff 0%, #357abd 100%);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    min-width: 32px;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 100%
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.progress-text {
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    z-index: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.progress-message {
+    font-size: 15px;
+    color: var(--text-color, #fff);
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--input-bg, #2a2a2a);
+    transition: all 0.3s ease;
+}
+
+.progress-message.error {
+    background: rgba(255, 68, 68, 0.2);
+    border-left: 3px solid #ff4444;
+    color: #ff6b6b;
+}
+
+.progress-message.warning {
+    background: rgba(255, 193, 7, 0.2);
+    border-left: 3px solid #ffc107;
+    color: #ffdb4d;
+}
+
+.progress-message.success {
+    background: rgba(76, 175, 80, 0.2);
+    border-left: 3px solid #4caf50;
+    color: #66bb6a;
+}
+
+.progress-details {
+    font-size: 13px;
+    color: var(--text-color-secondary, #aaa);
+    line-height: 1.6;
+}
+
+.detail-item {
+    padding: 4px 8px;
+    margin: 2px 0;
+    border-radius: 4px;
+    background: var(--input-bg, #2a2a2a);
+}
+
+.detail-item.success {
+    background: rgba(76, 175, 80, 0.15);
+    color: #66bb6a;
+    font-weight: 600;
+}
+
+.detail-item.error {
+    background: rgba(255, 68, 68, 0.15);
+    color: #ff6b6b;
+}
+
+.detail-item.warning {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffdb4d;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .reindex-progress-container {
+        width: 90vw;
+        padding: 16px;
+    }
+    
+    .progress-header h3 {
+        font-size: 18px;
+    }
+    
+    .progress-bar-container {
+        height: 28px;
+    }
+    
+    .progress-text {
+        font-size: 12px;
+    }
+}

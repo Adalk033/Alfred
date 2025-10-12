@@ -1,3 +1,26 @@
+"""
+===================================================================================
+AVISO: Este script CLI esta DEPRECADO
+===================================================================================
+Este script standalone (alfred.py) aun usa ALFRED_DOCS_PATH del archivo .env.
+
+El sistema principal de Alfred ahora gestiona documentos completamente desde la UI:
+  - Rutas configuradas por el usuario en la interfaz grafica
+  - Almacenadas en SQLite (tabla document_paths)
+  - Gestionadas via API REST (endpoints /documents/*)
+  - Sin necesidad de editar .env
+
+Para usar Alfred correctamente:
+  1. Inicia el servidor: python backend/core/alfred_backend.py
+  2. Abre la aplicacion Electron
+  3. Ve a la seccion de Gestion de Documentos
+  4. Agrega tus rutas de documentos desde la UI
+  5. Haz clic en "Reindexar Documentos"
+
+Este script se mantiene solo para testing/debugging legacy.
+===================================================================================
+"""
+
 import os
 from dotenv import load_dotenv
 import sys
@@ -28,6 +51,9 @@ import config
 import functionsToHistory
 from gpu_manager import get_gpu_manager
 
+print("\n" + "="*80)
+print("ADVERTENCIA: Script CLI deprecado - Usar aplicacion Electron con UI de gestion")
+print("="*80 + "\n")
 
 load_dotenv()  # Carga el .env
 
@@ -36,11 +62,12 @@ gpu_manager = get_gpu_manager()
 gpu_manager.configure_ollama_for_gpu()
 gpu_manager.optimize_for_inference()
 
-# Obtener la ruta desde variable de entorno
+# Obtener la ruta desde variable de entorno (solo para compatibilidad legacy)
 DOCS_PATH = os.getenv('ALFRED_DOCS_PATH')
 if not DOCS_PATH:
     print("Error: Define la variable de entorno ALFRED_DOCS_PATH")
     print("   Ejemplo: $env:ALFRED_DOCS_PATH='C:\\Users\\YOUR_PATH\\Documents'")
+    print("\nNOTA: Este script esta deprecado. Considera usar la aplicacion Electron.")
     sys.exit(1)
 
 CHROMA_DB_PATH = "./chroma_db"

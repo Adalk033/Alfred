@@ -183,6 +183,23 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_model_downloads_status ON model_downloads(status);
     """)
 
+    # Tabla para rutas de documentos
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS document_paths (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        path TEXT NOT NULL UNIQUE,
+        enabled BOOLEAN DEFAULT 1,
+        documents_count INTEGER DEFAULT 0,
+        last_scan DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_document_paths_enabled ON document_paths(enabled);
+    """)
+
     conn.commit()
     conn.close()
     db_logger.info("Base de datos inicializada correctamente")
@@ -1804,3 +1821,206 @@ def get_model_download_status(model_name: str):
         conn.close()
 
 
+# ===============================================
+# FUNCIONES PARA GESTION DE RUTAS DE DOCUMENTOS
+# ===============================================
+
+def add_document_path(path: str) -> bool:
+    """
+    Agregar una nueva ruta de documentos
+    
+    Args:
+        path: Ruta absoluta del directorio
+        
+    Returns:
+        True si se agrego exitosamente, False si ya existe o hay error
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            INSERT INTO document_paths (path, enabled, documents_count)
+            VALUES (?, 1, 0)
+        """, (path,))
+        
+        conn.commit()
+        db_logger.info(f"Ruta de documentos agregada: {path}")
+        return True
+        
+    except sqlite3.IntegrityError:
+        db_logger.warning(f"La ruta ya existe: {path}")
+        return False
+        
+    except Exception as e:
+        db_logger.error(f"Error al agregar ruta: {str(e)}")
+        return False
+        
+    finally:
+        conn.close()
+
+
+def get_document_paths(enabled_only: bool = True) -> list:
+    """
+    Obtener lista de rutas de documentos
+    
+    Args:
+        enabled_only: Si es True, solo retorna rutas habilitadas
+        
+    Returns:
+        Lista de diccionarios con informacion de las rutas
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        if enabled_only:
+            cursor.execute("""
+                SELECT id, path, enabled, documents_count, last_scan, created_at, updated_at
+                FROM document_paths
+                WHERE enabled = 1
+                ORDER BY created_at ASC
+            """)
+        else:
+            cursor.execute("""
+                SELECT id, path, enabled, documents_count, last_scan, created_at, updated_at
+                FROM document_paths
+                ORDER BY created_at ASC
+            """)
+        
+        rows = cursor.fetchall()
+        
+        paths = []
+        for row in rows:
+            paths.append({
+                "id": row["id"],
+                "path": row["path"],
+                "enabled": bool(row["enabled"]),
+                "documents_count": row["documents_count"],
+                "last_scan": row["last_scan"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"]
+            })
+        
+        return paths
+        
+    except Exception as e:
+        db_logger.error(f"Error al obtener rutas: {str(e)}")
+        return []
+        
+    finally:
+        conn.close()
+
+
+def update_document_path(path_id: int, new_path: str = None, enabled: bool = None, documents_count: int = None) -> bool:
+    """
+    Actualizar una ruta de documentos
+    
+    Args:
+        path_id: ID de la ruta a actualizar
+        new_path: Nueva ruta (opcional)
+        enabled: Estado habilitado/deshabilitado (opcional)
+        documents_count: Nuevo conteo de documentos (opcional)
+        
+    Returns:
+        True si se actualizo exitosamente
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        updates = []
+        params = []
+        
+        if new_path is not None:
+            updates.append("path = ?")
+            params.append(new_path)
+        
+        if enabled is not None:
+            updates.append("enabled = ?")
+            params.append(1 if enabled else 0)
+        
+        if documents_count is not None:
+            updates.append("documents_count = ?")
+            params.append(documents_count)
+        
+        if not updates:
+            return False
+        
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        
+        query = f"UPDATE document_paths SET {', '.join(updates)} WHERE id = ?"
+        params.append(path_id)
+        
+        cursor.execute(query, params)
+        conn.commit()
+        
+        db_logger.info(f"Ruta de documentos actualizada: ID {path_id}")
+        return cursor.rowcount > 0
+        
+    except Exception as e:
+        db_logger.error(f"Error al actualizar ruta: {str(e)}")
+        return False
+        
+    finally:
+        conn.close()
+
+
+def delete_document_path(path_id: int) -> bool:
+    """
+    Eliminar una ruta de documentos
+    
+    Args:
+        path_id: ID de la ruta a eliminar
+        
+    Returns:
+        True si se elimino exitosamente
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("DELETE FROM document_paths WHERE id = ?", (path_id,))
+        conn.commit()
+        
+        db_logger.info(f"Ruta de documentos eliminada: ID {path_id}")
+        return cursor.rowcount > 0
+        
+    except Exception as e:
+        db_logger.error(f"Error al eliminar ruta: {str(e)}")
+        return False
+        
+    finally:
+        conn.close()
+
+
+def update_path_scan_time(path_id: int) -> bool:
+    """
+    Actualizar la fecha de ultimo escaneo de una ruta
+    
+    Args:
+        path_id: ID de la ruta
+        
+    Returns:
+        True si se actualizo exitosamente
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            UPDATE document_paths 
+            SET last_scan = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (path_id,))
+        
+        conn.commit()
+        return cursor.rowcount > 0
+        
+    except Exception as e:
+        db_logger.error(f"Error al actualizar tiempo de escaneo: {str(e)}")
+        return False
+        
+    finally:
+        conn.close()

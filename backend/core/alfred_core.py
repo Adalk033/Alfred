@@ -56,7 +56,7 @@ class AlfredCore:
         load_dotenv()
         
         # Configuracion desde variables de entorno (valores por defecto)
-        self.docs_path = os.getenv('ALFRED_DOCS_PATH')
+        # ALFRED_DOCS_PATH ya NO se usa - el sistema ahora usa rutas configuradas por el usuario
         self.chroma_db_path = os.getenv('ALFRED_CHROMA_PATH', './chroma_db')
         self.force_reload = os.getenv('ALFRED_FORCE_RELOAD', 'false').lower() == 'true'
         # qa_history_file OBSOLETO - ahora se usa SQLite (db_manager.py)
@@ -112,9 +112,8 @@ class AlfredCore:
             from db_manager import set_user_setting
             set_user_setting('ollama_keep_alive', env_keep_alive, 'int')
         
-        # Validar configuracion
-        if not self.docs_path:
-            raise ValueError("Error: Define la variable de entorno ALFRED_DOCS_PATH")
+        # Ya NO validamos ALFRED_DOCS_PATH - ahora se usan rutas configuradas por el usuario
+        logger.info("Sistema configurado para usar rutas de documentos gestionadas por el usuario")
         
         # Componentes lazy-loaded
         self._llm = None
@@ -222,7 +221,7 @@ class AlfredCore:
         logger.info(f"Usuario: {self.user_name}")
         logger.info(f"Modelo LLM: {self.model_name}")
         logger.info(f"Modelo Embeddings: {self.embedding_model}")
-        logger.info(f"Ruta documentos: {self.docs_path}")
+        logger.info(f"Sistema de rutas: Gestionado por usuario (no usa .env)")
         
         # 1. Inicializar GPU (opcional, puede fallar si PyTorch no esta instalado)
         try:
@@ -236,21 +235,10 @@ class AlfredCore:
         logger.info("\nInicializando vectorstore...")
         vectorstore = self.vector_manager.initialize_vectorstore(force_reload=self.force_reload)
         
-        # 3. Indexacion incremental de documentos
-        if self.force_reload or vectorstore is None:
-            logger.info("\nIniciando indexacion de documentos...")
-            docs_path = Path(self.docs_path)
-            
-            stats = await self.vector_manager.index_documents_incremental(
-                docs_path,
-                force_reindex=self.force_reload
-            )
-            
-            logger.info(f"Indexacion completada:")
-            logger.info(f"  - Documentos nuevos: {stats['new_documents']}")
-            logger.info(f"  - Documentos modificados: {stats['modified_documents']}")
-            logger.info(f"  - Chunks totales: {stats['total_chunks']}")
-            logger.info(f"  - Documentos saltados: {stats['skipped']}")
+        # 3. Ya NO indexamos automaticamente - los documentos se indexan via endpoints
+        # El usuario gestiona las rutas desde la UI y ejecuta reindexacion manual
+        logger.info("\nSistema de indexacion: Manual via endpoints API")
+        logger.info("Los documentos se indexan cuando el usuario ejecuta 'Reindexar' desde la UI")
         
         # 4. Inicializar retriever
         _ = self.retriever
@@ -733,16 +721,25 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
     
     def get_stats(self) -> Dict[str, Any]:
         """Obtener estadisticas del sistema"""
-        from db_manager import get_qa_history_stats, get_document_stats
+        from db_manager import get_qa_history_stats, get_document_stats, get_user_setting
         
         qa_stats = get_qa_history_stats()
         doc_stats = self.vector_manager.get_stats() if self._vector_manager else {}
         
+        # Obtener nombre actualizado desde BD (en cada consulta)
+        current_user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
+        
+        # Obtener rutas configuradas desde BD
+        from db_manager import get_document_paths
+        configured_paths = get_document_paths(enabled_only=False)
+        enabled_paths = get_document_paths(enabled_only=True)
+        
         return {
-            'user_name': self.user_name,
+            'user_name': current_user_name,
             'model_name': self.model_name,
             'embedding_model': self.embedding_model,
-            'docs_path': self.docs_path,
+            'configured_paths': len(configured_paths),
+            'enabled_paths': len(enabled_paths),
             'chroma_db_path': self.chroma_db_path,
             'status': 'initialized' if self._initialized else 'not_initialized',
             'gpu_info': self.gpu_manager.gpu_info if self._gpu_manager else {},
@@ -824,18 +821,15 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
             return False
     
     async def reindex_documents_async(self):
-        """Reindexar documentos de forma asincrona"""
-        logger.info("Reindexando documentos...")
-        
-        docs_path = Path(self.docs_path)
-        stats = await self.vector_manager.reindex_all(docs_path)
-        
-        # Reinicializar retriever
-        self._retriever = None
-        _ = self.retriever
-        
-        logger.info("Reindexacion completada")
-        return stats
+        """
+        DEPRECADO: Reindexacion ahora se maneja via endpoint POST /documents/reindex
+        Este metodo se mantiene por compatibilidad pero no debe usarse.
+        """
+        logger.warning("reindex_documents_async() esta deprecado. Usar endpoint POST /documents/reindex")
+        raise NotImplementedError(
+            "La reindexacion ahora se maneja exclusivamente via API REST. "
+            "Usar: POST /documents/reindex con las rutas configuradas desde la UI."
+        )
     
     def clear_query_cache(self):
         """Limpiar todo el cache de queries"""

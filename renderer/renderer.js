@@ -26,7 +26,6 @@ window.alfredAPI.onBackendStatus((data) => {
 
 // Elementos del DOM (locales a renderer.js)
 let historyBtn;
-let statsBtn;
 let settingsBtn;
 let menuToggle;
 let leftSidebar;
@@ -78,7 +77,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Inicializar elementos locales
     historyBtn = document.getElementById('historyBtn');
-    statsBtn = document.getElementById('statsBtn');
     settingsBtn = document.getElementById('settingsBtn');
     searchDocsBtn = document.getElementById('searchDocsBtn');
     promptOnlyBtn = document.getElementById('promptOnlyBtn');
@@ -94,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ollamaKeepAliveSlider = document.getElementById('ollamaKeepAlive');
     ollamaKeepAliveValue = document.getElementById('ollamaKeepAliveValue');
     ollamaKeepAlivePresets = document.querySelectorAll('.preset-btn');
-    
+
     // Elementos del sidebar izquierdo
     menuToggle = document.getElementById('menuToggle');
     leftSidebar = document.getElementById('leftSidebar');
@@ -102,17 +100,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     newChatBtn = document.getElementById('newChatBtn');
     conversationsBtn = document.getElementById('conversationsBtn');
     profilePictureTopbar = document.getElementById('profilePictureTopbar');
-    
+
     // Indicador de modo en topbar
     modeIndicator = document.getElementById('modeIndicator');
     modeIndicatorName = modeIndicator ? modeIndicator.querySelector('.mode-name') : null;
 
     // Esperar a que el backend este listo antes de habilitar el chat
     await waitForBackendReady();
-    
+
     // Cargar modo desde BD antes de continuar
     await loadMode();
-    
+
     setupEventListeners();
     loadSettings();
     await loadCurrentModel();
@@ -159,10 +157,6 @@ function setupEventListeners() {
         showHistory();
         closeSidebarOnMobile();
     });
-    statsBtn.addEventListener('click', () => {
-        showStats();
-        closeSidebarOnMobile();
-    });
     settingsBtn.addEventListener('click', () => {
         settingsModal.classList.remove('none');
         closeSidebarOnMobile();
@@ -180,7 +174,7 @@ function setupEventListeners() {
         showConversations();
         closeSidebarOnMobile();
     });
-    
+
     // Event listener para foto de perfil en el topbar
     profilePictureTopbar.addEventListener('click', () => {
         settingsModal.classList.remove('none');
@@ -191,11 +185,11 @@ function setupEventListeners() {
     modeButtons.forEach(btn => {
         btn.addEventListener('click', async () => {
             const mode = btn.dataset.mode;
-            
+
             // Cambiar clase active
             modeButtons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            
+
             // Cambiar modo en la aplicacion
             await window.setMode(mode);
         });
@@ -208,15 +202,15 @@ function setupEventListeners() {
     // Event listeners para navegacion de configuraciones
     const settingsNavItems = document.querySelectorAll('.settings-nav-item');
     const settingsSections = document.querySelectorAll('.settings-section');
-    
+
     settingsNavItems.forEach(navItem => {
         navItem.addEventListener('click', () => {
             const sectionName = navItem.dataset.section;
-            
+
             // Cambiar item activo en el menu
             settingsNavItems.forEach(item => item.classList.remove('active'));
             navItem.classList.add('active');
-            
+
             // Mostrar seccion correspondiente
             settingsSections.forEach(section => {
                 if (section.dataset.section === sectionName) {
@@ -225,10 +219,16 @@ function setupEventListeners() {
                     section.classList.remove('active');
                 }
             });
-            
+
             // Cargar modelos si se abre la seccion de modelos
             if (sectionName === 'modelos') {
                 loadOllamaModels();
+            }
+
+            // Cargar documentos si se abre la seccion de documentos
+            if (sectionName === 'documentos') {
+                loadDocumentPaths();
+                loadIndexationStatus();
             }
         });
     });
@@ -238,13 +238,28 @@ function setupEventListeners() {
 
     // Event listener para cambiar foto de perfil
     changeProfilePictureBtn.addEventListener('click', changeProfilePicture);
-    
+
     // Event listener para guardar informacion personal
     const saveUserInfoBtn = document.getElementById('saveUserInfoBtn');
     if (saveUserInfoBtn) {
         saveUserInfoBtn.addEventListener('click', saveUserInfo);
     }
-    
+
+    // Event listeners para seccion de documentos
+    const addDocPathBtn = document.getElementById('addDocPathBtn');
+    const reindexDocsBtn = document.getElementById('reindexDocsBtn');
+    const clearIndexBtn = document.getElementById('clearIndexBtn');
+
+    if (addDocPathBtn) {
+        addDocPathBtn.addEventListener('click', addDocPath);
+    }
+    if (reindexDocsBtn) {
+        reindexDocsBtn.addEventListener('click', reindexDocuments);
+    }
+    if (clearIndexBtn) {
+        clearIndexBtn.addEventListener('click', clearIndex);
+    }
+
     // Event listeners para Keep Alive de Ollama
     if (ollamaKeepAliveSlider) {
         ollamaKeepAliveSlider.addEventListener('input', (e) => {
@@ -252,7 +267,7 @@ function setupEventListeners() {
             updateKeepAliveDisplay(value);
         });
     }
-    
+
     if (ollamaKeepAlivePresets) {
         ollamaKeepAlivePresets.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -262,19 +277,19 @@ function setupEventListeners() {
             });
         });
     }
-    
+
     // Event listeners para gestion de modelos
     const downloadModelBtn = document.getElementById('downloadModelBtn');
     const refreshModelsBtn = document.getElementById('refreshModelsBtn');
-    
+
     if (downloadModelBtn) {
         downloadModelBtn.addEventListener('click', downloadOllamaModel);
     }
-    
+
     if (refreshModelsBtn) {
         refreshModelsBtn.addEventListener('click', loadOllamaModels);
     }
-    
+
     // Event listener para Enter en input de descarga
     const downloadModelInput = document.getElementById('downloadModel');
     if (downloadModelInput) {
@@ -291,12 +306,12 @@ async function waitForBackendReady() {
     const API_BASE_URL = 'http://127.0.0.1:8000';
     const MAX_RETRIES = 60; // 2 minutos maximo (60 * 2 segundos)
     const RETRY_INTERVAL = 2000; // 2 segundos
-    
+
     // Referencias al overlay
     const overlay = document.getElementById('backendLoadingOverlay');
     const statusText = document.getElementById('loadingStatusText');
     const progressBar = document.getElementById('loadingProgressBar');
-    
+
     // Deshabilitar input mientras se espera
     if (State.messageInput) {
         State.messageInput.disabled = true;
@@ -305,11 +320,11 @@ async function waitForBackendReady() {
     if (State.sendBtn) {
         State.sendBtn.disabled = true;
     }
-    
+
     updateStatus('warning', 'Iniciando backend...', State.statusElement);
-    
+
     let retries = 0;
-    
+
     while (retries < MAX_RETRIES) {
         try {
             // Actualizar progreso visual
@@ -317,7 +332,7 @@ async function waitForBackendReady() {
             if (progressBar) {
                 progressBar.style.width = `${progress}%`;
             }
-            
+
             // Intentar llamar al endpoint /health
             const response = await fetch(`${API_BASE_URL}/health`, {
                 method: 'GET',
@@ -325,16 +340,16 @@ async function waitForBackendReady() {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (response.ok) {
                 const data = await response.json();
-                
+
                 // Verificar que alfred_core este inicializado y vectorstore cargado
                 // Aceptar tanto "healthy" como "degraded" (degraded = componentes opcionales fallan)
-                const isReady = (data.status === 'healthy' || data.status === 'degraded') 
-                    && data.alfred_core_initialized 
+                const isReady = (data.status === 'healthy' || data.status === 'degraded')
+                    && data.alfred_core_initialized
                     && data.vectorstore_loaded;
-                
+
                 if (isReady) {
                     // Backend esta listo!
                     if (progressBar) {
@@ -343,17 +358,17 @@ async function waitForBackendReady() {
                     if (statusText) {
                         statusText.textContent = 'Alfred esta listo!';
                     }
-                    
+
                     // Esperar un momento antes de ocultar el overlay
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    
+
                     // Ocultar overlay
                     if (overlay) {
                         overlay.classList.add('hidden');
                     }
-                    
+
                     updateStatus('connected', 'Conectado', State.statusElement);
-                    
+
                     // Habilitar input
                     if (State.messageInput) {
                         State.messageInput.disabled = false;
@@ -362,12 +377,11 @@ async function waitForBackendReady() {
                     if (State.sendBtn) {
                         State.sendBtn.disabled = false;
                     }
-                    
+
                     showNotification('success', 'Alfred esta listo para ayudarte');
-                    await loadInitialStats();
                     return true;
                 }
-                
+
                 // Backend responde pero no esta completamente listo
                 if (statusText) {
                     if (!data.alfred_core_initialized) {
@@ -383,22 +397,22 @@ async function waitForBackendReady() {
         } catch (error) {
             // Error de conexion - backend aun no responde
             console.log(`Esperando backend... intento ${retries + 1}/${MAX_RETRIES}`);
-            
+
             if (statusText) {
                 const dots = '.'.repeat((retries % 3) + 1);
                 statusText.textContent = `Conectando con el backend${dots}`;
             }
         }
-        
+
         // Esperar antes del siguiente intento
         await new Promise(resolve => setTimeout(resolve, RETRY_INTERVAL));
         retries++;
-        
+
         // Actualizar mensaje de estado
         const dots = '.'.repeat((retries % 3) + 1);
         updateStatus('warning', `Iniciando backend${dots}`, State.statusElement);
     }
-    
+
     // Si llegamos aqui, el backend no se inicio en el tiempo esperado
     if (overlay) {
         overlay.classList.add('hidden');
@@ -406,10 +420,10 @@ async function waitForBackendReady() {
     if (statusText) {
         statusText.textContent = 'Error al conectar con el backend';
     }
-    
+
     updateStatus('error', 'Error al iniciar backend', State.statusElement);
     showNotification('error', 'No se pudo conectar con el backend despues de varios intentos. Intenta reiniciar la aplicacion.');
-    
+
     return false;
 }
 
@@ -419,7 +433,6 @@ async function checkServerStatus() {
         const result = await window.alfredAPI.checkServer();
         if (result.success || result.connected) {
             updateStatus('connected', 'Conectado', State.statusElement);
-            await loadInitialStats();
         } else {
             updateStatus('error', 'Desconectado', State.statusElement);
             showNotification('No se pudo conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.', 'Hubo un error al conectar con el servidor de Alfred. Asegúrate de que esté ejecutándose.');
@@ -427,18 +440,6 @@ async function checkServerStatus() {
     } catch (error) {
         updateStatus('error', 'Error de conexión', State.statusElement);
         showNotification('Error al verificar el servidor', 'Hubo un error al verificar el estado del servidor.');
-    }
-}
-
-// Cargar estadísticas iniciales
-async function loadInitialStats() {
-    try {
-        const result = await window.alfredAPI.getStats();
-        if (result.success) {
-            const stats = result.data;
-        }
-    } catch (error) {
-        console.error('Error al cargar estadísticas:', error);
     }
 }
 
@@ -555,21 +556,21 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
     function typeChar() {
         if (index < content.length) {
             index++;
-            
+
             // Obtener texto acumulado hasta este punto
             const currentText = content.substring(0, index);
-            
+
             // Si es asistente, renderizar Markdown solo si cambio significativamente
             // Esto evita re-renderizar en cada caracter individual
             if (role === 'assistant') {
                 // Renderizar cada 5 caracteres o al final de palabra/linea
-                const shouldRender = 
-                    index % 5 === 0 || 
+                const shouldRender =
+                    index % 5 === 0 ||
                     content.charAt(index - 1) === ' ' ||
                     content.charAt(index - 1) === '\n' ||
                     content.charAt(index - 1) === '*' ||
                     content.charAt(index - 1) === '`';
-                
+
                 if (shouldRender || index === content.length) {
                     bubble.innerHTML = markdownToHtml(currentText);
                     lastRenderedText = currentText;
@@ -577,7 +578,7 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
             } else {
                 bubble.textContent = currentText;
             }
-            
+
             scrollToBottom();
             setTimeout(typeChar, speed);
         } else {
@@ -644,7 +645,7 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
 
                         const hiddenList = document.createElement('ul');
                         hiddenList.className = 'message-sources-list';
-                        
+
                         metadata.sources.slice(3).forEach(source => {
                             const li = document.createElement('li');
                             const fileName = source.split(/[\\/]/).pop();
@@ -660,8 +661,8 @@ async function addMessageWithTyping(content, role, metadata = null, userQuestion
                         expandButton.onclick = () => {
                             const isHidden = hiddenSourcesContainer.style.display === 'none';
                             hiddenSourcesContainer.style.display = isHidden ? 'block' : 'none';
-                            expandButton.textContent = isHidden 
-                                ? 'Ver menos' 
+                            expandButton.textContent = isHidden
+                                ? 'Ver menos'
                                 : `+${metadata.sources.length - 3} más...`;
                             expandButton.classList.toggle('expanded', isHidden);
                         };
@@ -750,7 +751,7 @@ async function saveConversation(question, answer, metadata) {
 function toggleLeftSidebar() {
     if (leftSidebar) {
         leftSidebar.classList.toggle('collapsed');
-        
+
         // Rotar el icono del menu
         if (menuToggle) {
             menuToggle.classList.toggle('active');
@@ -785,7 +786,7 @@ function setActiveNavItem(button) {
     document.querySelectorAll('.nav-item').forEach(btn => {
         btn.classList.remove('active');
     });
-    
+
     // Agregar clase activa al boton actual
     if (button) {
         button.classList.add('active');
@@ -814,7 +815,7 @@ async function showHistory() {
                 result.data.forEach(item => {
                     const historyItem = document.createElement('div');
                     historyItem.className = 'history-item';
-                    
+
                     const contentWrapper = document.createElement('div');
                     contentWrapper.className = 'history-item-content';
                     contentWrapper.onclick = () => loadHistoryItem(item);
@@ -848,7 +849,7 @@ async function showHistory() {
                     };
 
                     actionsDiv.appendChild(deleteBtn);
-                    
+
                     historyItem.appendChild(contentWrapper);
                     historyItem.appendChild(actionsDiv);
                     State.sidebarContent.appendChild(historyItem);
@@ -868,7 +869,7 @@ async function showHistory() {
 async function deleteHistoryItem(timestamp) {
     try {
         const result = await window.alfredAPI.deleteHistoryItem(timestamp);
-        
+
         if (result.success) {
             showNotification('Pregunta eliminada del historial', 'success');
             // Recargar el historial
@@ -899,58 +900,6 @@ function loadHistoryItem(item) {
     // Ocultar el contenido del sidebar al cargar un item
     hideLeftSidebarContent();
     setActiveNavItem(null);
-}
-
-// Mostrar estadísticas
-async function showStats() {
-    // Si ya esta activo, ocultarlo
-    if (activeNavItem === statsBtn && leftSidebarContent.classList.contains('active')) {
-        hideLeftSidebarContent();
-        setActiveNavItem(null);
-        return;
-    }
-
-    try {
-        const result = await window.alfredAPI.getStats();
-
-        if (result.success) {
-            const stats = result.data;
-
-            State.sidebarContent.innerHTML = `
-                <h4 style="margin-bottom: 16px; color: var(--text-primary);">Estadisticas del sistema</h4>
-                <div class="stat-card">
-                    <div class="stat-label">👤 Usuario</div>
-                    <div class="stat-value">${stats.user_name || 'N/A'}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">📄 Documentos indexados</div>
-                    <div class="stat-value">${stats.total_documents}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">💬 Consultas guardadas</div>
-                    <div class="stat-value">${stats.total_qa_history}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">🤖 Modelo</div>
-                    <div class="stat-value" style="font-size: 14px;">${stats.model_name}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">📁 Ruta de documentos</div>
-                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; word-break: break-all;">${stats.docs_path}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">✅ Estado</div>
-                    <div class="stat-value" style="font-size: 16px; color: var(--success-color);">${stats.status}</div>
-                </div>
-            `;
-
-            showLeftSidebarContent();
-            setActiveNavItem(statsBtn);
-        }
-    } catch (error) {
-        showNotification('Error al cargar las estadisticas', 'error');
-        console.error('Error:', error);
-    }
 }
 
 // Mostrar conversaciones
@@ -1037,10 +986,10 @@ function saveSettingsHandler() {
     });
 
     localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
-    
+
     // Guardar keep_alive de Ollama
     saveOllamaKeepAlive();
-    
+
     settingsModal.classList.add('none');
 
     showNotification('Configuración guardada', 'success');
@@ -1054,7 +1003,7 @@ function saveSettingsHandler() {
 async function loadOllamaKeepAlive() {
     try {
         const result = await window.alfredAPI.getOllamaKeepAlive();
-        
+
         if (result.success && result.data) {
             const seconds = result.data.keep_alive_seconds;
             if (ollamaKeepAliveSlider) {
@@ -1073,7 +1022,7 @@ function updateKeepAliveDisplay(seconds) {
     if (ollamaKeepAliveValue) {
         ollamaKeepAliveValue.textContent = seconds;
     }
-    
+
     // Actualizar botones de preset
     if (ollamaKeepAlivePresets) {
         ollamaKeepAlivePresets.forEach(btn => {
@@ -1092,7 +1041,7 @@ async function saveOllamaKeepAlive() {
     try {
         const seconds = parseInt(ollamaKeepAliveSlider.value);
         const result = await window.alfredAPI.setOllamaKeepAlive(seconds);
-        
+
         if (result.success) {
             console.log('Keep alive actualizado a', seconds, 'segundos');
             showNotification('Configuración de Ollama actualizada', 'success');
@@ -1113,9 +1062,9 @@ async function saveOllamaKeepAlive() {
 // Cargar lista de modelos instalados
 async function loadOllamaModels() {
     const modelsList = document.getElementById('modelsList');
-    
+
     if (!modelsList) return;
-    
+
     // Mostrar loading
     modelsList.innerHTML = `
         <div class="loading-models">
@@ -1123,11 +1072,11 @@ async function loadOllamaModels() {
             <span>Cargando modelos...</span>
         </div>
     `;
-    
+
     try {
         const response = await fetch('http://127.0.0.1:8000/ollama/models/list');
         const data = await response.json();
-        
+
         if (data.models && data.models.length > 0) {
             modelsList.innerHTML = data.models.map(model => `
                 <div class="model-item">
@@ -1136,7 +1085,9 @@ async function loadOllamaModels() {
                         <div class="model-details">
                             <span class="model-size">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
                                 </svg>
                                 ${model.size}
                             </span>
@@ -1166,7 +1117,7 @@ async function loadOllamaModels() {
                     </div>
                 </div>
             `).join('');
-            
+
             console.log(`Cargados ${data.models.length} modelos de Ollama`);
         } else {
             modelsList.innerHTML = `
@@ -1202,27 +1153,27 @@ async function loadOllamaModels() {
 async function downloadOllamaModel() {
     const modelInput = document.getElementById('downloadModel');
     const modelName = modelInput.value.trim();
-    
+
     if (!modelName) {
         showNotification('Ingresa el nombre del modelo', 'error');
         return;
     }
-    
+
     try {
         const response = await fetch(`http://127.0.0.1:8000/ollama/models/download?model_name=${encodeURIComponent(modelName)}`, {
             method: 'POST'
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
             showNotification(`Descarga de ${modelName} iniciada.`, 'info');
             modelInput.value = ''; // Limpiar input
-            
+
             // Mostrar contenedor de progreso
             const progressContainer = document.getElementById('downloadProgress');
             progressContainer.style.display = 'block';
-            
+
             // Iniciar polling para este modelo
             startDownloadPolling(modelName);
         } else {
@@ -1245,15 +1196,15 @@ function startDownloadPolling(modelName) {
         console.log(`[Polling] Ya existe polling activo para ${modelName}`);
         return;
     }
-    
+
     // Agregar item de progreso al contenedor
     addDownloadProgressItem(modelName);
-    
+
     // Guardar tiempo de inicio
     pollingStartTime[modelName] = Date.now();
-    
+
     console.log(`[Polling] Iniciando polling para ${modelName}`);
-    
+
     // Hacer polling cada 2 segundos
     activePolling[modelName] = setInterval(async () => {
         try {
@@ -1267,28 +1218,28 @@ function startDownloadPolling(modelName) {
                 showNotification(`Timeout en descarga de ${modelName}`, 'error');
                 return;
             }
-            
+
             const response = await fetch(`http://127.0.0.1:8000/ollama/models/status/${encodeURIComponent(modelName)}`);
             const data = await response.json();
-            
+
             console.log(`[Polling] Estado de ${modelName}:`, data.status, `${data.progress}%`);
-            
+
             if (data.found) {
                 updateDownloadProgress(modelName, data.status, data.progress, data.message);
-                
+
                 // Si la descarga termino (completed o failed), detener polling
                 if (data.status === 'completed' || data.status === 'failed') {
                     console.log(`[Polling] Descarga finalizada para ${modelName}: ${data.status}`);
                     clearInterval(activePolling[modelName]);
                     delete activePolling[modelName];
                     delete pollingStartTime[modelName];
-                    
+
                     // Recargar lista de modelos despues de 2 segundos
                     if (data.status === 'completed') {
                         setTimeout(() => {
                             loadOllamaModels();
                             showNotification(`Modelo ${modelName} descargado exitosamente`, 'success');
-                            
+
                             // Ocultar el item de progreso después de 3 segundos más
                             setTimeout(() => {
                                 const itemId = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
@@ -1316,7 +1267,7 @@ function startDownloadPolling(modelName) {
 // Agregar item de progreso
 function addDownloadProgressItem(modelName) {
     const list = document.getElementById('downloadProgressList');
-    
+
     const item = document.createElement('div');
     item.className = 'download-progress-item';
     item.id = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
@@ -1330,7 +1281,7 @@ function addDownloadProgressItem(modelName) {
         </div>
         <div class="download-progress-status">Iniciando descarga...</div>
     `;
-    
+
     list.appendChild(item);
 }
 
@@ -1338,17 +1289,17 @@ function addDownloadProgressItem(modelName) {
 function updateDownloadProgress(modelName, status, progress, message) {
     const itemId = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
     const item = document.getElementById(itemId);
-    
+
     if (!item) return;
-    
+
     const fill = item.querySelector('.download-progress-fill');
     const percent = item.querySelector('.download-progress-percent');
     const statusText = item.querySelector('.download-progress-status');
-    
+
     fill.style.width = `${progress}%`;
     percent.textContent = `${progress}%`;
     statusText.textContent = message || `Descargando... ${progress}%`;
-    
+
     // Aplicar clases segun estado
     item.className = 'download-progress-item';
     if (status === 'completed') {
@@ -1368,12 +1319,12 @@ async function selectModel(modelName) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model_name: modelName })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
             showNotification(`Modelo ${modelName} seleccionado`, 'success');
-            
+
             // Actualizar selector de modelo en topbar
             if (modelSelect) {
                 modelSelect.value = modelName;
@@ -1392,14 +1343,14 @@ async function deleteModel(modelName) {
     if (!confirm(`¿Estas seguro de eliminar el modelo ${modelName}?`)) {
         return;
     }
-    
+
     try {
         const response = await fetch(`http://127.0.0.1:8000/ollama/models/${encodeURIComponent(modelName)}`, {
             method: 'DELETE'
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
             showNotification(`Modelo ${modelName} eliminado`, 'success');
             loadOllamaModels(); // Recargar lista
@@ -1460,10 +1411,6 @@ async function changeModel() {
 
             // Agregar mensaje informativo en el chat
             addMessage(`🔄 Modelo cambiado a ${newModel}`, 'system');
-            // Actualizar estadisticas si estan activas
-            if (activeNavItem === statsBtn && leftSidebarContent.classList.contains('active')) {
-                showStats();
-            }
         } else {
             showNotification('Error al cambiar el modelo', 'error');
             // Revertir al modelo anterior
@@ -1557,22 +1504,22 @@ async function loadProfilePicture() {
     try {
         console.log('🖼️ Cargando foto de perfil desde backend...');
         const result = await window.alfredAPI.getProfilePicture();
-        
+
         if (result.success && result.data) {
             const { current, history } = result.data;
-            
+
             // Actualizar estado local
-            State.updateSettings({ 
+            State.updateSettings({
                 profilePicture: current,
                 profilePictureHistory: history || []
             });
-            
+
             // Actualizar UI
             if (current) {
                 updateProfilePictureDisplay(current);
             }
             updateProfileHistory();
-            
+
             console.log('✅ Foto de perfil cargada:', {
                 hasCurrent: !!current,
                 historyCount: history?.length || 0
@@ -1580,7 +1527,7 @@ async function loadProfilePicture() {
         } else {
             console.log('ℹ️ No hay foto de perfil guardada');
             // Inicializar historial vacio
-            State.updateSettings({ 
+            State.updateSettings({
                 profilePicture: null,
                 profilePictureHistory: []
             });
@@ -1588,7 +1535,7 @@ async function loadProfilePicture() {
     } catch (error) {
         console.error('❌ Error al cargar foto de perfil:', error);
         // Fallback a estado vacio
-        State.updateSettings({ 
+        State.updateSettings({
             profilePicture: null,
             profilePictureHistory: []
         });
@@ -1603,7 +1550,7 @@ function updateProfilePictureDisplay(imageDataUrl) {
     img.src = imageDataUrl;
     img.alt = 'Foto de perfil';
     currentProfilePicture.appendChild(img);
-    
+
     // Actualizar en topbar
     if (profilePictureTopbar) {
         profilePictureTopbar.innerHTML = '';
@@ -1650,7 +1597,7 @@ async function changeProfilePicture() {
             // Guardar en backend
             console.log('💾 Guardando foto en backend...');
             const saveResult = await window.alfredAPI.setProfilePicture(newImageData);
-            
+
             if (!saveResult.success) {
                 throw new Error(saveResult.error || 'Error al guardar foto');
             }
@@ -1660,7 +1607,7 @@ async function changeProfilePicture() {
 
             // Actualizar UI
             updateProfilePictureDisplay(newImageData);
-            
+
             // Recargar historial desde backend
             await loadProfilePicture();
 
@@ -1728,10 +1675,10 @@ function updateProfileHistory() {
 async function restoreProfilePicture(imageData, index) {
     try {
         console.log('🔄 Restaurando foto del historial...');
-        
+
         // Guardar directamente la foto seleccionada del historial
         const saveResult = await window.alfredAPI.setProfilePicture(imageData);
-        
+
         if (!saveResult.success) {
             throw new Error(saveResult.error || 'Error al restaurar foto');
         }
@@ -1741,7 +1688,7 @@ async function restoreProfilePicture(imageData, index) {
 
         // Actualizar UI
         updateProfilePictureDisplay(imageData);
-        
+
         // Recargar historial desde backend
         await loadProfilePicture();
 
@@ -1761,7 +1708,7 @@ async function restoreProfilePicture(imageData, index) {
 async function loadUserInfo() {
     try {
         console.log('📋 Cargando informacion personal...');
-        
+
         // Cargar nombre
         const nameResult = await window.alfredAPI.getUserSetting('user_name');
         if (nameResult.success && nameResult.data) {
@@ -1769,7 +1716,7 @@ async function loadUserInfo() {
             document.getElementById('userName').value = userName;
             console.log('✅ Nombre cargado:', userName);
         }
-        
+
         // Cargar edad
         const ageResult = await window.alfredAPI.getUserSetting('user_age');
         if (ageResult.success && ageResult.data) {
@@ -1777,7 +1724,7 @@ async function loadUserInfo() {
             document.getElementById('userAge').value = userAge;
             console.log('✅ Edad cargada:', userAge);
         }
-        
+
     } catch (error) {
         console.error('❌ Error al cargar informacion personal:', error);
     }
@@ -1788,9 +1735,9 @@ async function saveUserInfo() {
     try {
         const userName = document.getElementById('userName').value.trim();
         const userAge = document.getElementById('userAge').value;
-        
+
         console.log('💾 Guardando informacion personal...', { userName, userAge });
-        
+
         // Guardar nombre
         if (userName) {
             const nameResult = await window.alfredAPI.setUserSetting('user_name', userName, 'string');
@@ -1798,7 +1745,7 @@ async function saveUserInfo() {
                 throw new Error('Error al guardar nombre');
             }
         }
-        
+
         // Guardar edad
         if (userAge) {
             const ageResult = await window.alfredAPI.setUserSetting('user_age', userAge, 'integer');
@@ -1806,10 +1753,10 @@ async function saveUserInfo() {
                 throw new Error('Error al guardar edad');
             }
         }
-        
+
         console.log('✅ Informacion personal guardada');
         showNotification('success', 'Informacion personal actualizada. Los cambios se aplicaran en tu proxima conversacion.');
-        
+
     } catch (error) {
         console.error('❌ Error al guardar informacion personal:', error);
         showNotification('error', `Error al guardar: ${error.message}`);
@@ -1820,17 +1767,17 @@ async function saveUserInfo() {
 async function deleteProfilePicture(index) {
     try {
         console.log('🗑️ Eliminando foto del historial...');
-        
+
         const imageToDelete = State.settings.profilePictureHistory[index];
 
         // Si es la foto actual, eliminar desde backend
         if (imageToDelete === State.settings.profilePicture) {
             const deleteResult = await window.alfredAPI.deleteProfilePicture();
-            
+
             if (!deleteResult.success) {
                 throw new Error(deleteResult.error || 'Error al eliminar foto');
             }
-            
+
             State.updateSettings({ profilePicture: null });
             currentProfilePicture.innerHTML = '<span class="default-avatar">👤</span>';
         }
@@ -1838,10 +1785,10 @@ async function deleteProfilePicture(index) {
         // Eliminar del historial local
         const newHistory = [...State.settings.profilePictureHistory];
         newHistory.splice(index, 1);
-        
+
         // Guardar historial actualizado en backend
         await window.alfredAPI.setUserSetting('profile_picture_history', newHistory, 'json');
-        
+
         // Actualizar estado local
         State.updateSettings({ profilePictureHistory: newHistory });
 
@@ -1886,7 +1833,7 @@ let currentMode = MODES.WORK;
 function updateModeIndicator(mode) {
     console.log('[updateModeIndicator] Llamada con modo:', mode);
     console.log('[updateModeIndicator] modeIndicatorName existe:', !!modeIndicatorName);
-    
+
     if (!modeIndicatorName) {
         console.warn('[updateModeIndicator] modeIndicatorName no está inicializado, buscando elemento...');
         const indicator = document.getElementById('modeIndicator');
@@ -1898,7 +1845,7 @@ function updateModeIndicator(mode) {
             return;
         }
     }
-    
+
     const modeName = MODE_NAMES[mode] || 'Work';
     modeIndicatorName.textContent = modeName;
     console.log('[updateModeIndicator] Texto actualizado a:', modeName);
@@ -1919,7 +1866,7 @@ async function setMode(mode) {
 
     // Aplicar el modo al body
     document.body.setAttribute('data-mode', mode);
-    
+
     // Actualizar indicador de modo en topbar
     updateModeIndicator(mode);
 
@@ -1951,21 +1898,21 @@ async function loadMode() {
     try {
         console.log('[loadMode] Iniciando carga de modo...');
         const response = await fetch('http://127.0.0.1:8000/settings/mode');
-        
+
         if (!response.ok) {
             throw new Error('Error al cargar el modo');
         }
 
         const data = await response.json();
         const savedMode = data.mode || MODES.WORK;
-        
+
         console.log('[loadMode] Modo recibido del backend:', savedMode);
 
         // Aplicar el modo guardado
         currentMode = savedMode;
         document.body.setAttribute('data-mode', savedMode);
         console.log('[loadMode] Aplicado data-mode al body:', savedMode);
-        
+
         // Actualizar indicador de modo en topbar
         updateModeIndicator(savedMode);
 
@@ -1987,7 +1934,7 @@ async function loadMode() {
         // Si falla, usar modo por defecto (work)
         document.body.setAttribute('data-mode', MODES.WORK);
         updateModeIndicator(MODES.WORK);
-        
+
         // Marcar work como activo por defecto
         const modeButtons = document.querySelectorAll('.mode-btn');
         modeButtons.forEach(btn => {
@@ -1999,6 +1946,529 @@ async function loadMode() {
         });
     }
 }
+
+// ===============================================
+// FUNCIONES DE GESTION DE DOCUMENTOS
+// ===============================================
+
+// Cargar estado de indexacion
+async function loadIndexationStatus() {
+    try {
+        const response = await fetch('http://localhost:8000/documents/stats');
+        const result = await response.json();
+
+        if (result.success && result.stats) {
+            const stats = result.stats;
+            document.getElementById('indexedDocsCount').textContent = stats.total_documents || 0;
+            document.getElementById('chunksCount').textContent = stats.total_chunks || 0;
+            document.getElementById('vectorsCount').textContent = stats.total_vectors || 0;
+
+            // Formatear ultima actualizacion
+            if (stats.last_update) {
+                const lastUpdate = new Date(stats.last_update);
+                const now = new Date();
+                const diffMinutes = Math.floor((now - lastUpdate) / 60000);
+
+                let timeText;
+                if (diffMinutes < 1) {
+                    timeText = 'Ahora';
+                } else if (diffMinutes < 60) {
+                    timeText = `Hace ${diffMinutes} min`;
+                } else if (diffMinutes < 1440) {
+                    const hours = Math.floor(diffMinutes / 60);
+                    timeText = `Hace ${hours}h`;
+                } else {
+                    const days = Math.floor(diffMinutes / 1440);
+                    timeText = `Hace ${days}d`;
+                }
+
+                document.getElementById('lastIndexUpdate').textContent = timeText;
+            } else {
+                document.getElementById('lastIndexUpdate').textContent = 'Nunca';
+            }
+        }
+    } catch (error) {
+        console.error('Error al cargar estado de indexacion:', error);
+        document.getElementById('indexedDocsCount').textContent = '0';
+        document.getElementById('chunksCount').textContent = '0';
+        document.getElementById('vectorsCount').textContent = '0';
+        document.getElementById('lastIndexUpdate').textContent = 'Error';
+    }
+}
+
+// Cargar paths de documentos
+async function loadDocumentPaths() {
+    const pathsList = document.getElementById('docPathsList');
+
+    try {
+        const response = await fetch('http://localhost:8000/documents/paths?enabled_only=false');
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error('Error al cargar rutas');
+        }
+
+        const paths = data.paths || [];
+
+        if (paths.length === 0) {
+            pathsList.innerHTML = `
+                <div class="doc-paths-empty">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    <p>No hay rutas de documentos configuradas</p>
+                    <p style="font-size: 12px;">Haz clic en + para agregar una ruta</p>
+                </div>
+            `;
+        } else {
+            pathsList.innerHTML = paths.map((pathData) => {
+                const lastScan = pathData.last_scan
+                    ? new Date(pathData.last_scan).toLocaleString('es-MX', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })
+                    : 'Nunca';
+
+                const docsCount = pathData.documents_count || 0;
+                const statusClass = pathData.enabled ? 'enabled' : 'disabled';
+
+                return `
+                    <div class="doc-path-item ${statusClass}">
+                        <div class="doc-path-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="doc-path-info">
+                            <div class="doc-path-text">${pathData.path}</div>
+                            <div class="doc-path-stats">
+                                ${docsCount} documento${docsCount !== 1 ? 's' : ''} • Escaneo: ${lastScan}
+                                ${pathData.enabled ? '' : ' • <span style="color: var(--warning-color);">Deshabilitada</span>'}
+                            </div>
+                        </div>
+                        <div class="doc-path-actions">
+                            <button class="doc-path-btn" onclick="toggleDocPath(${pathData.id}, ${!pathData.enabled})" title="${pathData.enabled ? 'Deshabilitar' : 'Habilitar'}">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    ${pathData.enabled
+                        ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>'
+                        : '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
+                    }
+                                </svg>
+                            </button>
+                            <button class="doc-path-btn" onclick="browseDocPath(${pathData.id})" title="Cambiar ruta">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                            </button>
+                            <button class="doc-path-btn delete" onclick="removeDocPath(${pathData.id})" title="Eliminar">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    } catch (error) {
+        console.error('Error al cargar paths:', error);
+        pathsList.innerHTML = '<p style="color: var(--danger-color);">Error al cargar rutas</p>';
+    }
+}
+
+// Agregar nuevo path
+async function addDocPath() {
+    try {
+        const result = await window.alfredAPI.selectFolder();
+
+        if (result.success && result.path) {
+            const response = await fetch('http://localhost:8000/documents/paths', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: result.path })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                showNotification('success', `Ruta agregada: ${result.path}`);
+                await loadDocumentPaths();
+                await loadIndexationStatus();
+            } else {
+                // Manejar error del servidor
+                const errorMsg = typeof data.detail === 'string'
+                    ? data.detail
+                    : (data.message || 'Error al agregar ruta');
+                showNotification('error', errorMsg);
+            }
+        }
+    } catch (error) {
+        console.error('Error al agregar path:', error);
+        const errorMsg = error.message || 'Error al agregar carpeta';
+        showNotification('error', errorMsg);
+    }
+}
+
+// Explorar/cambiar path
+async function browseDocPath(pathId) {
+    try {
+        const result = await window.alfredAPI.selectFolder();
+
+        if (result.success && result.path) {
+            const response = await fetch(`http://localhost:8000/documents/paths/${pathId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_path: result.path })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                showNotification('success', 'Ruta actualizada');
+                await loadDocumentPaths();
+            } else {
+                const errorMsg = typeof data.detail === 'string'
+                    ? data.detail
+                    : (data.message || 'Error al actualizar ruta');
+                showNotification('error', errorMsg);
+            }
+        }
+    } catch (error) {
+        console.error('Error al cambiar path:', error);
+        const errorMsg = error.message || 'Error al actualizar carpeta';
+        showNotification('error', errorMsg);
+    }
+}
+
+// Habilitar/deshabilitar path
+async function toggleDocPath(pathId, enabled) {
+    try {
+        // Si se está deshabilitando, advertir sobre eliminación de documentos
+        if (!enabled) {
+            const confirmMsg = 'DESHABILITAR RUTA\n\n' +
+                'Al deshabilitar esta ruta:\n' +
+                '- Los documentos indexados se ELIMINARAN de ChromaDB\n' +
+                '- No apareceran mas en las busquedas\n' +
+                '- Puedes reindexar despues para volver a agregarlos\n\n' +
+                '¿Continuar con la deshabilitacion?';
+
+            if (!confirm(confirmMsg)) {
+                return; // Cancelar
+            }
+        }
+
+        const response = await fetch(`http://localhost:8000/documents/paths/${pathId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enabled })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            let message = enabled
+                ? 'Ruta habilitada exitosamente'
+                : 'Ruta deshabilitada';
+
+            if (data.deleted_chunks && data.deleted_chunks > 0) {
+                message += `\n\nEliminados ${data.deleted_chunks} chunks de ChromaDB`;
+            }
+
+            showNotification('success', message);
+            await loadDocumentPaths();
+            await loadIndexationStatus(); // Actualizar estadísticas
+        } else {
+            const errorMsg = typeof data.detail === 'string'
+                ? data.detail
+                : (data.message || 'Error al cambiar estado');
+            showNotification('error', errorMsg);
+        }
+    } catch (error) {
+        console.error('Error al cambiar estado:', error);
+        const errorMsg = error.message || 'Error al cambiar estado';
+        showNotification('error', errorMsg);
+    }
+}
+
+// Eliminar path
+async function removeDocPath(pathId) {
+    if (!confirm('¿Eliminar esta ruta de documentos?')) return;
+
+    try {
+        const response = await fetch(`http://localhost:8000/documents/paths/${pathId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            showNotification('success', 'Ruta eliminada');
+            await loadDocumentPaths();
+            await loadIndexationStatus();
+        } else {
+            const errorMsg = typeof data.detail === 'string'
+                ? data.detail
+                : (data.message || 'Error al eliminar ruta');
+            showNotification('error', errorMsg);
+        }
+    } catch (error) {
+        console.error('Error al eliminar path:', error);
+        const errorMsg = error.message || 'Error al eliminar ruta';
+        showNotification('error', errorMsg);
+    }
+}
+
+// Reindexar documentos
+async function reindexDocuments() {
+    const confirmMsg = 'REINDEXAR TODOS LOS DOCUMENTOS\n\n' +
+        'Esto hara:\n' +
+        '- Procesar SOLO rutas HABILITADAS\n' +
+        '- Agregar/actualizar documentos de rutas habilitadas\n' +
+        '- Puede tardar varios minutos\n\n' +
+        'Nota: Las rutas deshabilitadas ya tienen sus documentos eliminados.\n\n' +
+        'Continuar?';
+
+    if (!confirm(confirmMsg)) return;
+
+    // Deshabilitar boton durante el proceso
+    const reindexBtn = document.getElementById('reindexDocsBtn');
+    const originalText = reindexBtn.textContent;
+    reindexBtn.disabled = true;
+    reindexBtn.textContent = 'Indexando...';
+
+    // Crear overlay para bloquear interaccion con el fondo
+    const overlay = document.createElement('div');
+    overlay.id = 'reindex-overlay';
+    overlay.className = 'reindex-overlay';
+    document.body.appendChild(overlay);
+
+    // Crear elemento de progreso
+    const progressContainer = document.createElement('div');
+    progressContainer.id = 'reindex-progress';
+    progressContainer.className = 'reindex-progress-container';
+    progressContainer.innerHTML = `
+        <div class="progress-header">
+            <h3>Reindexando Documentos</h3>
+            <button id="closeProgressBtn" class="close-progress-btn" disabled>×</button>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar" style="width: 0%">
+                <span class="progress-text" id="progressText">0%</span>
+            </div>
+        </div>
+        <div class="progress-message" id="progressMessage">Conectando...</div>
+        <div class="progress-details" id="progressDetails"></div>
+    `;
+
+    document.body.appendChild(progressContainer);
+
+    // Conectar a SSE para recibir progreso
+    const eventSource = new EventSource('http://localhost:8000/documents/reindex/progress');
+    let reindexStarted = false;
+
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'connected') {
+                console.log('Conectado al stream de progreso');
+
+                // Ahora que estamos conectados, iniciar la reindexacion
+                if (!reindexStarted) {
+                    reindexStarted = true;
+                    fetch('http://localhost:8000/documents/reindex', {
+                        method: 'POST'
+                    }).catch(error => {
+                        console.error('Error en POST reindex:', error);
+                    });
+                }
+                return;
+            }
+
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const progressMessage = document.getElementById('progressMessage');
+            const progressDetails = document.getElementById('progressDetails');
+
+            if (!progressBar) return;
+
+            // Actualizar barra de progreso
+            if (data.progress !== undefined) {
+                progressBar.style.width = `${data.progress}%`;
+                progressText.textContent = `${data.progress}%`;
+            }
+
+            // Actualizar mensaje principal
+            if (data.message) {
+                progressMessage.textContent = data.message;
+
+                // Agregar clase segun tipo de evento
+                progressMessage.className = 'progress-message';
+                if (data.type === 'error') {
+                    progressMessage.classList.add('error');
+                } else if (data.type === 'warning') {
+                    progressMessage.classList.add('warning');
+                } else if (data.type === 'success' || data.type === 'complete') {
+                    progressMessage.classList.add('success');
+                }
+            }
+
+            // Agregar detalles adicionales
+            if (data.type === 'processing') {
+                progressDetails.innerHTML = `
+                    <div class="detail-item">Ruta: ${data.path_index}/${data.total_paths}</div>
+                    <div class="detail-item">Carpeta: ${data.current_path ? data.current_path.split('\\').pop() : ''}</div>
+                `;
+            } else if (data.type === 'loading' && data.documents_loaded) {
+                const existingDetails = progressDetails.innerHTML;
+                progressDetails.innerHTML = existingDetails + `<div class="detail-item">Documentos cargados: ${data.documents_loaded}</div>`;
+            } else if (data.type === 'chunking' && data.chunks_generated) {
+                const existingDetails = progressDetails.innerHTML;
+                progressDetails.innerHTML = existingDetails + `<div class="detail-item">Chunks generados: ${data.chunks_generated}</div>`;
+            } else if (data.type === 'complete' && data.stats) {
+                progressDetails.innerHTML = `
+                    <div class="detail-item success">✓ Completado</div>
+                    <div class="detail-item">Rutas procesadas: ${data.stats.processed_paths}</div>
+                    <div class="detail-item">Total documentos: ${data.stats.total_documents}</div>
+                    <div class="detail-item">Total chunks: ${data.stats.total_chunks}</div>
+                    ${data.stats.errors_count > 0 ? `<div class="detail-item error">Errores: ${data.stats.errors_count}</div>` : ''}
+                    ${data.stats.warnings_count > 0 ? `<div class="detail-item warning">Advertencias: ${data.stats.warnings_count}</div>` : ''}
+                `;
+            }
+
+            // Si es evento de finalizacion
+            if (data.type === 'done') {
+                eventSource.close();
+
+                // Habilitar boton de cerrar
+                const closeBtn = document.getElementById('closeProgressBtn');
+                if (closeBtn) {
+                    closeBtn.disabled = false;
+                    closeBtn.onclick = () => {
+                        progressContainer.remove();
+                        overlay.remove(); // Remover overlay tambien
+                        reindexBtn.disabled = false;
+                        reindexBtn.textContent = originalText;
+                        loadIndexationStatus(); // Actualizar estadisticas generales
+                        loadDocumentPaths(); // Actualizar lista de rutas con conteo de documentos
+                    };
+
+                    // Auto-cerrar despues de 5 segundos si fue exitoso
+                    setTimeout(() => {
+                        if (progressContainer.parentNode && !data.stats?.errors_count) {
+                            closeBtn.click();
+                        }
+                    }, 5000);
+                }
+            }
+
+        } catch (error) {
+            console.error('Error parseando evento SSE:', error);
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        console.error('Error en SSE:', error);
+        eventSource.close();
+
+        const progressMessage = document.getElementById('progressMessage');
+        const closeBtn = document.getElementById('closeProgressBtn');
+
+        if (progressMessage) {
+            progressMessage.textContent = 'Error en la conexion de progreso';
+            progressMessage.className = 'progress-message error';
+        }
+
+        if (closeBtn) {
+            closeBtn.disabled = false;
+            closeBtn.onclick = () => {
+                progressContainer.remove();
+                overlay.remove(); // Remover overlay tambien
+                reindexBtn.disabled = false;
+                reindexBtn.textContent = originalText;
+                loadIndexationStatus(); // Actualizar estadisticas incluso si hay error
+                loadDocumentPaths(); // Actualizar lista de rutas
+            };
+        }
+
+        showNotification('error', 'Error al conectar con el servidor para mostrar progreso');
+    };
+}
+
+// Limpiar indice
+async function clearIndex() {
+    const confirmMsg = 'ELIMINAR TODO EL INDICE\n\n' +
+        'Esta accion:\n' +
+        '- Borrara TODOS los vectores y chunks\n' +
+        '- Eliminara la base de datos ChromaDB completamente\n' +
+        '- Reseteara contadores de TODAS las rutas (habilitadas y deshabilitadas)\n' +
+        '- NO elimina las rutas configuradas\n\n' +
+        'NO SE PUEDE DESHACER\n\n' +
+        'Despues tendras que reindexar para volver a usar el sistema RAG.\n\n' +
+        '¿Estas seguro?';
+
+    if (!confirm(confirmMsg)) return;
+
+    // Deshabilitar boton durante el proceso
+    const clearBtn = document.getElementById('clearIndexBtn');
+    const originalText = clearBtn.textContent;
+    clearBtn.disabled = true;
+    clearBtn.textContent = 'Limpiando...';
+
+    try {
+        showNotification('info', 'Eliminando indice completo...');
+
+        const response = await fetch('http://localhost:8000/documents/index', {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        console.log('Respuesta de clearIndex:', response.status, data);
+
+        if (response.ok && data.success) {
+            const message = `Indice eliminado completamente\n\n` +
+                `Rutas reseteadas: ${data.cleared_paths || 0}`;
+            showNotification('success', message);
+
+            await loadDocumentPaths();
+            await loadIndexationStatus();
+        } else {
+            const errorMsg = typeof data.detail === 'string'
+                ? data.detail
+                : (data.message || 'Error al limpiar indice');
+            console.error('Error del servidor:', data);
+            showNotification('error', `Error: ${errorMsg}`);
+        }
+    } catch (error) {
+        console.error('Error al limpiar indice:', error);
+        const errorMsg = error.message || 'Error al limpiar indice';
+        showNotification('error', `Error de conexion: ${errorMsg}`);
+    } finally {
+        // Rehabilitar boton
+        clearBtn.disabled = false;
+        clearBtn.textContent = originalText;
+    }
+}
+
+// ===============================================
+// EXPONER FUNCIONES GLOBALMENTE PARA onclick
+// ===============================================
+window.toggleDocPath = toggleDocPath;
+window.browseDocPath = browseDocPath;
+window.removeDocPath = removeDocPath;
+window.addDocPath = addDocPath;
+window.reindexDocuments = reindexDocuments;
+window.clearIndex = clearIndex;
+
+// ===============================================
+// EVENT LISTENERS
+// ===============================================
 
 /**
  * Obtiene el modo actual
@@ -2018,3 +2488,12 @@ window.restartBackend = restartBackend;
 window.setMode = setMode;
 window.getCurrentMode = getCurrentMode;
 window.MODES = MODES;
+
+// Funciones de documentos
+window.addDocPath = addDocPath;
+window.browseDocPath = browseDocPath;
+window.removeDocPath = removeDocPath;
+window.reindexDocuments = reindexDocuments;
+window.clearIndex = clearIndex;
+window.loadDocumentPaths = loadDocumentPaths;
+window.loadIndexationStatus = loadIndexationStatus;

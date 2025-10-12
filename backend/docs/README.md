@@ -1,13 +1,15 @@
 # Alfred
 Your personal AI assistant running 100% locally
 
-## 🚀 Características
+## 🚀 Caracteristicas
 
-- **Totalmente Local**: Todo se ejecuta en tu máquina, tus datos nunca salen
-- **Aceleración por GPU**: Detecta y usa automáticamente GPU NVIDIA/AMD/Apple Silicon para mayor velocidad 🚀
-- **Optimización Inteligente**: Busca primero en respuestas previas verificadas para mayor velocidad ⚡
-- **Extracción Inteligente**: Encuentra automáticamente RFC, CURP, NSS y otros datos personales
-- **Base de Datos Vectorial**: Usa ChromaDB para búsquedas semánticas eficientes
+- **Totalmente Local**: Todo se ejecuta en tu maquina, tus datos nunca salen
+- **Gestion de Documentos desde UI**: Agrega/elimina rutas de documentos desde la interfaz grafica, sin editar archivos de configuracion
+- **Indexacion Bajo Demanda**: Reindexar documentos cuando quieras con un solo clic
+- **Aceleracion por GPU**: Detecta y usa automaticamente GPU NVIDIA/AMD/Apple Silicon para mayor velocidad 🚀
+- **Optimizacion Inteligente**: Busca primero en respuestas previas verificadas para mayor velocidad ⚡
+- **Extraccion Inteligente**: Encuentra automaticamente RFC, CURP, NSS y otros datos personales
+- **Base de Datos Vectorial**: Usa ChromaDB para busquedas semanticas eficientes
 - **Modelos Ollama**: Powered by Gemma2:9b y nomic-embed-text
 - **Sistema de Historial**: Aprende de tus respuestas verificadas para optimizar consultas futuras
 
@@ -16,10 +18,10 @@ Your personal AI assistant running 100% locally
 - Python 3.8+
 - Ollama instalado con los modelos:
   - `gemma2:9b`
-  - `embeddinggemma:300m`
+  - `nomic-embed-text:v1.5`
 - (Opcional) GPU NVIDIA/AMD para mejor rendimiento
 
-## 🔧 Configuración
+## 🔧 Configuracion
 
 1. Instala las dependencias:
 ```bash
@@ -33,20 +35,32 @@ python test_gpu.py
 
 3. Crea un archivo `.env` con:
 ```env
-ALFRED_DOCS_PATH=C:\Users\TU_USUARIO\Documents
-ALFRED_USER_NAME=Tu Nombre
+ALFRED_MODEL=gemma2:9b
+ALFRED_EMBEDDING_MODEL=nomic-embed-text:v1.5
+ALFRED_HOST=127.0.0.1
+ALFRED_PORT=8000
 ALFRED_FORCE_RELOAD=false
-ALFRED_DEBUG=false
+
+# YA NO ES NECESARIO (sistema legacy deprecado):
+# ALFRED_DOCS_PATH=C:\Users\TU_USUARIO\Documents
 ```
 
-4. Ejecuta Alfred:
+4. Ejecuta la aplicacion Electron:
 ```powershell
-python alfred.py
+cd AlfredElectron
+.\start.ps1
 ```
+
+5. **Gestiona tus documentos desde la UI**:
+   - Ve a la seccion "Gestion de Documentos"
+   - Haz clic en "Examinar" para agregar rutas
+   - Haz clic en "Reindexar Documentos" para indexar
+
+📚 **Ver guia completa**: [DOCUMENT_MANAGEMENT_MIGRATION.md](DOCUMENT_MANAGEMENT_MIGRATION.md)
 
 ## 🎮 GPU Support
 
-Alfred detecta y usa automáticamente tu GPU para acelerar el procesamiento. Ver [GPU_SETUP.md](GPU_SETUP.md) para:
+Alfred detecta y usa automaticamente tu GPU para acelerar el procesamiento. Ver [GPU_SETUP.md](GPU_SETUP.md) para:
 - Configuración de GPU NVIDIA/AMD/Apple Silicon
 - Solución de problemas
 - Optimizaciones de rendimiento

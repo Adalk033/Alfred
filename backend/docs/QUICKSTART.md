@@ -1,39 +1,44 @@
 # 🚀 Quick Start - Alfred Backend
 
-## ⚡ Inicio Rápido (5 minutos)
+## ⚡ Inicio Rapido (5 minutos)
 
-### 1️⃣ Configuración Inicial
+### 1️⃣ Configuracion Inicial
 
 ```powershell
-# Copia el archivo de configuración de ejemplo
-Copy-Item .env.example .env
-
-# Edita el archivo .env y configura tu ruta de documentos
+# Crea el archivo de configuracion
 notepad .env
 ```
 
-**IMPORTANTE**: Edita `ALFRED_DOCS_PATH` con la ruta a tus documentos.
+**Contenido minimo del .env:**
+```env
+ALFRED_MODEL=gemma2:9b
+ALFRED_EMBEDDING_MODEL=nomic-embed-text:v1.5
+ALFRED_HOST=127.0.0.1
+ALFRED_PORT=8000
+```
+
+**NOTA**: Ya NO es necesario configurar `ALFRED_DOCS_PATH`. Las rutas de documentos ahora se gestionan desde la interfaz grafica.
 
 ### 2️⃣ Instalar Dependencias
 
 ```powershell
-# Opción A: Dependencias esenciales (recomendado para Windows)
+# Opcion A: Dependencias esenciales (recomendado para Windows)
 pip install -r requirements_core.txt
 
-# Opción B: Todas las dependencias (puede fallar en Windows por rutas largas)
+# Opcion B: Todas las dependencias (puede fallar en Windows por rutas largas)
 pip install -r requirements.txt
 ```
 
-**⚠️ Problema común en Windows:** Error de rutas largas
+**⚠️ Problema comun en Windows:** Error de rutas largas
 Si obtienes un error como `[WinError 206] The filename or extension is too long`, consulta: **`TROUBLESHOOTING_WINDOWS_PATH.md`**
 
 ### 3️⃣ Verificar Ollama
 
 ```powershell
-# Verifica que Ollama esté ejecutándose
+# Verifica que Ollama este ejecutandose
 ollama list
 
-# Si no tienes los modelos, descárgalos
+# Si no tienes los modelos, descargalos
 ollama pull gemma2:9b
 ollama pull nomic-embed-text:v1.5
 ```
@@ -137,22 +142,25 @@ curl -X POST http://localhost:8000/query `
 
 ## ❓ Problemas Comunes
 
-### ❌ "Alfred Core no está inicializado"
+### ❌ "Alfred Core no esta inicializado"
 ```powershell
 # Verifica Ollama
 ollama list
-ollama serve  # Si no está corriendo
+ollama serve  # Si no esta corriendo
 
 # Verifica modelos
 ollama pull gemma2:9b
 ```
 
-### ❌ "No se encontró ALFRED_DOCS_PATH"
-```powershell
-# Edita tu .env
-notepad .env
+### ❌ "No hay documentos indexados"
+**Solucion:**
+1. Abre la aplicacion Electron
+2. Ve a la seccion "Gestion de Documentos"
+3. Haz clic en "Examinar" y selecciona una carpeta
+4. Haz clic en "Agregar Ruta"
+5. Haz clic en "Reindexar Documentos"
 
-# Verifica que la ruta existe
+Ver guia completa: [DOCUMENT_MANAGEMENT_MIGRATION.md](DOCUMENT_MANAGEMENT_MIGRATION.md)
 Test-Path "C:\Users\TU_USUARIO\Documents"
 ```
 
