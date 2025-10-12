@@ -325,6 +325,51 @@
                     <div class="settings-section" data-section="modelos">
                         <h3 class="section-title">Modelos</h3>
 
+                        <!-- Lista de modelos instalados -->
+                        <div class="setting-group">
+                            <div class="models-header">
+                                <label>Modelos instalados</label>
+                                <button class="button secondary" id="refreshModelsBtn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                    </svg>
+                                    Actualizar
+                                </button>
+                            </div>
+                            <div id="modelsList" class="models-list">
+                                <div class="loading-models">
+                                    <div class="loading-spinner"></div>
+                                    <span>Cargando modelos...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <label for="downloadModel">Descargar modelo</label>
+                            <div class="download-model-controls">
+                                <input type="text" id="downloadModel" placeholder="Nombre del modelo (ej: llama3.2:3b, mistral)" />
+                                <button class="button primary" id="downloadModelBtn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    Descargar
+                                </button>
+                            </div>
+                            <p class="setting-description">
+                                Ingresa el nombre del modelo de Ollama que deseas descargar. Ejemplos: llama3.2:3b, mistral, gemma2:9b
+                            </p>
+                            <!-- Lista de descargas en progreso -->
+                            <div id="downloadProgress" class="download-progress-container" style="display: none;">
+                                <div class="download-progress-header">
+                                    <label>Descargas en progreso</label>
+                                </div>
+                                <div id="downloadProgressList" class="download-progress-list"></div>
+                            </div>
+                        </div>
+
                         <div class="setting-group">
                             <label for="ollamaKeepAlive">Tiempo de inactividad de Ollama</label>
                             <div class="keep-alive-controls">
@@ -344,24 +389,6 @@
                                 <button class="preset-btn" data-seconds="300">Normal (5min)</button>
                                 <button class="preset-btn" data-seconds="1800">Largo (30min)</button>
                             </div>
-                        </div>
-
-                        <div class="setting-group">
-                            <label for="downloadModel">Descargar modelo</label>
-                            <div class="download-model-controls">
-                                <input type="text" id="downloadModel" placeholder="Nombre del modelo (ej: llama2, mistral)" />
-                                <button class="button primary" id="downloadModelBtn">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                    Descargar
-                                </button>
-                            </div>
-                            <p class="setting-description">
-                                Ingresa el nombre del modelo de Ollama que deseas descargar.
-                            </p>
                         </div>
 
                         <div class="setting-group">

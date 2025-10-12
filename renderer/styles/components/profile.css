@@ -176,6 +176,252 @@
     white-space: nowrap;
 }
 
+/* Lista de modelos instalados */
+.models-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.models-header label {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.models-list {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.loading-models {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 20px;
+    color: var(--text-secondary);
+}
+
+.model-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.model-item:last-child {
+    margin-bottom: 0;
+}
+
+.model-item:hover {
+    border-color: var(--mode-primary);
+    background: var(--mode-primary-transparent);
+}
+
+.model-info {
+    flex: 1;
+}
+
+.model-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.model-details {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.model-size,
+.model-modified {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.model-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.model-action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.model-action-btn:hover {
+    background: var(--mode-primary);
+    border-color: var(--mode-primary);
+    color: white;
+}
+
+.model-action-btn.delete:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+}
+
+.no-models-message {
+    text-align: center;
+    padding: 32px;
+    color: var(--text-secondary);
+}
+
+.no-models-message svg {
+    width: 48px;
+    height: 48px;
+    opacity: 0.5;
+    margin-bottom: 12px;
+}
+
+/* Descargas en progreso */
+.download-progress-container {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.download-progress-header {
+    margin-bottom: 12px;
+}
+
+.download-progress-header label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.download-progress-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.download-progress-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    transition: all 0.3s ease;
+}
+
+.download-progress-item.completed {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.download-progress-item.failed {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.download-progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.download-model-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.download-progress-percent {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mode-primary);
+}
+
+.download-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.download-progress-fill {
+    height: 100%;
+    background: var(--mode-primary);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.download-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 100%
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.download-progress-status {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.download-progress-item.completed .download-progress-fill {
+    background: #10b981;
+}
+
+.download-progress-item.failed .download-progress-fill {
+    background: #ef4444;
+}
+
+.download-progress-item.completed .download-progress-percent {
+    color: #10b981;
+}
+
+.download-progress-item.failed .download-progress-percent {
+    color: #ef4444;
+}
+
 /* Estilos para foto de perfil */
 .profile-section {
     border-bottom: 1px solid var(--border-color);

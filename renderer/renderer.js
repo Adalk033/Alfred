@@ -110,6 +110,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Esperar a que el backend este listo antes de habilitar el chat
     await waitForBackendReady();
     
+    // Cargar modo desde BD antes de continuar
+    await loadMode();
+    
     setupEventListeners();
     loadSettings();
     await loadCurrentModel();
@@ -221,6 +224,11 @@ function setupEventListeners() {
                     section.classList.remove('active');
                 }
             });
+            
+            // Cargar modelos si se abre la seccion de modelos
+            if (sectionName === 'modelos') {
+                loadOllamaModels();
+            }
         });
     });
 
@@ -245,6 +253,28 @@ function setupEventListeners() {
                 ollamaKeepAliveSlider.value = seconds;
                 updateKeepAliveDisplay(seconds);
             });
+        });
+    }
+    
+    // Event listeners para gestion de modelos
+    const downloadModelBtn = document.getElementById('downloadModelBtn');
+    const refreshModelsBtn = document.getElementById('refreshModelsBtn');
+    
+    if (downloadModelBtn) {
+        downloadModelBtn.addEventListener('click', downloadOllamaModel);
+    }
+    
+    if (refreshModelsBtn) {
+        refreshModelsBtn.addEventListener('click', loadOllamaModels);
+    }
+    
+    // Event listener para Enter en input de descarga
+    const downloadModelInput = document.getElementById('downloadModel');
+    if (downloadModelInput) {
+        downloadModelInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                downloadOllamaModel();
+            }
         });
     }
 }
@@ -1047,6 +1077,316 @@ async function saveOllamaKeepAlive() {
     }
 }
 
+// ===============================================
+// FUNCIONES DE GESTION DE MODELOS OLLAMA
+// ===============================================
+
+// Cargar lista de modelos instalados
+async function loadOllamaModels() {
+    const modelsList = document.getElementById('modelsList');
+    
+    if (!modelsList) return;
+    
+    // Mostrar loading
+    modelsList.innerHTML = `
+        <div class="loading-models">
+            <div class="loading-spinner"></div>
+            <span>Cargando modelos...</span>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('http://127.0.0.1:8000/ollama/models/list');
+        const data = await response.json();
+        
+        if (data.models && data.models.length > 0) {
+            modelsList.innerHTML = data.models.map(model => `
+                <div class="model-item">
+                    <div class="model-info">
+                        <div class="model-name">${model.name}</div>
+                        <div class="model-details">
+                            <span class="model-size">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                </svg>
+                                ${model.size}
+                            </span>
+                            <span class="model-modified">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                ${model.modified}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="model-actions">
+                        <button class="model-action-btn" onclick="selectModel('${model.name}')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Usar
+                        </button>
+                        <button class="model-action-btn delete" onclick="deleteModel('${model.name}')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+            console.log(`Cargados ${data.models.length} modelos de Ollama`);
+        } else {
+            modelsList.innerHTML = `
+                <div class="no-models-message">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <p>No hay modelos instalados</p>
+                    <p style="font-size: 12px;">Descarga un modelo usando el campo de arriba</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error al cargar modelos:', error);
+        modelsList.innerHTML = `
+            <div class="no-models-message">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                <p>Error al cargar modelos</p>
+                <p style="font-size: 12px;">Asegurate de que Ollama este instalado y corriendo</p>
+            </div>
+        `;
+        showNotification('Error al cargar modelos de Ollama', 'error');
+    }
+}
+
+// Descargar un modelo de Ollama
+async function downloadOllamaModel() {
+    const modelInput = document.getElementById('downloadModel');
+    const modelName = modelInput.value.trim();
+    
+    if (!modelName) {
+        showNotification('Ingresa el nombre del modelo', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`http://127.0.0.1:8000/ollama/models/download?model_name=${encodeURIComponent(modelName)}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`Descarga de ${modelName} iniciada.`, 'info');
+            modelInput.value = ''; // Limpiar input
+            
+            // Mostrar contenedor de progreso
+            const progressContainer = document.getElementById('downloadProgress');
+            progressContainer.style.display = 'block';
+            
+            // Iniciar polling para este modelo
+            startDownloadPolling(modelName);
+        } else {
+            showNotification(`Error al descargar modelo: ${data.detail}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error al descargar modelo:', error);
+        showNotification('Error al iniciar descarga del modelo', 'error');
+    }
+}
+
+// Objeto para almacenar intervalos de polling activos
+const activePolling = {};
+const pollingStartTime = {};
+
+// Iniciar polling para un modelo
+function startDownloadPolling(modelName) {
+    // Si ya hay polling activo para este modelo, no crear otro
+    if (activePolling[modelName]) {
+        console.log(`[Polling] Ya existe polling activo para ${modelName}`);
+        return;
+    }
+    
+    // Agregar item de progreso al contenedor
+    addDownloadProgressItem(modelName);
+    
+    // Guardar tiempo de inicio
+    pollingStartTime[modelName] = Date.now();
+    
+    console.log(`[Polling] Iniciando polling para ${modelName}`);
+    
+    // Hacer polling cada 2 segundos
+    activePolling[modelName] = setInterval(async () => {
+        try {
+            // Timeout de 30 minutos (1800000ms)
+            const elapsed = Date.now() - pollingStartTime[modelName];
+            if (elapsed > 1800000) {
+                console.warn(`[Polling] Timeout alcanzado para ${modelName}, deteniendo polling`);
+                clearInterval(activePolling[modelName]);
+                delete activePolling[modelName];
+                delete pollingStartTime[modelName];
+                showNotification(`Timeout en descarga de ${modelName}`, 'error');
+                return;
+            }
+            
+            const response = await fetch(`http://127.0.0.1:8000/ollama/models/status/${encodeURIComponent(modelName)}`);
+            const data = await response.json();
+            
+            console.log(`[Polling] Estado de ${modelName}:`, data.status, `${data.progress}%`);
+            
+            if (data.found) {
+                updateDownloadProgress(modelName, data.status, data.progress, data.message);
+                
+                // Si la descarga termino (completed o failed), detener polling
+                if (data.status === 'completed' || data.status === 'failed') {
+                    console.log(`[Polling] Descarga finalizada para ${modelName}: ${data.status}`);
+                    clearInterval(activePolling[modelName]);
+                    delete activePolling[modelName];
+                    delete pollingStartTime[modelName];
+                    
+                    // Recargar lista de modelos despues de 2 segundos
+                    if (data.status === 'completed') {
+                        setTimeout(() => {
+                            loadOllamaModels();
+                            showNotification(`Modelo ${modelName} descargado exitosamente`, 'success');
+                            
+                            // Ocultar el item de progreso después de 3 segundos más
+                            setTimeout(() => {
+                                const itemId = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                                const item = document.getElementById(itemId);
+                                if (item) {
+                                    item.style.transition = 'opacity 0.5s';
+                                    item.style.opacity = '0';
+                                    setTimeout(() => item.remove(), 500);
+                                }
+                            }, 3000);
+                        }, 2000);
+                    } else if (data.status === 'failed') {
+                        showNotification(`Error al descargar ${modelName}: ${data.message}`, 'error');
+                    }
+                }
+            } else {
+                console.warn(`[Polling] No se encontró información para ${modelName}`);
+            }
+        } catch (error) {
+            console.error('[Polling] Error al obtener progreso:', error);
+        }
+    }, 2000);
+}
+
+// Agregar item de progreso
+function addDownloadProgressItem(modelName) {
+    const list = document.getElementById('downloadProgressList');
+    
+    const item = document.createElement('div');
+    item.className = 'download-progress-item';
+    item.id = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    item.innerHTML = `
+        <div class="download-progress-info">
+            <span class="download-model-name">${modelName}</span>
+            <span class="download-progress-percent">0%</span>
+        </div>
+        <div class="download-progress-bar">
+            <div class="download-progress-fill" style="width: 0%"></div>
+        </div>
+        <div class="download-progress-status">Iniciando descarga...</div>
+    `;
+    
+    list.appendChild(item);
+}
+
+// Actualizar progreso de descarga
+function updateDownloadProgress(modelName, status, progress, message) {
+    const itemId = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    const item = document.getElementById(itemId);
+    
+    if (!item) return;
+    
+    const fill = item.querySelector('.download-progress-fill');
+    const percent = item.querySelector('.download-progress-percent');
+    const statusText = item.querySelector('.download-progress-status');
+    
+    fill.style.width = `${progress}%`;
+    percent.textContent = `${progress}%`;
+    statusText.textContent = message || `Descargando... ${progress}%`;
+    
+    // Aplicar clases segun estado
+    item.className = 'download-progress-item';
+    if (status === 'completed') {
+        item.classList.add('completed');
+        statusText.textContent = 'Descarga completada';
+    } else if (status === 'failed') {
+        item.classList.add('failed');
+        statusText.textContent = message || 'Error en la descarga';
+    }
+}
+
+// Seleccionar un modelo para usar
+async function selectModel(modelName) {
+    try {
+        const response = await fetch('http://127.0.0.1:8000/model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_name: modelName })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`Modelo ${modelName} seleccionado`, 'success');
+            
+            // Actualizar selector de modelo en topbar
+            if (modelSelect) {
+                modelSelect.value = modelName;
+            }
+        } else {
+            showNotification(`Error al seleccionar modelo: ${data.detail}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error al seleccionar modelo:', error);
+        showNotification('Error al seleccionar modelo', 'error');
+    }
+}
+
+// Eliminar un modelo de Ollama
+async function deleteModel(modelName) {
+    if (!confirm(`¿Estas seguro de eliminar el modelo ${modelName}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`http://127.0.0.1:8000/ollama/models/${encodeURIComponent(modelName)}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`Modelo ${modelName} eliminado`, 'success');
+            loadOllamaModels(); // Recargar lista
+        } else {
+            showNotification(`Error al eliminar modelo: ${data.detail}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error al eliminar modelo:', error);
+        showNotification('Error al eliminar modelo', 'error');
+    }
+}
+
+// Exponer funciones globalmente para uso en HTML
+window.selectModel = selectModel;
+window.deleteModel = deleteModel;
+
 // Cargar el modelo actual
 async function loadCurrentModel() {
     try {
@@ -1452,10 +1792,24 @@ let currentMode = MODES.WORK;
  * @param {string} mode - Modo activo
  */
 function updateModeIndicator(mode) {
-    if (!modeIndicatorName) return;
+    console.log('[updateModeIndicator] Llamada con modo:', mode);
+    console.log('[updateModeIndicator] modeIndicatorName existe:', !!modeIndicatorName);
+    
+    if (!modeIndicatorName) {
+        console.warn('[updateModeIndicator] modeIndicatorName no está inicializado, buscando elemento...');
+        const indicator = document.getElementById('modeIndicator');
+        if (indicator) {
+            modeIndicatorName = indicator.querySelector('.mode-name');
+            console.log('[updateModeIndicator] Elemento encontrado manualmente');
+        } else {
+            console.error('[updateModeIndicator] No se pudo encontrar #modeIndicator en el DOM');
+            return;
+        }
+    }
     
     const modeName = MODE_NAMES[mode] || 'Work';
     modeIndicatorName.textContent = modeName;
+    console.log('[updateModeIndicator] Texto actualizado a:', modeName);
 }
 
 /**
@@ -1479,7 +1833,7 @@ async function setMode(mode) {
 
     // Guardar en base de datos
     try {
-        const response = await fetch('http://localhost:8000/settings/mode', {
+        const response = await fetch('http://127.0.0.1:8000/settings/mode', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1503,7 +1857,8 @@ async function setMode(mode) {
  */
 async function loadMode() {
     try {
-        const response = await fetch('http://localhost:8000/settings/mode');
+        console.log('[loadMode] Iniciando carga de modo...');
+        const response = await fetch('http://127.0.0.1:8000/settings/mode');
         
         if (!response.ok) {
             throw new Error('Error al cargar el modo');
@@ -1511,27 +1866,32 @@ async function loadMode() {
 
         const data = await response.json();
         const savedMode = data.mode || MODES.WORK;
+        
+        console.log('[loadMode] Modo recibido del backend:', savedMode);
 
         // Aplicar el modo guardado
         currentMode = savedMode;
         document.body.setAttribute('data-mode', savedMode);
+        console.log('[loadMode] Aplicado data-mode al body:', savedMode);
         
         // Actualizar indicador de modo en topbar
         updateModeIndicator(savedMode);
 
         // Marcar el boton activo en la UI
         const modeButtons = document.querySelectorAll('.mode-btn');
+        console.log('[loadMode] Botones de modo encontrados:', modeButtons.length);
         modeButtons.forEach(btn => {
             if (btn.dataset.mode === savedMode) {
                 btn.classList.add('active');
+                console.log('[loadMode] Boton marcado como activo:', btn.dataset.mode);
             } else {
                 btn.classList.remove('active');
             }
         });
 
-        console.log(`Modo cargado: ${savedMode}`);
+        console.log(`[loadMode] Modo cargado exitosamente: ${savedMode}`);
     } catch (error) {
-        console.error('Error al cargar modo:', error);
+        console.error('[loadMode] Error al cargar modo:', error);
         // Si falla, usar modo por defecto (work)
         document.body.setAttribute('data-mode', MODES.WORK);
         updateModeIndicator(MODES.WORK);
@@ -1555,10 +1915,7 @@ function getCurrentMode() {
     return currentMode;
 }
 
-// Cargar el modo al iniciar la aplicacion
-document.addEventListener('DOMContentLoaded', () => {
-    loadMode();
-});
+// Ya no es necesario el segundo DOMContentLoaded, loadMode() se llama en el primero
 
 // Exponer funciones globalmente para los botones HTML
 window.loadConversation = loadConversation;

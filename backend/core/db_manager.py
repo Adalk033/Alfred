@@ -162,6 +162,27 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_user_settings_key ON user_settings(setting_key);
     """)
 
+    # Tabla para historial de descargas de modelos de Ollama
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS model_downloads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        model_name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        progress INTEGER DEFAULT 0,
+        message TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_model_downloads_name ON model_downloads(model_name);
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_model_downloads_status ON model_downloads(status);
+    """)
+
     conn.commit()
     conn.close()
     db_logger.info("Base de datos inicializada correctamente")
@@ -1608,5 +1629,178 @@ def get_document_stats():
     finally:
         conn.close()
 
+
+# ====================================
+# FUNCIONES PARA GESTION DE MODELOS
+# ====================================
+
+def save_model_download_history(model_name: str, status: str, message: str = "", progress: int = 0):
+    """
+    Guardar registro de descarga/eliminacion de modelo en historial
+    
+    Args:
+        model_name: Nombre del modelo
+        status: Estado (downloading, completed, failed, deleted)
+        message: Mensaje adicional
+        progress: Progreso de descarga (0-100)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            INSERT INTO model_downloads (model_name, status, progress, message, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
+        """, (model_name, status, progress, message))
+        
+        conn.commit()
+        db_logger.info(f"Historial de modelo guardado: {model_name} - {status} - {progress}%")
+        
+    except Exception as e:
+        db_logger.error(f"Error al guardar historial de modelo: {str(e)}")
+        conn.rollback()
+        raise
+    
+    finally:
+        conn.close()
+
+
+def update_model_download_progress(model_name: str, progress: int, message: str = ""):
+    """
+    Actualizar progreso de descarga de un modelo
+    
+    Args:
+        model_name: Nombre del modelo
+        progress: Progreso (0-100)
+        message: Mensaje opcional
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Actualizar el ultimo registro de este modelo que este en estado downloading
+        cursor.execute("""
+            UPDATE model_downloads 
+            SET progress = ?, message = ?, updated_at = datetime('now')
+            WHERE model_name = ? 
+            AND status = 'downloading'
+            AND id = (
+                SELECT id FROM model_downloads 
+                WHERE model_name = ? AND status = 'downloading'
+                ORDER BY created_at DESC LIMIT 1
+            )
+        """, (progress, message, model_name, model_name))
+        
+        conn.commit()
+        
+    except Exception as e:
+        db_logger.error(f"Error al actualizar progreso: {str(e)}")
+        conn.rollback()
+    
+    finally:
+        conn.close()
+
+
+def get_model_download_history(limit: int = 50):
+    """
+    Obtener historial de descargas de modelos
+    
+    Args:
+        limit: Numero maximo de registros a retornar
+        
+    Returns:
+        Lista de diccionarios con el historial
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT 
+                id,
+                model_name,
+                status,
+                progress,
+                message,
+                created_at,
+                updated_at
+            FROM model_downloads
+            ORDER BY updated_at DESC
+            LIMIT ?
+        """, (limit,))
+        
+        rows = cursor.fetchall()
+        
+        return [
+            {
+                "id": row["id"],
+                "model_name": row["model_name"],
+                "status": row["status"],
+                "progress": row["progress"],
+                "message": row["message"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"]
+            }
+            for row in rows
+        ]
+        
+    except Exception as e:
+        db_logger.error(f"Error al obtener historial de modelos: {str(e)}")
+        return []
+    
+    finally:
+        conn.close()
+
+
+def get_model_download_status(model_name: str):
+    """
+    Obtener el ultimo estado de descarga de un modelo especifico
+    
+    Args:
+        model_name: Nombre del modelo
+        
+    Returns:
+        Diccionario con el estado o None si no existe
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT 
+                id,
+                model_name,
+                status,
+                progress,
+                message,
+                created_at,
+                updated_at
+            FROM model_downloads
+            WHERE model_name = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """, (model_name,))
+        
+        row = cursor.fetchone()
+        
+        if row:
+            return {
+                "id": row["id"],
+                "model_name": row["model_name"],
+                "status": row["status"],
+                "progress": row["progress"],
+                "message": row["message"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"]
+            }
+        
+        return None
+        
+    except Exception as e:
+        db_logger.error(f"Error al obtener estado de modelo: {str(e)}")
+        return None
+    
+    finally:
+        conn.close()
 
 
