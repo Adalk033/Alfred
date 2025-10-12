@@ -212,9 +212,9 @@
 
     <!-- Modal de configuración -->
     <div class="modal none" id="settingsModal">
-        <div class="modal-content">
+        <div class="modal-content settings-modal-content">
             <div class="modal-header">
-                <h2>Configuración</h2>
+                <h2>Configuracion</h2>
                 <button class="icon-button" id="closeSettings">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                         <path
@@ -222,84 +222,284 @@
                     </svg>
                 </button>
             </div>
-            <div class="modal-body">
-                <!-- Sección de foto de perfil -->
-                <div class="setting-group profile-section">
-                    <label>Foto de perfil</label>
-                    <div class="profile-picture-container">
-                        <div class="current-profile-picture" id="currentProfilePicture">
-                            <span class="default-avatar">👤</span>
+            <div class="settings-container">
+                <!-- Menu lateral de configuraciones -->
+                <div class="settings-sidebar">
+                    <nav class="settings-nav">
+                        <button class="settings-nav-item active" data-section="perfil">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span>Perfil</span>
+                        </button>
+                        <button class="settings-nav-item" data-section="modelos">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="8" y1="21" x2="16" y2="21"></line>
+                                <line x1="12" y1="17" x2="12" y2="21"></line>
+                            </svg>
+                            <span>Modelos</span>
+                        </button>
+                        <button class="settings-nav-item" data-section="personalizacion">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v6M12 18v4M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M18 12h4M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"></path>
+                            </svg>
+                            <span>Personalizacion</span>
+                        </button>
+                        <button class="settings-nav-item" data-section="aplicaciones">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                            <span>Aplicaciones</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Contenido de configuraciones -->
+                <div class="settings-content">
+                    <!-- Seccion Perfil -->
+                    <div class="settings-section active" data-section="perfil">
+                        <h3 class="section-title">Perfil</h3>
+                        
+                        <div class="setting-group profile-section">
+                            <label>Foto de perfil</label>
+                            <div class="profile-picture-container">
+                                <div class="current-profile-picture" id="currentProfilePicture">
+                                    <span class="default-avatar">👤</span>
+                                </div>
+                                <div class="profile-actions">
+                                    <button class="button secondary" id="changeProfilePictureBtn">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path
+                                                d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                                        </svg>
+                                        Cambiar foto
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Historial de fotos de perfil -->
+                            <div class="profile-history-section">
+                                <div class="profile-history-header">
+                                    <h4>Historial de fotos</h4>
+                                    <span class="profile-history-count" id="profileHistoryCount">0 fotos</span>
+                                </div>
+                                <div class="profile-history-gallery" id="profileHistoryGallery">
+                                    <div class="no-history-message">
+                                        No hay fotos en el historial
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="profile-actions">
-                            <button class="button secondary" id="changeProfilePictureBtn">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                    <path
-                                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
-                                </svg>
-                                Cambiar foto
-                            </button>
+
+                        <div class="setting-group">
+                            <label for="serverUrl">URL del servidor Alfred</label>
+                            <input type="text" id="serverUrl" value="http://127.0.0.1:8000" />
+                        </div>
+
+                        <div class="setting-group">
+                            <label>
+                                <input type="checkbox" id="autoSave" checked />
+                                Guardar conversaciones automaticamente
+                            </label>
+                        </div>
+                        <div class="setting-group">
+                            <label>
+                                <input type="checkbox" id="useHistory" checked />
+                                Buscar en historial primero
+                            </label>
+                        </div>
+                        <div class="setting-group">
+                            <label>
+                                <input type="checkbox" id="soundEnabled" />
+                                Habilitar sonidos
+                            </label>
                         </div>
                     </div>
 
-                    <!-- Historial de fotos de perfil -->
-                    <div class="profile-history-section">
-                        <div class="profile-history-header">
-                            <h4>Historial de fotos</h4>
-                            <span class="profile-history-count" id="profileHistoryCount">0 fotos</span>
+                    <!-- Seccion Modelos -->
+                    <div class="settings-section" data-section="modelos">
+                        <h3 class="section-title">Modelos</h3>
+
+                        <div class="setting-group">
+                            <label for="ollamaKeepAlive">Tiempo de inactividad de Ollama</label>
+                            <div class="keep-alive-controls">
+                                <input type="range" id="ollamaKeepAlive" min="0" max="1800" value="30" step="30" />
+                                <div class="keep-alive-display">
+                                    <span id="ollamaKeepAliveValue">30</span> segundos
+                                </div>
+                            </div>
+                            <p class="setting-description">
+                                Tiempo que Ollama mantiene el modelo en memoria despues de usarlo.
+                                Valores mas bajos liberan memoria mas rapido, valores mas altos mejoran la velocidad de
+                                respuesta.
+                            </p>
+                            <div class="keep-alive-presets">
+                                <button class="preset-btn" data-seconds="0">Inmediato (0s)</button>
+                                <button class="preset-btn" data-seconds="30">Rapido (30s)</button>
+                                <button class="preset-btn" data-seconds="300">Normal (5min)</button>
+                                <button class="preset-btn" data-seconds="1800">Largo (30min)</button>
+                            </div>
                         </div>
-                        <div class="profile-history-gallery" id="profileHistoryGallery">
-                            <div class="no-history-message">
-                                No hay fotos en el historial
+
+                        <div class="setting-group">
+                            <label for="downloadModel">Descargar modelo</label>
+                            <div class="download-model-controls">
+                                <input type="text" id="downloadModel" placeholder="Nombre del modelo (ej: llama2, mistral)" />
+                                <button class="button primary" id="downloadModelBtn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    Descargar
+                                </button>
+                            </div>
+                            <p class="setting-description">
+                                Ingresa el nombre del modelo de Ollama que deseas descargar.
+                            </p>
+                        </div>
+
+                        <div class="setting-group">
+                            <label for="modelTone">Tono del modelo</label>
+                            <select id="modelTone">
+                                <option value="profesional">Profesional</option>
+                                <option value="casual">Casual</option>
+                                <option value="tecnico">Tecnico</option>
+                                <option value="creativo">Creativo</option>
+                                <option value="amigable">Amigable</option>
+                            </select>
+                            <p class="setting-description">
+                                Define el estilo de comunicacion del asistente.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Seccion Personalizacion -->
+                    <div class="settings-section" data-section="personalizacion">
+                        <h3 class="section-title">Personalizacion</h3>
+
+                        <div class="setting-group">
+                            <label for="userName">Tu nombre</label>
+                            <input type="text" id="userName" placeholder="Como quieres que te llame?" />
+                        </div>
+
+                        <div class="setting-group">
+                            <label for="assistantName">Nombre del asistente</label>
+                            <input type="text" id="assistantName" placeholder="Alfred" value="Alfred" />
+                        </div>
+
+                        <div class="setting-group">
+                            <label for="customInstructions">Instrucciones personalizadas</label>
+                            <textarea id="customInstructions" rows="4" placeholder="Instrucciones especificas para el asistente..."></textarea>
+                            <p class="setting-description">
+                                Instrucciones que el asistente seguira en todas las conversaciones.
+                            </p>
+                        </div>
+
+                        <div class="setting-group">
+                            <label for="userOccupation">Ocupacion</label>
+                            <input type="text" id="userOccupation" placeholder="Desarrollador, Diseñador, Estudiante..." />
+                        </div>
+
+                        <div class="setting-group">
+                            <label for="aboutUser">Acerca de ti</label>
+                            <textarea id="aboutUser" rows="3" placeholder="Cuentale al asistente sobre ti, tus intereses, objetivos..."></textarea>
+                            <p class="setting-description">
+                                Esta informacion ayudara al asistente a personalizar sus respuestas.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Seccion Aplicaciones -->
+                    <div class="settings-section" data-section="aplicaciones">
+                        <h3 class="section-title">Aplicaciones conectadas</h3>
+                        <p class="section-description">Conecta tus aplicaciones favoritas para extender las capacidades de Alfred.</p>
+
+                        <div class="apps-grid">
+                            <div class="app-card">
+                                <div class="app-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-info">
+                                    <h4>Google Calendar</h4>
+                                    <p>Gestiona tu agenda y eventos</p>
+                                </div>
+                                <button class="button secondary app-connect-btn">Conectar</button>
+                            </div>
+
+                            <div class="app-card">
+                                <div class="app-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-info">
+                                    <h4>Tidal</h4>
+                                    <p>Control de musica y playlists</p>
+                                </div>
+                                <button class="button secondary app-connect-btn">Conectar</button>
+                            </div>
+
+                            <div class="app-card">
+                                <div class="app-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 7h14v2H5zm0 4h14v2H5zm0 4h7v2H5z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-info">
+                                    <h4>Notion</h4>
+                                    <p>Sincroniza tus notas y tareas</p>
+                                </div>
+                                <button class="button secondary app-connect-btn">Conectar</button>
+                            </div>
+
+                            <div class="app-card">
+                                <div class="app-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-info">
+                                    <h4>Gmail</h4>
+                                    <p>Gestiona tu correo electronico</p>
+                                </div>
+                                <button class="button secondary app-connect-btn">Conectar</button>
+                            </div>
+
+                            <div class="app-card">
+                                <div class="app-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-info">
+                                    <h4>Trello</h4>
+                                    <p>Organiza tus proyectos</p>
+                                </div>
+                                <button class="button secondary app-connect-btn">Conectar</button>
+                            </div>
+
+                            <div class="app-card">
+                                <div class="app-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-info">
+                                    <h4>Slack</h4>
+                                    <p>Integracion con tu equipo</p>
+                                </div>
+                                <button class="button secondary app-connect-btn">Conectar</button>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Configuraciones existentes -->
-                <div class="setting-group">
-                    <label for="serverUrl">URL del servidor Alfred</label>
-                    <input type="text" id="serverUrl" value="http://127.0.0.1:8000" />
-                </div>
-
-                <!-- Configuracion de Ollama Keep Alive -->
-                <div class="setting-group">
-                    <label for="ollamaKeepAlive">Tiempo de inactividad de Ollama</label>
-                    <div class="keep-alive-controls">
-                        <input type="range" id="ollamaKeepAlive" min="0" max="1800" value="30" step="30" />
-                        <div class="keep-alive-display">
-                            <span id="ollamaKeepAliveValue">30</span> segundos
-                        </div>
-                    </div>
-                    <p class="setting-description">
-                        Tiempo que Ollama mantiene el modelo en memoria despues de usarlo.
-                        Valores mas bajos liberan memoria mas rapido, valores mas altos mejoran la velocidad de
-                        respuesta.
-                    </p>
-                    <div class="keep-alive-presets">
-                        <button class="preset-btn" data-seconds="0">Inmediato (0s)</button>
-                        <button class="preset-btn" data-seconds="30">Rapido (30s)</button>
-                        <button class="preset-btn" data-seconds="300">Normal (5min)</button>
-                        <button class="preset-btn" data-seconds="1800">Largo (30min)</button>
-                    </div>
-                </div>
-
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="autoSave" checked />
-                        Guardar conversaciones automaticamente
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="useHistory" checked />
-                        Buscar en historial primero
-                    </label>
-                </div>
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="soundEnabled" />
-                        Habilitar sonidos
-                    </label>
                 </div>
             </div>
             <div class="modal-footer">

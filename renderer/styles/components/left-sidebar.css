@@ -257,7 +257,7 @@
     border-radius: 8px;
     color: var(--text-secondary);
     cursor: pointer;
-    transition: var(--transition);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-size: 14px;
     font-weight: 500;
     text-align: left;
@@ -266,17 +266,29 @@
 }
 
 .nav-item:hover {
-    background-color: var(--bg-tertiary);
-    color: var(--text-primary);
+    background: var(--mode-primary-transparent);
+    color: var(--mode-primary);
+    transform: translateX(4px);
+}
+
+.nav-item:hover svg {
+    color: var(--mode-primary);
 }
 
 .nav-item:active {
-    transform: scale(0.98);
+    transform: scale(0.98) translateX(4px);
 }
 
 .nav-item.active {
-    background-color: var(--primary-color);
-    color: white;
+    background: var(--mode-primary-transparent);
+    color: var(--mode-primary);
+    border-left: 3px solid var(--mode-primary);
+    padding-left: 13px;
+    font-weight: 600;
+}
+
+.nav-item.active svg {
+    color: var(--mode-primary);
 }
 
 .nav-item svg {

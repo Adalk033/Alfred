@@ -201,6 +201,29 @@ function setupEventListeners() {
     cancelSettings.addEventListener('click', () => settingsModal.classList.add('none'));
     saveSettings.addEventListener('click', saveSettingsHandler);
 
+    // Event listeners para navegacion de configuraciones
+    const settingsNavItems = document.querySelectorAll('.settings-nav-item');
+    const settingsSections = document.querySelectorAll('.settings-section');
+    
+    settingsNavItems.forEach(navItem => {
+        navItem.addEventListener('click', () => {
+            const sectionName = navItem.dataset.section;
+            
+            // Cambiar item activo en el menu
+            settingsNavItems.forEach(item => item.classList.remove('active'));
+            navItem.classList.add('active');
+            
+            // Mostrar seccion correspondiente
+            settingsSections.forEach(section => {
+                if (section.dataset.section === sectionName) {
+                    section.classList.add('active');
+                } else {
+                    section.classList.remove('active');
+                }
+            });
+        });
+    });
+
     // Event listener para cambio de modelo
     modelSelect.addEventListener('change', changeModel);
 
