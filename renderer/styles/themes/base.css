@@ -1,0 +1,59 @@
+/* styles.css - Estilos modernos para Alfred Electron */
+:root {
+    /* Colores */
+    --primary-color: #4a9eff;
+    --primary-hover: #3a8eef;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --green-dot-status: #34c759;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+
+    --text-primary: #FAFAFA;
+    --text-secondary: #b0b0b0;
+    --border-color: #262626;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --message-user-bg: #4a9eff;
+    --message-assistant-bg: #2d2d2d;
+    --transition: all 0.3s ease;
+
+    /* Background colors DARK */
+    --bg-primary: #000000;
+    --bg-secondary: #000000;
+    --bg-tertiary: #2d2d2d;
+    --bg-hover: #333333;
+
+    /* Mode WORK */
+    --mode-work-base: #00B8DB;
+    --mode-text-color: #00B8DB;
+
+    /* Mode FOCUS */
+    --mode-focus-base: #6C63FF;
+
+    /* Mode REST */
+    --mode-rest-base: #FF6584;
+
+    /*  Mode Entertainment */
+    --mode-entertainment-base: #FF9F1C;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+
+.mode {
+    color: var(--mode-text-color);
+}

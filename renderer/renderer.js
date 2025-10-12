@@ -28,7 +28,13 @@ window.alfredAPI.onBackendStatus((data) => {
 let historyBtn;
 let statsBtn;
 let settingsBtn;
-let closeSidebar;
+let menuToggle;
+let leftSidebar;
+let leftSidebarContent;
+let newChatBtn;
+let conversationsBtn;
+let profilePictureTopbar;
+let activeNavItem = null;
 
 // Botones de modo de busqueda
 let searchDocsBtn;
@@ -61,16 +67,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         sendBtn: document.getElementById('sendBtn'),
         typingIndicator: document.getElementById('typingIndicator'),
         statusElement: document.getElementById('status'),
-        sidebar: document.getElementById('sidebar'),
-        sidebarTitle: document.getElementById('sidebarTitle'),
-        sidebarContent: document.getElementById('sidebarContent')
+        sidebar: document.getElementById('leftSidebarContent'), // Ahora usamos el contenedor del sidebar izquierdo
+        sidebarTitle: null, // Ya no necesitamos titulo separado
+        sidebarContent: document.getElementById('leftSidebarContent')
     });
 
     // Inicializar elementos locales
     historyBtn = document.getElementById('historyBtn');
     statsBtn = document.getElementById('statsBtn');
     settingsBtn = document.getElementById('settingsBtn');
-    closeSidebar = document.getElementById('closeSidebar');
     searchDocsBtn = document.getElementById('searchDocsBtn');
     promptOnlyBtn = document.getElementById('promptOnlyBtn');
     modelSelect = document.getElementById('modelSelect');
@@ -85,6 +90,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     ollamaKeepAliveSlider = document.getElementById('ollamaKeepAlive');
     ollamaKeepAliveValue = document.getElementById('ollamaKeepAliveValue');
     ollamaKeepAlivePresets = document.querySelectorAll('.preset-btn');
+    
+    // Elementos del sidebar izquierdo
+    menuToggle = document.getElementById('menuToggle');
+    leftSidebar = document.getElementById('leftSidebar');
+    leftSidebarContent = document.getElementById('leftSidebarContent');
+    newChatBtn = document.getElementById('newChatBtn');
+    conversationsBtn = document.getElementById('conversationsBtn');
+    profilePictureTopbar = document.getElementById('profilePictureTopbar');
 
     // Esperar a que el backend este listo antes de habilitar el chat
     await waitForBackendReady();
@@ -130,16 +143,36 @@ function setupEventListeners() {
         searchDocsBtn.classList.remove('active');
     });
 
-    historyBtn.addEventListener('click', showHistory);
-    statsBtn.addEventListener('click', showStats);
-    settingsBtn.addEventListener('click', () => settingsModal.classList.remove('none'));
-    closeSidebar.addEventListener('click', () => State.sidebar.classList.add('none'));
+    historyBtn.addEventListener('click', () => {
+        showHistory();
+        closeSidebarOnMobile();
+    });
+    statsBtn.addEventListener('click', () => {
+        showStats();
+        closeSidebarOnMobile();
+    });
+    settingsBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('none');
+        closeSidebarOnMobile();
+    });
 
-    // Event listener para conversaciones
-    const conversationsBtn = document.getElementById('conversationsBtn');
-    if (conversationsBtn) {
-        conversationsBtn.addEventListener('click', showConversations);
-    }
+    // Event listeners del sidebar izquierdo
+    menuToggle.addEventListener('click', toggleLeftSidebar);
+    newChatBtn.addEventListener('click', () => {
+        window.createNewConversation();
+        hideLeftSidebarContent();
+        setActiveNavItem(null);
+        closeSidebarOnMobile();
+    });
+    conversationsBtn.addEventListener('click', () => {
+        showConversations();
+        closeSidebarOnMobile();
+    });
+    
+    // Event listener para foto de perfil en el topbar
+    profilePictureTopbar.addEventListener('click', () => {
+        settingsModal.classList.remove('none');
+    });
 
     closeSettings.addEventListener('click', () => settingsModal.classList.add('none'));
     cancelSettings.addEventListener('click', () => settingsModal.classList.add('none'));
@@ -608,22 +641,70 @@ async function saveConversation(question, answer, metadata) {
     return result;
 }
 
+// Toggle del sidebar izquierdo
+function toggleLeftSidebar() {
+    if (leftSidebar) {
+        leftSidebar.classList.toggle('collapsed');
+        
+        // Rotar el icono del menu
+        if (menuToggle) {
+            menuToggle.classList.toggle('active');
+        }
+    }
+}
+
+// Cerrar sidebar en mobile cuando se hace clic en una opcion
+function closeSidebarOnMobile() {
+    if (window.innerWidth <= 768 && leftSidebar) {
+        leftSidebar.classList.add('collapsed');
+    }
+}
+
+// Mostrar contenido en el sidebar izquierdo
+function showLeftSidebarContent() {
+    if (leftSidebarContent) {
+        leftSidebarContent.classList.add('active');
+    }
+}
+
+// Ocultar contenido del sidebar izquierdo
+function hideLeftSidebarContent() {
+    if (leftSidebarContent) {
+        leftSidebarContent.classList.remove('active');
+    }
+}
+
+// Marcar item de navegacion como activo
+function setActiveNavItem(button) {
+    // Remover clase activa de todos los botones
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Agregar clase activa al boton actual
+    if (button) {
+        button.classList.add('active');
+        activeNavItem = button;
+    }
+}
+
 // Mostrar historial
 async function showHistory() {
-
-    if (checkSidebar()) {
-        State.sidebar.classList.add('none');
+    // Si ya esta activo, ocultarlo
+    if (activeNavItem === historyBtn && leftSidebarContent.classList.contains('active')) {
+        hideLeftSidebarContent();
+        setActiveNavItem(null);
         return;
     }
+
     try {
         const result = await window.alfredAPI.getHistory(20);
 
         if (result.success) {
-            State.sidebarTitle.textContent = 'Historial Preguntas rapidas';
-            State.sidebarContent.innerHTML = '';
+            State.sidebarContent.innerHTML = '<h4 style="margin-bottom: 16px; color: var(--text-primary);">Historial Preguntas rapidas</h4>';
 
             if (result.data.length === 0) {
-                State.sidebarContent.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No hay conversaciones guardadas</p>';
+                State.sidebarContent.innerHTML += '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No hay conversaciones guardadas</p>';
             } else {
                 result.data.forEach(item => {
                     const historyItem = document.createElement('div');
@@ -669,7 +750,8 @@ async function showHistory() {
                 });
             }
 
-            State.sidebar.classList.remove('none');
+            showLeftSidebarContent();
+            setActiveNavItem(historyBtn);
         }
     } catch (error) {
         showNotification('Error al cargar el historial', 'error');
@@ -709,19 +791,17 @@ function loadHistoryItem(item) {
         sources: item.sources || []
     });
 
-    // Cerrar el sidebar usando la clase 'none' (consistente con el resto del codigo)
-    State.sidebar.classList.add('none');
-}
-
-function checkSidebar() {
-    if (State.sidebar.classList.contains('none')) { return false; }
-    return true;
+    // Ocultar el contenido del sidebar al cargar un item
+    hideLeftSidebarContent();
+    setActiveNavItem(null);
 }
 
 // Mostrar estadísticas
-async function showStats(changeVisibility = true) {
-    if (checkSidebar() && changeVisibility) {
-        sidebar.classList.add('none');
+async function showStats() {
+    // Si ya esta activo, ocultarlo
+    if (activeNavItem === statsBtn && leftSidebarContent.classList.contains('active')) {
+        hideLeftSidebarContent();
+        setActiveNavItem(null);
         return;
     }
 
@@ -731,8 +811,8 @@ async function showStats(changeVisibility = true) {
         if (result.success) {
             const stats = result.data;
 
-            State.sidebarTitle.textContent = 'Estadisticas del sistema';
             State.sidebarContent.innerHTML = `
+                <h4 style="margin-bottom: 16px; color: var(--text-primary);">Estadisticas del sistema</h4>
                 <div class="stat-card">
                     <div class="stat-label">👤 Usuario</div>
                     <div class="stat-value">${stats.user_name || 'N/A'}</div>
@@ -759,7 +839,8 @@ async function showStats(changeVisibility = true) {
                 </div>
             `;
 
-            State.sidebar.classList.remove('none');
+            showLeftSidebarContent();
+            setActiveNavItem(statsBtn);
         }
     } catch (error) {
         showNotification('Error al cargar las estadisticas', 'error');
@@ -769,19 +850,21 @@ async function showStats(changeVisibility = true) {
 
 // Mostrar conversaciones
 async function showConversations() {
-    if (checkSidebar()) {
-        State.sidebar.classList.add('none');
+    // Si ya esta activo, ocultarlo
+    if (activeNavItem === conversationsBtn && leftSidebarContent.classList.contains('active')) {
+        hideLeftSidebarContent();
+        setActiveNavItem(null);
         return;
     }
 
     try {
         await loadConversations();
 
-        State.sidebarTitle.textContent = 'Conversaciones';
-        State.sidebarContent.innerHTML = '<div id="conversationsList" class="conversations-list"></div>';
+        State.sidebarContent.innerHTML = '<h4 style="margin-bottom: 16px; color: var(--text-primary);">Conversaciones</h4><div id="conversationsList" class="conversations-list"></div>';
 
         updateConversationsList();
-        State.sidebar.classList.remove('none');
+        showLeftSidebarContent();
+        setActiveNavItem(conversationsBtn);
     } catch (error) {
         showNotification('error', 'Error al cargar conversaciones');
         console.error('Error:', error);
@@ -934,7 +1017,10 @@ async function changeModel() {
 
             // Agregar mensaje informativo en el chat
             addMessage(`🔄 Modelo cambiado a ${newModel}`, 'system');
-            if (checkSidebar()) { showStats(false); }
+            // Actualizar estadisticas si estan activas
+            if (activeNavItem === statsBtn && leftSidebarContent.classList.contains('active')) {
+                showStats();
+            }
         } else {
             showNotification('Error al cambiar el modelo', 'error');
             // Revertir al modelo anterior
@@ -1068,11 +1154,21 @@ async function loadProfilePicture() {
 
 // Actualizar visualización de foto de perfil
 function updateProfilePictureDisplay(imageDataUrl) {
+    // Actualizar en modal de configuracion
     currentProfilePicture.innerHTML = '';
     const img = document.createElement('img');
     img.src = imageDataUrl;
     img.alt = 'Foto de perfil';
     currentProfilePicture.appendChild(img);
+    
+    // Actualizar en topbar
+    if (profilePictureTopbar) {
+        profilePictureTopbar.innerHTML = '';
+        const imgTopbar = document.createElement('img');
+        imgTopbar.src = imageDataUrl;
+        imgTopbar.alt = 'Foto de perfil';
+        profilePictureTopbar.appendChild(imgTopbar);
+    }
 }
 
 // Cambiar foto de perfil

@@ -1,14 +1,14 @@
 
 /* Área de mensajes */
 .messages {
-    flex: 1 1 auto;
+    flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    min-height: 0; /* Crucial para flexbox */
+    min-height: 0;
 }
 
 .messages::-webkit-scrollbar {
@@ -17,15 +17,23 @@
 
 .messages::-webkit-scrollbar-track {
     background: var(--bg-secondary);
-}
-
-.messages::-webkit-scrollbar-thumb {
-    background: var(--bg-tertiary);
     border-radius: 4px;
 }
 
-.messages::-webkit-scrollbar-thumb:hover {
+.messages::-webkit-scrollbar-thumb {
     background: var(--border-color);
+    border-radius: 4px;
+    transition: var(--transition);
+}
+
+.messages::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) var(--bg-secondary);
 }
 
 /* Mensaje de bienvenida */

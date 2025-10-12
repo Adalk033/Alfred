@@ -26,6 +26,11 @@
     <!-- Barra superior -->
     <div class="topbar">
         <div class="topbar-left">
+            <button class="icon-button menu-toggle" id="menuToggle" title="Menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 12h18M3 6h18M3 18h18" />
+                </svg>
+            </button>
             <div class="logo">
                 <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
                     <circle cx="16" cy="16" r="14" fill="#4a9eff" opacity="0.2" />
@@ -33,26 +38,12 @@
                     <circle cx="16" cy="18" r="3" fill="#4a9eff" />
                     <path d="M16 21V26" stroke="#4a9eff" stroke-width="2" />
                 </svg>
-                <h1>Alfred</h1>
+                <h1>IA Assistant | <span>Alfred</span></h1>
             </div>
-            <div class="status" id="status">
-                <span class="status-dot"></span>
-                <span class="status-text">Conectando...</span>
-            </div>
+            <div class="mode">Work</div>
         </div>
         <div class="topbar-right">
-            <button class="icon-button" onclick="window.createNewConversation()" title="Nueva conversacion">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 5v14M5 12h14" />
-                </svg>
-            </button>
-            <button class="icon-button" id="conversationsBtn" title="Ver conversaciones">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
-                </svg>
-            </button>
             <div class="model-selector">
-                <label for="modelSelect">Modelo:</label>
                 <select id="modelSelect" class="model-select">
                     <option value="gemma3:4b">Gemma3 4B</option>
                     <option value="gemma3n:e4b">Gemma3n e4B</option>
@@ -60,6 +51,18 @@
                     <option value="gemma3:12b">Gemma3 12B</option>
                     <option value="gpt-oss:20b">GPT-OSS 20B</option>
                     <option value="gemma2:9b">Gemma2 9B</option>
+                </select>
+            </div>
+            <div class="status" id="status">
+                <span class="status-dot"></span>
+                <span class="status-text">Conectando...</span>
+            </div>
+            <div class="mode-selector">
+                <select id="modeSelect" class="mode-select">
+                    <option value="work">Work</option>
+                    <option value="personal">Personal</option>
+                    <option value="creative">Creative</option>
+                    <option value="focus">Focus</option>
                 </select>
             </div>
             <button class="icon-button" onclick="stopOllama()" title="Detener Ollama (liberar recursos)">
@@ -73,25 +76,58 @@
                     <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
                 </svg>
             </button>
-            <button class="icon-button" id="historyBtn" title="Ver historial">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                        d="M10 3a7 7 0 100 14 7 7 0 000-14zm0 12a5 5 0 110-10 5 5 0 010 10zm1-8H9v4l3.5 2.1.7-1.2-2.2-1.3V7z" />
-                </svg>
-            </button>
-            <button class="icon-button" id="statsBtn" title="Estadísticas">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M3 17h14v-2H3v2zm0-4h14v-2H3v2zm0-6v2h14V7H3z" />
-                </svg>
-            </button>
-            <button class="icon-button" id="settingsBtn" title="Configuración">
-                <img src="../assets/cogwheel.png" alt="" width="20" height="20">
-            </button>
+            <div class="profile-picture-topbar" id="profilePictureTopbar" title="Perfil">
+                <span class="default-avatar">👤</span>
+            </div>
         </div>
     </div>
 
     <!-- Contenedor principal -->
     <div class="container">
+        <!-- Sidebar izquierdo (menu) -->
+        <div class="left-sidebar" id="leftSidebar">
+            <div class="left-sidebar-header">
+                <h3>Menu</h3>
+            </div>
+            <nav class="left-sidebar-nav">
+                <button class="nav-item" id="newChatBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    <span>Nueva conversacion</span>
+                </button>
+                <button class="nav-item" id="conversationsBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+                    </svg>
+                    <span>Conversaciones</span>
+                </button>
+                <button class="nav-item" id="historyBtn">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 3a7 7 0 100 14 7 7 0 000-14zm0 12a5 5 0 110-10 5 5 0 010 10zm1-8H9v4l3.5 2.1.7-1.2-2.2-1.3V7z" />
+                    </svg>
+                    <span>Historial</span>
+                </button>
+                <button class="nav-item" id="statsBtn">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M3 17h14v-2H3v2zm0-4h14v-2H3v2zm0-6v2h14V7H3z" />
+                    </svg>
+                    <span>Estadisticas</span>
+                </button>
+                <button class="nav-item" id="settingsBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
+                    </svg>
+                    <span>Configuracion</span>
+                </button>
+            </nav>
+            
+            <!-- Contenido dinamico del sidebar -->
+            <div class="left-sidebar-content" id="leftSidebarContent">
+                <!-- Aqui se mostrara el contenido de conversaciones, historial o estadisticas -->
+            </div>
+        </div>
+
         <!-- Área de chat -->
         <div class="chat-container">
             <div class="messages" id="messages">
@@ -136,22 +172,6 @@
                         </svg>
                     </button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Panel lateral (oculto por defecto) -->
-        <div class="sidebar none" id="sidebar">
-            <div class="sidebar-header">
-                <h3 id="sidebarTitle">Panel</h3>
-                <button class="icon-button" id="closeSidebar">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                        <path
-                            d="M15.898 4.045c-.269-.27-.706-.27-.975 0l-4.923 4.923-4.923-4.923c-.27-.27-.706-.27-.975 0s-.27.706 0 .975l4.923 4.923-4.923 4.923c-.27.27-.27.706 0 .975.135.135.312.203.488.203s.353-.068.488-.203l4.923-4.923 4.923 4.923c.135.135.312.203.488.203s.353-.068.488-.203c.27-.269.27-.706 0-.975l-4.923-4.923 4.923-4.923c.27-.269.27-.706 0-.975z" />
-                    </svg>
-                </button>
-            </div>
-            <div class="sidebar-content" id="sidebarContent">
-                <!-- El contenido se llenará dinámicamente -->
             </div>
         </div>
     </div>
@@ -206,7 +226,7 @@
                     <label for="serverUrl">URL del servidor Alfred</label>
                     <input type="text" id="serverUrl" value="http://127.0.0.1:8000" />
                 </div>
-                
+
                 <!-- Configuracion de Ollama Keep Alive -->
                 <div class="setting-group">
                     <label for="ollamaKeepAlive">Tiempo de inactividad de Ollama</label>
@@ -217,8 +237,9 @@
                         </div>
                     </div>
                     <p class="setting-description">
-                        Tiempo que Ollama mantiene el modelo en memoria despues de usarlo. 
-                        Valores mas bajos liberan memoria mas rapido, valores mas altos mejoran la velocidad de respuesta.
+                        Tiempo que Ollama mantiene el modelo en memoria despues de usarlo.
+                        Valores mas bajos liberan memoria mas rapido, valores mas altos mejoran la velocidad de
+                        respuesta.
                     </p>
                     <div class="keep-alive-presets">
                         <button class="preset-btn" data-seconds="0">Inmediato (0s)</button>
@@ -227,7 +248,7 @@
                         <button class="preset-btn" data-seconds="1800">Largo (30min)</button>
                     </div>
                 </div>
-                
+
                 <div class="setting-group">
                     <label>
                         <input type="checkbox" id="autoSave" checked />

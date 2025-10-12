@@ -7,6 +7,9 @@
     justify-content: space-between;
     align-items: center;
     -webkit-app-region: drag;
+    flex-shrink: 0;
+    min-height: 64px;
+    z-index: 200;
 }
 
 .topbar-left,
@@ -26,8 +29,61 @@
 .logo h1 {
     font-size: 18px;
     font-weight: 600;
-    color: var(--primary-color);
 }
+
+/* Selector de modelo */
+.model-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.model-selector label {
+    font-weight: 500;
+}
+
+.model-select {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: var(--transition);
+    outline: none;
+}
+
+.model-select:hover {
+    border-color: var(--primary-color);
+}
+
+.model-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.model-select option {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.mode-select {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: var(--transition);
+    outline: none;
+}
+
 
 .status {
     display: flex;
@@ -35,13 +91,16 @@
     gap: 8px;
     font-size: 13px;
     color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+    padding: 8px 12px;
+    border-radius: 8px;
 }
 
 .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background-color: var(--secondary-color);
+    background-color: var(--green-dot-status);
     animation: pulse 2s infinite;
 }
 
