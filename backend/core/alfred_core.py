@@ -540,13 +540,17 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         question: str,
         conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
-        """Generar respuesta sin buscar documentos"""
+        """Generar respuesta sin buscar documentos - flujo unificado con templates"""
         current_datetime = get_current_datetime_spanish()
         
         # Obtener toda la personalizacion del usuario
         personalization = get_user_personalization()
         
-        prompt_template = config.PROMPT_TEMPLATE_NO_DOCUMENTS.replace("{USER_NAME}", personalization['user_name'])
+        # Usar template sin documentos para todos los modelos
+        prompt_template = config.PROMPT_TEMPLATE_NO_DOCUMENTS
+        
+        # Reemplazar placeholders de personalizacion
+        prompt_template = prompt_template.replace("{USER_NAME}", personalization['user_name'])
         prompt_template = prompt_template.replace("{USER_AGE}", str(personalization['user_age']))
         prompt_template = prompt_template.replace("{ASSISTANT_NAME}", personalization['assistant_name'])
         prompt_template = prompt_template.replace("{CUSTOM_INSTRUCTIONS}", personalization['custom_instructions'])
@@ -554,25 +558,33 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         prompt_template = prompt_template.replace("{ABOUT_USER}", personalization['about_user'])
         prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
         
-        # Construir contexto con historial
-        context_parts = []
+        # Construir historial de conversacion
+        conversation_history_text = ""
         if conversation_history and len(conversation_history) > 0:
-            context_parts.append("Previous messages in this conversation:")
+            history_parts = ["Previous messages in this conversation:"]
             for msg in conversation_history[-30:]:
                 role = "User" if msg["role"] == "user" else "Alfred"
-                context_parts.append(f"{role}: {msg['content']}")
+                history_parts.append(f"{role}: {msg['content']}")
+            conversation_history_text = "\n".join(history_parts)
         else:
-            context_parts.append("No previous conversation history.")
+            conversation_history_text = "No previous conversation history."
         
-        context_text = "\n".join(context_parts)
-        final_prompt = prompt_template.replace("{context}", context_text)
-        final_prompt = final_prompt.replace("{input}", question)
+        # Reemplazar historial de conversacion
+        prompt_template = prompt_template.replace("{conversation_history}", conversation_history_text)
+        
+        # Crear ChatPromptTemplate (mismo flujo que con documentos)
+        prompt = ChatPromptTemplate.from_template(prompt_template)
         
         try:
-            # Invocar LLM de forma asincrona
+            # Invocar LLM con template de LangChain (flujo unificado)
             answer = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.llm.invoke(final_prompt)
+                lambda: self.llm.invoke(
+                    prompt.format(
+                        input=question,
+                        context=""  # Sin contexto de documentos
+                    )
+                )
             )
             
             return {
@@ -651,26 +663,7 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
             context_string = context_string[:max_context_chars] + "\n\n[...contexto truncado por longitud...]"
             logger.info(f"Contexto truncado a {max_context_chars} caracteres")
         
-        # 3. Generar prompt
-        current_datetime = get_current_datetime_spanish()
-        
-        # Obtener toda la personalizacion del usuario
-        personalization = get_user_personalization()
-        
-        if self.model_name in ["gpt-oss:20b"]:
-            prompt_template = config.PROMPT_TEMPLATE_GPT_ONLY.replace("{USER_NAME}", personalization['user_name'])
-            prompt_template = prompt_template.replace("{USER_AGE}", str(personalization['user_age']))
-        else:
-            prompt_template = config.PROMPT_TEMPLATE_WITH_DOCUMENTS.replace("{USER_NAME}", personalization['user_name'])
-            prompt_template = prompt_template.replace("{USER_AGE}", str(personalization['user_age']))
-        
-        prompt_template = prompt_template.replace("{ASSISTANT_NAME}", personalization['assistant_name'])
-        prompt_template = prompt_template.replace("{CUSTOM_INSTRUCTIONS}", personalization['custom_instructions'])
-        prompt_template = prompt_template.replace("{USER_OCCUPATION}", personalization['user_occupation'])
-        prompt_template = prompt_template.replace("{ABOUT_USER}", personalization['about_user'])
-        prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
-        
-        # Agregar historial de conversacion
+        # 3. Construir historial de conversacion
         conversation_history_text = ""
         if conversation_history and len(conversation_history) > 0:
             history_parts = ["Previous messages in this conversation:"]
@@ -681,19 +674,38 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         else:
             conversation_history_text = "No previous conversation history."
         
-        prompt_template = prompt_template.replace("{conversation_history}", conversation_history_text)
+        # Combinar historial de conversacion + contexto de documentos en un solo string
+        combined_context = f"{conversation_history_text}\n\n--- DOCUMENT FRAGMENTS ---\n{context_string}"
         
-        # 4. Crear prompt con context_string formateado
+        # 4. Generar prompt
+        current_datetime = get_current_datetime_spanish()
+        
+        # Obtener toda la personalizacion del usuario
+        personalization = get_user_personalization()
+        
+        # Usar template con documentos para todos los modelos
+        prompt_template = config.PROMPT_TEMPLATE_WITH_DOCUMENTS
+        
+        # Reemplazar placeholders de personalizacion
+        prompt_template = prompt_template.replace("{USER_NAME}", personalization['user_name'])
+        prompt_template = prompt_template.replace("{USER_AGE}", str(personalization['user_age']))
+        prompt_template = prompt_template.replace("{ASSISTANT_NAME}", personalization['assistant_name'])
+        prompt_template = prompt_template.replace("{CUSTOM_INSTRUCTIONS}", personalization['custom_instructions'])
+        prompt_template = prompt_template.replace("{USER_OCCUPATION}", personalization['user_occupation'])
+        prompt_template = prompt_template.replace("{ABOUT_USER}", personalization['about_user'])
+        prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
+        
+        # 5. Crear prompt con ChatPromptTemplate (flujo unificado)
         prompt = ChatPromptTemplate.from_template(prompt_template)
         
-        # 5. Generar respuesta usando el context_string formateado
+        # 6. Generar respuesta usando el contexto combinado
         try:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: self.llm.invoke(
                     prompt.format(
                         input=question,
-                        context=context_string
+                        context=combined_context  # Historial + documentos juntos
                     )
                 )
             )

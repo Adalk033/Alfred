@@ -1681,7 +1681,7 @@ function stopOllama() {
 // Función auxiliar para actualizar estado de conexión
 function updateConnectionStatus(connected) {
     if (connected) {
-        updateStatus('connected', 'Conectado', State.statusElement, State.statusElement);
+        updateStatus('connected', 'Conectado', State.statusElement);
     } else {
         updateStatus('error', 'Desconectado', State.statusElement);
     }

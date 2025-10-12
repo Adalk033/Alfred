@@ -54,6 +54,8 @@ function createWindow() {
         mainWindow.show();
         // Verificar/iniciar backend después de mostrar la ventana
         checkAndStartBackend();
+        // Iniciar monitoreo del estado del backend
+        startStatusMonitoring();
     });
 
     // Manejar recarga de la página (Ctrl+R)
@@ -91,7 +93,8 @@ app.whenReady().then(() => {
 
 // Cerrar cuando todas las ventanas estén cerradas
 app.on('window-all-closed', () => {
-    // Detener el backend si lo iniciamos nosotros
+    // Detener monitoreo y backend
+    stopStatusMonitoring();
     stopBackend();
 
     if (process.platform !== 'darwin') {
@@ -101,6 +104,7 @@ app.on('window-all-closed', () => {
 
 // Asegurar que el backend se detenga al cerrar la app
 app.on('before-quit', () => {
+    stopStatusMonitoring();
     stopBackend();
 });
 
@@ -321,12 +325,14 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
     while (Date.now() - startTime < timeout) {
         if (await isBackendRunning()) {
             console.log('Backend esta disponible');
+            notifyBackendStatus(true);  // Notificar que esta conectado
             return true;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
         console.log('Esperando al backend...');
     }
 
+    notifyBackendStatus(false);  // Notificar que fallo la conexion
     return false;
 }
 
@@ -436,6 +442,7 @@ function stopBackend() {
 
         backendProcess = null;
         isBackendStartedByElectron = false;
+        notifyBackendStatus(false);  // Notificar desconexion
     }
 }
 
@@ -457,6 +464,7 @@ async function checkAndStartBackend() {
         if (isRunning) {
             console.log('El backend ya esta corriendo');
             notifyUser('success', 'Conectado al servidor de Alfred');
+            notifyBackendStatus(true);  // Notificar conexion exitosa
             return true;
         }
 
@@ -472,6 +480,48 @@ function notifyUser(type, message) {
     console.log(`[NOTIFY] (${type}): ${message}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('backend-notification', { type, message });
+    }
+}
+
+// Notificar estado del backend
+function notifyBackendStatus(connected) {
+    console.log(`[STATUS] Backend: ${connected ? 'connected' : 'disconnected'}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backend-status', { 
+            status: connected ? 'connected' : 'disconnected',
+            timestamp: Date.now()
+        });
+    }
+}
+
+// Chequeo periodico del estado del backend
+let statusCheckInterval = null;
+
+function startStatusMonitoring() {
+    // Limpiar cualquier intervalo previo
+    if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+    }
+    
+    // Chequear cada 30 segundos
+    statusCheckInterval = setInterval(async () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            const isRunning = await isBackendRunning();
+            notifyBackendStatus(isRunning);
+            
+            // Si el backend esta caido, intentar reiniciarlo
+            if (!isRunning && isBackendStartedByElectron) {
+                console.log('[MONITOR] Backend caido, intentando reiniciar...');
+                await checkAndStartBackend();
+            }
+        }
+    }, 30000);  // 30 segundos
+}
+
+function stopStatusMonitoring() {
+    if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+        statusCheckInterval = null;
     }
 }
 
@@ -524,6 +574,10 @@ ipcMain.handle('check-server', async () => {
         console.log('[MAIN] Verificando servidor Alfred en http://127.0.0.1:8000/health');
         const isRunning = await isBackendRunning();
         console.log(`[MAIN] Servidor esta ${isRunning ? 'conectado' : 'no disponible'}`);
+        
+        // Notificar estado al frontend
+        notifyBackendStatus(isRunning);
+        
         return {
             connected: isRunning,
             message: isRunning ? 'Servidor conectado' : 'Servidor no disponible'
