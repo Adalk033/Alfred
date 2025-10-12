@@ -516,13 +516,25 @@ export function enableEditMode(conversationId, titleElement) {
     input.value = currentTitle;
     input.maxLength = 100;
 
+    // IMPORTANTE: Prevenir que los clicks en el input se propaguen
+    input.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    // Prevenir que otros eventos se propaguen
+    input.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+    });
+
     // Reemplazar el titulo con el input
     titleElement.style.display = 'none';
     titleElement.parentNode.insertBefore(input, titleElement);
 
     // Enfocar el input y seleccionar el texto
-    input.focus();
-    input.select();
+    setTimeout(() => {
+        input.focus();
+        input.select();
+    }, 50);
 
     // Crear botones de accion
     const actionsDiv = conversationItem.querySelector('.conversation-actions');
@@ -538,18 +550,15 @@ export function enableEditMode(conversationId, titleElement) {
         const newTitle = input.value.trim();
         if (newTitle && newTitle !== currentTitle) {
             const success = await renameConversation(conversationId, newTitle);
-            if (!success) {
-                // Si falla, restaurar el estado original
-                input.remove();
-                titleElement.style.display = '';
-                actionsDiv.innerHTML = originalButtons;
+            if (success) {
+                // Éxito: la lista se recarga automáticamente en renameConversation
+                return;
             }
-        } else {
-            // Cancelar si no hay cambios
-            input.remove();
-            titleElement.style.display = '';
-            actionsDiv.innerHTML = originalButtons;
         }
+        // Si no hay cambios o falla, restaurar estado original
+        input.remove();
+        titleElement.style.display = '';
+        actionsDiv.innerHTML = originalButtons;
     };
 
     // Funcion para cancelar
