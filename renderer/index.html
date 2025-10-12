@@ -429,13 +429,11 @@
                         <h3 class="section-title">Personalización</h3>
 
                         <div class="setting-group">
-                            <label for="userName">Tu nombre</label>
-                            <input type="text" id="userName" placeholder="Como quieres que te llame?" />
-                        </div>
-
-                        <div class="setting-group">
                             <label for="assistantName">Nombre del asistente</label>
                             <input type="text" id="assistantName" placeholder="Alfred" value="Alfred" />
+                            <p class="setting-description">
+                                Personaliza como quieres llamar a tu asistente.
+                            </p>
                         </div>
 
                         <div class="setting-group">
@@ -449,6 +447,9 @@
                         <div class="setting-group">
                             <label for="userOccupation">Ocupacion</label>
                             <input type="text" id="userOccupation" placeholder="Desarrollador, Diseñador, Estudiante..." />
+                            <p class="setting-description">
+                                Ayuda al asistente a entender tu contexto profesional.
+                            </p>
                         </div>
 
                         <div class="setting-group">
@@ -457,6 +458,10 @@
                             <p class="setting-description">
                                 Esta informacion ayudara al asistente a personalizar sus respuestas.
                             </p>
+                        </div>
+
+                        <div class="setting-group">
+                            <button id="savePersonalizationBtn" class="button primary">Guardar Personalizacion</button>
                         </div>
                     </div>
 

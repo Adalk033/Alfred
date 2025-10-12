@@ -75,6 +75,15 @@ export async function loadConversations() {
         if (result.success) {
             State.setConversations(result.data);
             updateConversationsList();
+
+            // Si no hay conversaciones, asegurar que el input este habilitado
+            if (result.data.length === 0 && State.messageInput) {
+                State.messageInput.disabled = false;
+                State.messageInput.placeholder = 'Escribe tu mensaje aqui...';
+                if (State.sendBtn) {
+                    State.sendBtn.disabled = !State.messageInput.value.trim();
+                }
+            }
         } else {
             console.error('Error al cargar conversaciones:', result.error);
         }
@@ -326,15 +335,17 @@ export async function deleteConversationById(conversationId) {
                     State.messagesContainer.innerHTML = '';
                 }
 
-                // Crear nueva conversacion en segundo plano sin bloquear
-                createNewConversation(null, true).then(() => {
-                    // Restaurar enfoque al textarea después de crear la conversacion
-                    if (State.messageInput) {
-                        setTimeout(() => State.messageInput.focus(), 100);
-                    }
-                }).catch(err => {
+                // Crear nueva conversacion ANTES de actualizar la lista
+                try {
+                    await createNewConversation(null, true);
+                } catch (err) {
                     console.error('Error al crear nueva conversacion:', err);
-                });
+                }
+
+                // Restaurar enfoque al textarea después de crear la conversacion
+                if (State.messageInput) {
+                    setTimeout(() => State.messageInput.focus(), 100);
+                }
             } else {
                 // Restaurar enfoque al textarea si no era la conversacion actual
                 if (State.messageInput) {
@@ -342,10 +353,12 @@ export async function deleteConversationById(conversationId) {
                 }
             }
 
-            // Actualizar lista en segundo plano sin bloquear
-            loadConversations().catch(err => {
+            // Actualizar lista DESPUÉS de crear la nueva conversacion (si aplica)
+            try {
+                await loadConversations();
+            } catch (err) {
                 console.error('Error al cargar conversaciones:', err);
-            });
+            }
 
             showNotification('success', 'Conversacion eliminada');
         } else {

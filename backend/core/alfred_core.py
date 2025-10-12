@@ -45,6 +45,25 @@ def get_current_datetime_spanish() -> str:
     return f"{dia_semana}, {dia} de {mes} de {año}, {hora}"
 
 
+def get_user_personalization() -> dict:
+    """
+    Obtener toda la configuracion de personalizacion del usuario desde BD
+    
+    Returns:
+        Diccionario con todos los campos de personalizacion
+    """
+    from db_manager import get_user_setting
+    
+    return {
+        'user_name': get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario')),
+        'user_age': get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada')),
+        'assistant_name': get_user_setting('assistant_name', default='Alfred'),
+        'custom_instructions': get_user_setting('custom_instructions', default='Ninguna instruccion personalizada.'),
+        'user_occupation': get_user_setting('user_occupation', default='No especificada'),
+        'about_user': get_user_setting('about_user', default='No especificado')
+    }
+
+
 class AlfredCore:
     """
     Nucleo refactorizado del asistente Alfred
@@ -524,13 +543,15 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         """Generar respuesta sin buscar documentos"""
         current_datetime = get_current_datetime_spanish()
         
-        # Obtener nombre y edad actuales desde BD (en cada generacion)
-        from db_manager import get_user_setting
-        user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
-        user_age = get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada'))
+        # Obtener toda la personalizacion del usuario
+        personalization = get_user_personalization()
         
-        prompt_template = config.PROMPT_TEMPLATE_NO_DOCUMENTS.replace("{USER_NAME}", user_name)
-        prompt_template = prompt_template.replace("{USER_AGE}", str(user_age))
+        prompt_template = config.PROMPT_TEMPLATE_NO_DOCUMENTS.replace("{USER_NAME}", personalization['user_name'])
+        prompt_template = prompt_template.replace("{USER_AGE}", str(personalization['user_age']))
+        prompt_template = prompt_template.replace("{ASSISTANT_NAME}", personalization['assistant_name'])
+        prompt_template = prompt_template.replace("{CUSTOM_INSTRUCTIONS}", personalization['custom_instructions'])
+        prompt_template = prompt_template.replace("{USER_OCCUPATION}", personalization['user_occupation'])
+        prompt_template = prompt_template.replace("{ABOUT_USER}", personalization['about_user'])
         prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
         
         # Construir contexto con historial
@@ -633,18 +654,20 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         # 3. Generar prompt
         current_datetime = get_current_datetime_spanish()
         
-        # Obtener nombre y edad actuales desde BD (en cada generacion)
-        from db_manager import get_user_setting
-        user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
-        user_age = get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada'))
+        # Obtener toda la personalizacion del usuario
+        personalization = get_user_personalization()
         
         if self.model_name in ["gpt-oss:20b"]:
-            prompt_template = config.PROMPT_TEMPLATE_GPT_ONLY.replace("{USER_NAME}", user_name)
-            prompt_template = prompt_template.replace("{USER_AGE}", str(user_age))
+            prompt_template = config.PROMPT_TEMPLATE_GPT_ONLY.replace("{USER_NAME}", personalization['user_name'])
+            prompt_template = prompt_template.replace("{USER_AGE}", str(personalization['user_age']))
         else:
-            prompt_template = config.PROMPT_TEMPLATE_WITH_DOCUMENTS.replace("{USER_NAME}", user_name)
-            prompt_template = prompt_template.replace("{USER_AGE}", str(user_age))
+            prompt_template = config.PROMPT_TEMPLATE_WITH_DOCUMENTS.replace("{USER_NAME}", personalization['user_name'])
+            prompt_template = prompt_template.replace("{USER_AGE}", str(personalization['user_age']))
         
+        prompt_template = prompt_template.replace("{ASSISTANT_NAME}", personalization['assistant_name'])
+        prompt_template = prompt_template.replace("{CUSTOM_INSTRUCTIONS}", personalization['custom_instructions'])
+        prompt_template = prompt_template.replace("{USER_OCCUPATION}", personalization['user_occupation'])
+        prompt_template = prompt_template.replace("{ABOUT_USER}", personalization['about_user'])
         prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
         
         # Agregar historial de conversacion

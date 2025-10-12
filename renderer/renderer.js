@@ -230,6 +230,11 @@ function setupEventListeners() {
                 loadDocumentPaths();
                 loadIndexationStatus();
             }
+
+            // Cargar personalizacion si se abre la seccion de personalizacion
+            if (sectionName === 'personalizacion') {
+                loadPersonalization();
+            }
         });
     });
 
@@ -239,10 +244,16 @@ function setupEventListeners() {
     // Event listener para cambiar foto de perfil
     changeProfilePictureBtn.addEventListener('click', changeProfilePicture);
 
-    // Event listener para guardar informacion personal
+    // Event listener para guardar informacion personal (Perfil)
     const saveUserInfoBtn = document.getElementById('saveUserInfoBtn');
     if (saveUserInfoBtn) {
         saveUserInfoBtn.addEventListener('click', saveUserInfo);
+    }
+
+    // Event listener para guardar personalizacion (Personalizacion)
+    const savePersonalizationBtn = document.getElementById('savePersonalizationBtn');
+    if (savePersonalizationBtn) {
+        savePersonalizationBtn.addEventListener('click', savePersonalization);
     }
 
     // Event listeners para seccion de documentos
@@ -1704,7 +1715,7 @@ async function restoreProfilePicture(imageData, index) {
 // FUNCIONES DE INFORMACION PERSONAL (NOMBRE Y EDAD)
 // ===============================================
 
-// Cargar informacion personal del usuario
+// Cargar informacion personal del usuario (Perfil: nombre y edad)
 async function loadUserInfo() {
     try {
         console.log('📋 Cargando informacion personal...');
@@ -1719,7 +1730,7 @@ async function loadUserInfo() {
 
         // Cargar edad
         const ageResult = await window.alfredAPI.getUserSetting('user_age');
-        if (ageResult.success && ageResult.data) {
+        if (ageResult.success && ageResult.data && document.getElementById('userAge')) {
             const userAge = ageResult.data.value || '';
             document.getElementById('userAge').value = userAge;
             console.log('✅ Edad cargada:', userAge);
@@ -1730,11 +1741,53 @@ async function loadUserInfo() {
     }
 }
 
-// Guardar informacion personal
+// Cargar personalizacion (Personalizacion: asistente, instrucciones, ocupacion, sobre ti)
+async function loadPersonalization() {
+    try {
+        console.log('📋 Cargando personalizacion...');
+
+        // Cargar nombre del asistente
+        const assistantResult = await window.alfredAPI.getUserSetting('assistant_name');
+        if (assistantResult.success && assistantResult.data && document.getElementById('assistantName')) {
+            const assistantName = assistantResult.data.value || 'Alfred';
+            document.getElementById('assistantName').value = assistantName;
+            console.log('✅ Nombre del asistente cargado:', assistantName);
+        }
+
+        // Cargar instrucciones personalizadas
+        const instructionsResult = await window.alfredAPI.getUserSetting('custom_instructions');
+        if (instructionsResult.success && instructionsResult.data && document.getElementById('customInstructions')) {
+            const customInstructions = instructionsResult.data.value || '';
+            document.getElementById('customInstructions').value = customInstructions;
+            console.log('✅ Instrucciones personalizadas cargadas');
+        }
+
+        // Cargar ocupacion
+        const occupationResult = await window.alfredAPI.getUserSetting('user_occupation');
+        if (occupationResult.success && occupationResult.data && document.getElementById('userOccupation')) {
+            const userOccupation = occupationResult.data.value || '';
+            document.getElementById('userOccupation').value = userOccupation;
+            console.log('✅ Ocupacion cargada:', userOccupation);
+        }
+
+        // Cargar informacion sobre el usuario
+        const aboutResult = await window.alfredAPI.getUserSetting('about_user');
+        if (aboutResult.success && aboutResult.data && document.getElementById('aboutUser')) {
+            const aboutUser = aboutResult.data.value || '';
+            document.getElementById('aboutUser').value = aboutUser;
+            console.log('✅ Informacion sobre el usuario cargada');
+        }
+
+    } catch (error) {
+        console.error('❌ Error al cargar personalizacion:', error);
+    }
+}
+
+// Guardar informacion personal (Perfil: nombre y edad)
 async function saveUserInfo() {
     try {
         const userName = document.getElementById('userName').value.trim();
-        const userAge = document.getElementById('userAge').value;
+        const userAge = document.getElementById('userAge')?.value;
 
         console.log('💾 Guardando informacion personal...', { userName, userAge });
 
@@ -1759,6 +1812,59 @@ async function saveUserInfo() {
 
     } catch (error) {
         console.error('❌ Error al guardar informacion personal:', error);
+        showNotification('error', `Error al guardar: ${error.message}`);
+    }
+}
+
+// Guardar personalizacion (Personalizacion: asistente, instrucciones, ocupacion, sobre ti)
+async function savePersonalization() {
+    try {
+        const assistantName = document.getElementById('assistantName')?.value.trim();
+        const customInstructions = document.getElementById('customInstructions')?.value.trim();
+        const userOccupation = document.getElementById('userOccupation')?.value.trim();
+        const aboutUser = document.getElementById('aboutUser')?.value.trim();
+
+        console.log('💾 Guardando personalizacion...', { 
+            assistantName, customInstructions, userOccupation, aboutUser 
+        });
+
+        // Guardar nombre del asistente
+        if (assistantName) {
+            const assistantResult = await window.alfredAPI.setUserSetting('assistant_name', assistantName, 'string');
+            if (!assistantResult.success) {
+                throw new Error('Error al guardar nombre del asistente');
+            }
+        }
+
+        // Guardar instrucciones personalizadas
+        if (customInstructions) {
+            const instructionsResult = await window.alfredAPI.setUserSetting('custom_instructions', customInstructions, 'string');
+            if (!instructionsResult.success) {
+                throw new Error('Error al guardar instrucciones personalizadas');
+            }
+        }
+
+        // Guardar ocupacion
+        if (userOccupation) {
+            const occupationResult = await window.alfredAPI.setUserSetting('user_occupation', userOccupation, 'string');
+            if (!occupationResult.success) {
+                throw new Error('Error al guardar ocupacion');
+            }
+        }
+
+        // Guardar informacion sobre el usuario
+        if (aboutUser) {
+            const aboutResult = await window.alfredAPI.setUserSetting('about_user', aboutUser, 'string');
+            if (!aboutResult.success) {
+                throw new Error('Error al guardar informacion sobre el usuario');
+            }
+        }
+
+        console.log('✅ Personalizacion guardada');
+        showNotification('success', 'Personalizacion actualizada. Los cambios se aplicaran en tu proxima conversacion.');
+
+    } catch (error) {
+        console.error('❌ Error al guardar personalizacion:', error);
         showNotification('error', `Error al guardar: ${error.message}`);
     }
 }
