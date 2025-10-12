@@ -177,26 +177,49 @@
 
             <!-- Input de mensaje -->
             <div class="input-container">
-                <textarea id="messageInput" placeholder="Escribe tu mensaje aquí..." rows="1"
-                    autocomplete="off"></textarea>
-                <div class="input-actions">
-                    <button id="searchDocsBtn" class="mode-toggle-btn" title="Buscar en documentos">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path
-                                d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                <div>
+                    <textarea id="messageInput" placeholder="Escribe tu mensaje aquí..." rows="1"
+                        autocomplete="off"></textarea>
+                    <div class="input-actions">
+                        <button id="attachFileBtn" class="icon-button" title="Adjuntar documento temporal">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                            </svg>
+                        </button>
+                        <input type="file" id="fileInput" style="display: none;" accept=".txt,.pdf,.docx,.xlsx,.pptx,.md,.json,.xml,.csv" />
+                        <button id="searchDocsBtn" class="mode-toggle-btn" title="Buscar en documentos">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path
+                                    d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                            </svg>
+                            <span>Documentos</span>
+                        </button>
+                        <button id="promptOnlyBtn" class="mode-toggle-btn active" title="Solo usar el prompt">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path
+                                    d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
+                            </svg>
+                            <span>Prompt</span>
+                        </button>
+                        <button id="sendBtn" class="send-button" disabled>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Indicador de archivo adjunto -->
+                <div class="attached-file-indicator" id="attachedFileIndicator" style="display: none;">
+                    <div class="attached-file-info">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z"/>
                         </svg>
-                        <span>Documentos</span>
-                    </button>
-                    <button id="promptOnlyBtn" class="mode-toggle-btn active" title="Solo usar el prompt">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path
-                                d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z" />
-                        </svg>
-                        <span>Prompt</span>
-                    </button>
-                    <button id="sendBtn" class="send-button" disabled>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                        <span class="file-name" id="attachedFileName"></span>
+                        <span class="file-size" id="attachedFileSize"></span>
+                    </div>
+                    <button class="remove-file-btn" id="removeFileBtn" title="Quitar archivo">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
                         </svg>
                     </button>
                 </div>

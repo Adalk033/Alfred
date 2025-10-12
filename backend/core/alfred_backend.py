@@ -41,6 +41,259 @@ from conversation_manager import get_conversation_manager
 from utils.security import encrypt_data, decrypt_data
 from functionsToHistory import encrypt_personal_data, decrypt_personal_data
 
+# --- Utilidades para procesamiento de archivos ---
+
+def extract_text_from_pdf(content: str, file_name: str) -> str:
+    """
+    Extraer texto de un PDF a partir de su contenido en base64 o texto
+    
+    Args:
+        content: Contenido del PDF (puede ser base64 con o sin prefijo data:)
+        file_name: Nombre del archivo para logging
+        
+    Returns:
+        Texto extraído del PDF
+    """
+    try:
+        import PyPDF2
+        import base64
+        from io import BytesIO
+        import re
+        
+        print(f"🔍 Procesando PDF: {file_name}")
+        print(f"📏 Longitud del contenido recibido: {len(content)} caracteres")
+        
+        # Limpiar prefijo data: si existe (ej: data:application/pdf;base64,)
+        if content.startswith('data:'):
+            print(f"🧹 Limpiando prefijo data: URL...")
+            # Buscar la coma que separa el header del contenido base64
+            match = re.search(r'base64,(.+)', content)
+            if match:
+                content = match.group(1)
+                print(f"✅ Prefijo removido, nueva longitud: {len(content)} caracteres")
+            else:
+                print(f"⚠️ No se encontro separador base64, usando contenido completo")
+        
+        # Decodificar base64
+        try:
+            print(f"🔓 Decodificando base64...")
+            pdf_bytes = base64.b64decode(content)
+            print(f"✅ Decodificado exitoso: {len(pdf_bytes)} bytes")
+        except Exception as decode_error:
+            print(f"❌ Error al decodificar base64: {str(decode_error)}")
+            raise ValueError(f"Error al decodificar base64: {str(decode_error)}")
+        
+        # Crear objeto PDF
+        print(f"📄 Creando lector PDF...")
+        pdf_file = BytesIO(pdf_bytes)
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        
+        print(f"📚 PDF cargado: {len(pdf_reader.pages)} paginas")
+        
+        # Extraer texto de todas las páginas
+        text_parts = []
+        for page_num, page in enumerate(pdf_reader.pages):
+            try:
+                text = page.extract_text()
+                if text.strip():
+                    text_parts.append(f"--- Pagina {page_num + 1} ---\n{text}")
+                    print(f"  ✅ Pagina {page_num + 1}: {len(text)} caracteres")
+                else:
+                    print(f"  ⚠️ Pagina {page_num + 1}: vacia o sin texto extraible")
+            except Exception as page_error:
+                print(f"  ❌ Error en pagina {page_num + 1}: {str(page_error)}")
+                text_parts.append(f"--- Pagina {page_num + 1} ---\n[Error al extraer texto de esta pagina]")
+        
+        extracted_text = "\n\n".join(text_parts)
+        print(f"✅ PDF procesado exitosamente: {file_name}")
+        print(f"📊 Total: {len(pdf_reader.pages)} paginas, {len(extracted_text)} caracteres extraidos")
+        
+        return extracted_text if extracted_text else "[PDF procesado pero no se pudo extraer texto]"
+        
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"❌ Error al procesar PDF {file_name}:")
+        print(error_detail)
+        return f"[Error al procesar PDF: {str(e)}. Por favor verifica que el archivo no este corrupto.]"
+
+
+def extract_text_from_docx(content: str, file_name: str) -> str:
+    """
+    Extraer texto de un documento Word (.docx) a partir de su contenido en base64
+    
+    Args:
+        content: Contenido del archivo en base64 (con o sin prefijo data:)
+        file_name: Nombre del archivo para logging
+        
+    Returns:
+        Texto extraído del documento
+    """
+    try:
+        from docx import Document
+        import base64
+        from io import BytesIO
+        import re
+        
+        print(f"🔍 Procesando Word: {file_name}")
+        
+        # Limpiar prefijo data: si existe
+        if content.startswith('data:'):
+            match = re.search(r'base64,(.+)', content)
+            if match:
+                content = match.group(1)
+        
+        # Decodificar contenido base64
+        docx_bytes = base64.b64decode(content)
+        docx_file = BytesIO(docx_bytes)
+        
+        # Cargar documento
+        doc = Document(docx_file)
+        
+        # Extraer texto de parrafos
+        text_parts = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                text_parts.append(para.text)
+        
+        # Extraer texto de tablas
+        for table in doc.tables:
+            table_text = []
+            for row in table.rows:
+                row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                if row_text:
+                    table_text.append(row_text)
+            if table_text:
+                text_parts.append("\n--- Tabla ---\n" + "\n".join(table_text))
+        
+        extracted_text = "\n\n".join(text_parts)
+        print(f"✅ Word procesado: {file_name} - {len(doc.paragraphs)} parrafos, {len(extracted_text)} caracteres")
+        
+        return extracted_text if extracted_text else "[Documento Word procesado pero no se pudo extraer texto]"
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Error al procesar Word {file_name}:")
+        print(traceback.format_exc())
+        return f"[Error al procesar documento Word: {str(e)}]"
+
+
+def extract_text_from_xlsx(content: str, file_name: str) -> str:
+    """
+    Extraer texto de una hoja de calculo Excel (.xlsx) a partir de su contenido en base64
+    
+    Args:
+        content: Contenido del archivo en base64 (con o sin prefijo data:)
+        file_name: Nombre del archivo para logging
+        
+    Returns:
+        Texto extraído de todas las hojas
+    """
+    try:
+        from openpyxl import load_workbook
+        import base64
+        from io import BytesIO
+        import re
+        
+        print(f"🔍 Procesando Excel: {file_name}")
+        
+        # Limpiar prefijo data: si existe
+        if content.startswith('data:'):
+            match = re.search(r'base64,(.+)', content)
+            if match:
+                content = match.group(1)
+        
+        # Decodificar contenido base64
+        xlsx_bytes = base64.b64decode(content)
+        xlsx_file = BytesIO(xlsx_bytes)
+        
+        # Cargar workbook
+        wb = load_workbook(xlsx_file, data_only=True)
+        
+        # Extraer texto de cada hoja
+        sheet_parts = []
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            
+            # Obtener valores de celdas
+            rows_text = []
+            for row in ws.iter_rows(values_only=True):
+                row_text = " | ".join(str(cell) if cell is not None else "" for cell in row)
+                if row_text.strip():
+                    rows_text.append(row_text)
+            
+            if rows_text:
+                sheet_parts.append(f"--- Hoja: {sheet_name} ---\n" + "\n".join(rows_text))
+        
+        extracted_text = "\n\n".join(sheet_parts)
+        print(f"✅ Excel procesado: {file_name} - {len(wb.sheetnames)} hojas, {len(extracted_text)} caracteres")
+        
+        return extracted_text if extracted_text else "[Hoja de calculo procesada pero no se pudo extraer texto]"
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Error al procesar Excel {file_name}:")
+        print(traceback.format_exc())
+        return f"[Error al procesar hoja de calculo: {str(e)}]"
+
+
+def extract_text_from_pptx(content: str, file_name: str) -> str:
+    """
+    Extraer texto de una presentacion PowerPoint (.pptx) a partir de su contenido en base64
+    
+    Args:
+        content: Contenido del archivo en base64 (con o sin prefijo data:)
+        file_name: Nombre del archivo para logging
+        
+    Returns:
+        Texto extraído de todas las diapositivas
+    """
+    try:
+        from pptx import Presentation
+        import base64
+        from io import BytesIO
+        import re
+        
+        print(f"🔍 Procesando PowerPoint: {file_name}")
+        
+        # Limpiar prefijo data: si existe
+        if content.startswith('data:'):
+            match = re.search(r'base64,(.+)', content)
+            if match:
+                content = match.group(1)
+        
+        # Decodificar contenido base64
+        pptx_bytes = base64.b64decode(content)
+        pptx_file = BytesIO(pptx_bytes)
+        
+        # Cargar presentacion
+        prs = Presentation(pptx_file)
+        
+        # Extraer texto de cada diapositiva
+        slide_parts = []
+        for slide_num, slide in enumerate(prs.slides, 1):
+            slide_text = []
+            
+            # Extraer texto de todas las formas
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text.strip():
+                    slide_text.append(shape.text)
+            
+            if slide_text:
+                slide_parts.append(f"--- Diapositiva {slide_num} ---\n" + "\n".join(slide_text))
+        
+        extracted_text = "\n\n".join(slide_parts)
+        print(f"✅ PowerPoint procesado: {file_name} - {len(prs.slides)} diapositivas, {len(extracted_text)} caracteres")
+        
+        return extracted_text if extracted_text else "[Presentacion procesada pero no se pudo extraer texto]"
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Error al procesar PowerPoint {file_name}:")
+        print(traceback.format_exc())
+        return f"[Error al procesar presentacion: {str(e)}]"
+
+
 # --- Modelos de datos para la API ---
 
 class QueryRequest(BaseModel):
@@ -235,6 +488,7 @@ class QueryWithConversationRequest(BaseModel):
     search_documents: bool = Field(True, description="Buscar en documentos o solo usar el prompt")
     search_kwargs: Optional[Dict[str, Any]] = Field(None, description="Parametros adicionales de busqueda")
     max_context_messages: int = Field(50, description="Numero maximo de mensajes de contexto", ge=1, le=50)
+    temp_document: Optional[Dict[str, str]] = Field(None, description="Documento temporal adjunto (name, content)")
 
 class OllamaKeepAliveRequest(BaseModel):
     """Solicitud para actualizar el keep_alive de Ollama"""
@@ -1702,11 +1956,60 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 for msg in messages
             ]
         
+        # Si hay documento temporal adjunto, agregarlo al contexto de la pregunta
+        question_with_context = request.question
+        force_prompt_only = False
+        
+        if request.temp_document:
+            file_name = request.temp_document['name']
+            print(f"📎 Documento temporal adjunto: {file_name}")
+            
+            # Detectar formato y procesar segun extension
+            file_ext = file_name.lower()
+            
+            if file_ext.endswith('.pdf'):
+                print(f"📄 Procesando PDF...")
+                doc_content = extract_text_from_pdf(request.temp_document['content'], file_name)
+            elif file_ext.endswith('.docx'):
+                print(f"📄 Procesando Word (DOCX)...")
+                doc_content = extract_text_from_docx(request.temp_document['content'], file_name)
+            elif file_ext.endswith('.xlsx'):
+                print(f"📊 Procesando Excel (XLSX)...")
+                doc_content = extract_text_from_xlsx(request.temp_document['content'], file_name)
+            elif file_ext.endswith('.pptx'):
+                print(f"� Procesando PowerPoint (PPTX)...")
+                doc_content = extract_text_from_pptx(request.temp_document['content'], file_name)
+            else:
+                # Archivos de texto plano (txt, md, json, xml, csv, etc)
+                doc_content = request.temp_document['content']
+            
+            # Obtener tamaño
+            doc_size_kb = len(doc_content.encode('utf-8')) / 1024
+            
+            print(f"📊 Tamaño del documento: {doc_size_kb:.2f} KB")
+            
+            # Si el documento es muy grande (>100KB), truncar o advertir
+            max_chars = 50000  # ~50KB de texto (aprox 12,500 palabras)
+            if len(doc_content) > max_chars:
+                print(f"⚠️ Documento grande ({len(doc_content)} chars), truncando a {max_chars} chars")
+                doc_content = doc_content[:max_chars] + "\n\n[... documento truncado por tamaño ...]"
+            
+            # Forzar modo prompt-only cuando hay documento adjunto (más rápido)
+            force_prompt_only = True
+            print(f"🚀 Modo prompt-only forzado para archivo adjunto")
+            
+            # Agregar documento al contexto
+            document_context = f"\n\n--- DOCUMENTO ADJUNTO: {file_name} ---\n"
+            document_context += doc_content
+            document_context += f"\n--- FIN DEL DOCUMENTO ---\n\n"
+            question_with_context = document_context + request.question
+        
         # Ejecutar consulta con contexto de conversacion
+        # Si hay documento adjunto, forzar search_documents=False para mejor rendimiento
         result = await alfred_core.query_async(
-            question=request.question,
+            question=question_with_context,
             use_history=request.use_history,
-            search_documents=request.search_documents,
+            search_documents=request.search_documents if not force_prompt_only else False,
             search_kwargs=request.search_kwargs,
             conversation_history=conversation_history
         )

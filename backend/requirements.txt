@@ -183,3 +183,7 @@ wrapt==1.17.3
 yarl==1.21.0
 zipp==3.23.0
 zstandard==0.25.0
+# Librerías para procesamiento de documentos
+PyPDF2>=3.0.1
+openpyxl>=3.1.5
+python-pptx>=1.0.2

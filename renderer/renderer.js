@@ -61,6 +61,9 @@ let ollamaKeepAliveSlider;
 let ollamaKeepAliveValue;
 let ollamaKeepAlivePresets;
 
+// Archivo adjunto temporal
+let attachedFile = null;
+
 // Inicializacion
 document.addEventListener('DOMContentLoaded', async () => {
     // Inicializar elementos del DOM en State
@@ -271,6 +274,19 @@ function setupEventListeners() {
         clearIndexBtn.addEventListener('click', clearIndex);
     }
 
+    // Event listeners para archivos adjuntos temporales
+    const attachFileBtn = document.getElementById('attachFileBtn');
+    const fileInput = document.getElementById('fileInput');
+    const removeFileBtn = document.getElementById('removeFileBtn');
+
+    if (attachFileBtn && fileInput) {
+        attachFileBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileAttach);
+    }
+    if (removeFileBtn) {
+        removeFileBtn.addEventListener('click', removeAttachedFile);
+    }
+
     // Event listeners para Keep Alive de Ollama
     if (ollamaKeepAliveSlider) {
         ollamaKeepAliveSlider.addEventListener('input', (e) => {
@@ -454,6 +470,152 @@ async function checkServerStatus() {
     }
 }
 
+// ====================================
+// MANEJO DE ARCHIVOS ADJUNTOS TEMPORALES
+// ====================================
+
+/**
+ * Manejar adjuntar archivo
+ */
+async function handleFileAttach(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Sistema de advertencias progresivas
+    const fileSize = file.size;
+    const sizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+    
+    // 0-10MB: Sin advertencia
+    // 10-50MB: Advertencia moderada
+    // 50MB+: Advertencia fuerte
+    
+    if (fileSize > 50 * 1024 * 1024) {
+        // Más de 50MB
+        const confirmed = confirm(
+            `⚠️ ADVERTENCIA: El archivo es muy grande (${sizeMB} MB)\n\n` +
+            `Esto puede causar:\n` +
+            `- Procesamiento muy lento\n` +
+            `- Uso alto de memoria\n` +
+            `- Posible congelamiento de la aplicacion\n\n` +
+            `¿Estas seguro de continuar?`
+        );
+        if (!confirmed) {
+            event.target.value = '';
+            return;
+        }
+    } else if (fileSize > 10 * 1024 * 1024) {
+        // Entre 10-50MB
+        const confirmed = confirm(
+            `⚠️ Archivo grande (${sizeMB} MB)\n\n` +
+            `El procesamiento puede tardar un poco.\n` +
+            `¿Deseas continuar?`
+        );
+        if (!confirmed) {
+            event.target.value = '';
+            return;
+        }
+    }
+
+    try {
+        // Leer el contenido del archivo
+        showNotification('info', `Leyendo archivo: ${file.name} (${sizeMB} MB)...`);
+        const content = await readFileContent(file);
+        
+        // Guardar archivo adjunto
+        attachedFile = {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            content: content
+        };
+
+        // Mostrar indicador
+        showAttachedFileIndicator(file.name, file.size);
+        
+        if (fileSize > 10 * 1024 * 1024) {
+            showNotification('success', `Archivo adjunto: ${file.name} (${sizeMB} MB) - Puede tardar en procesarse`);
+        } else {
+            showNotification('success', `Archivo adjunto: ${file.name}`);
+        }
+    } catch (error) {
+        console.error('Error al leer archivo:', error);
+        showNotification('error', 'Error al leer el archivo');
+        event.target.value = '';
+    }
+}
+
+/**
+ * Leer contenido del archivo
+ */
+function readFileContent(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            resolve(e.target.result);
+        };
+        
+        reader.onerror = (e) => {
+            reject(new Error('Error al leer el archivo'));
+        };
+        
+        // Formatos binarios que requieren base64
+        const binaryFormats = ['.pdf', '.docx', '.xlsx', '.pptx'];
+        const isBinary = binaryFormats.some(ext => file.name.toLowerCase().endsWith(ext));
+        
+        if (isBinary) {
+            // Archivos binarios (PDF, Word, Excel, PowerPoint) como base64
+            reader.readAsDataURL(file);
+        } else {
+            // Archivos de texto plano (txt, md, json, xml, csv, etc)
+            reader.readAsText(file);
+        }
+    });
+}
+
+/**
+ * Mostrar indicador de archivo adjunto
+ */
+function showAttachedFileIndicator(fileName, fileSize) {
+    const indicator = document.getElementById('attachedFileIndicator');
+    const fileNameEl = document.getElementById('attachedFileName');
+    const fileSizeEl = document.getElementById('attachedFileSize');
+    
+    fileNameEl.textContent = fileName;
+    fileSizeEl.textContent = formatFileSize(fileSize);
+    indicator.style.display = 'flex';
+}
+
+/**
+ * Quitar archivo adjunto
+ */
+function removeAttachedFile() {
+    attachedFile = null;
+    const indicator = document.getElementById('attachedFileIndicator');
+    indicator.style.display = 'none';
+    
+    // Limpiar input de archivo
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+        fileInput.value = '';
+    }
+    
+    showNotification('info', 'Archivo removido');
+}
+
+/**
+ * Formatear tamaño de archivo
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+}
+
 // Enviar mensaje
 async function sendMessage() {
     const message = State.messageInput.value.trim();
@@ -490,9 +652,26 @@ async function sendMessage() {
     try {
         // Enviar consulta a Alfred con el modo de busqueda seleccionado y el ID de conversacion
         const searchDocuments = State.searchMode === 'documents';
-        console.log('📤 Enviando consulta:', { message, searchDocuments, conversationId: getCurrentConversationId() });
+        
+        // Preparar datos con archivo adjunto si existe
+        const queryData = {
+            message,
+            conversationId: getCurrentConversationId(),
+            searchDocuments,
+            attachedFile: attachedFile ? {
+                name: attachedFile.name,
+                content: attachedFile.content
+            } : null
+        };
+        
+        console.log('📤 Enviando consulta:', queryData);
 
-        const result = await window.alfredAPI.sendQueryWithConversation(message, getCurrentConversationId(), searchDocuments);
+        const result = await window.alfredAPI.sendQueryWithAttachment(queryData);
+
+        // Limpiar archivo adjunto despues de enviar
+        if (attachedFile) {
+            removeAttachedFile();
+        }
 
         // Capturar tiempo de fin y calcular duracion
         const endTime = performance.now();

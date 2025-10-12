@@ -1073,3 +1073,46 @@ ipcMain.handle('send-query-with-conversation', async (event, question, conversat
     }
 });
 
+// Handler para enviar consulta con archivo adjunto temporal
+ipcMain.handle('send-query-with-attachment', async (event, queryData) => {
+    try {
+        const { message, conversationId, searchDocuments, attachedFile } = queryData;
+        
+        console.log('[MAIN] Enviando consulta con archivo adjunto:', { 
+            message, 
+            conversationId, 
+            searchDocuments,
+            hasAttachment: !!attachedFile 
+        });
+
+        const result = await makeRequest('http://127.0.0.1:8000/query/conversation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                question: message,
+                conversation_id: conversationId || null,
+                use_history: true,
+                save_response: false,
+                search_documents: searchDocuments,
+                max_context_messages: 10,
+                temp_document: attachedFile || null
+            })
+        });
+
+        console.log('[MAIN] Respuesta del backend recibida');
+
+        if (result.statusCode >= 400) {
+            const errorDetail = result.data?.detail || result.data?.message || 'Error del servidor';
+            console.error('[MAIN] Error del servidor:', errorDetail);
+            return { success: false, error: errorDetail };
+        }
+
+        return { success: true, data: result.data };
+    } catch (error) {
+        console.error('[MAIN] Error en send-query-with-attachment:', error);
+        return { success: false, error: error.message };
+    }
+});
+

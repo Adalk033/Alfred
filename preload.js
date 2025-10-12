@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   clearConversation: (conversationId) => ipcRenderer.invoke('clear-conversation', conversationId),
   searchConversations: (query) => ipcRenderer.invoke('search-conversations', query),
   sendQueryWithConversation: (question, conversationId, searchDocuments) => ipcRenderer.invoke('send-query-with-conversation', question, conversationId, searchDocuments),
+  sendQueryWithAttachment: (queryData) => ipcRenderer.invoke('send-query-with-attachment', queryData),
   
   // Escuchar notificaciones del backend
   onBackendNotification: (callback) => {
