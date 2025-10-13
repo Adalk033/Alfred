@@ -3,9 +3,9 @@
 **Alfred** es un asistente personal 100% local y privado con capacidades de Recuperación Aumentada de Generación (RAG). Toda la inteligencia artificial se ejecuta en tu dispositivo - sin enviar datos a la nube.
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
-![Electron](https://img.shields.io/badge/Electron-v28.0-blue)
+![Electron](https://img.shields.io/badge/Electron-v38.2.2-blue)
 ![Python](https://img.shields.io/badge/Python-3.8+-green)
-![Node.js](https://img.shields.io/badge/Node.js-18+-green)
+![Node.js](https://img.shields.io/badge/Node.js-22.20.0+-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
@@ -63,7 +63,7 @@
 | Software | Versión Mínima | Descargar |
 |----------|----------------|-----------|
 | **Python** | 3.8+ | [python.org](https://www.python.org/downloads/) |
-| **Node.js** | 18+ (LTS) | [nodejs.org](https://nodejs.org/) |
+| **Node.js** | 22.20.0+ | [nodejs.org](https://nodejs.org/) |
 | **Ollama** | Última | [ollama.ai](https://ollama.ai/) |
 
 ### Hardware Recomendado
@@ -136,7 +136,7 @@ chmod +x stP.sh
 python --version  # Debe ser 3.8+
 
 # Verificar Node.js
-node --version    # Debe ser 18+
+node --version    # Debe ser 22.20.0+
 
 # Verificar Ollama
 ollama version
@@ -902,7 +902,7 @@ curl http://127.0.0.1:8000/health
 
 | Paquete | Versión | Uso |
 |---------|---------|-----|
-| **electron** | 28.0+ | Framework desktop |
+| **electron** | 38.2.2+ | Framework desktop |
 | **electron-builder** | Latest | Compilación de ejecutables |
 
 ---
