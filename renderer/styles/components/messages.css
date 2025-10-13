@@ -497,3 +497,59 @@
     line-height: 1.8;
 }
 
+/* Estilos para tablas Markdown */
+.message.assistant .message-bubble table.markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 0.9em;
+}
+
+/* Eliminar margen superior si la tabla es el primer elemento */
+.message.assistant .message-bubble table.markdown-table:first-child {
+    margin-top: 0;
+}
+
+/* Eliminar margen inferior si la tabla es el ultimo elemento */
+.message.assistant .message-bubble table.markdown-table:last-child {
+    margin-bottom: 0;
+}
+
+.message.assistant .message-bubble table.markdown-table thead {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+}
+
+.message.assistant .message-bubble table.markdown-table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: white;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.message.assistant .message-bubble table.markdown-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.message.assistant .message-bubble table.markdown-table tbody tr:hover {
+    background-color: rgba(74, 144, 226, 0.1);
+}
+
+.message.assistant .message-bubble table.markdown-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Alineacion de numeros en tablas */
+.message.assistant .message-bubble table.markdown-table td:has(*[class*="$"]),
+.message.assistant .message-bubble table.markdown-table td:nth-child(3),
+.message.assistant .message-bubble table.markdown-table td:nth-child(4) {
+    text-align: right;
+    font-family: 'Courier New', monospace;
+}
+
+

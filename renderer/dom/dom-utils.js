@@ -12,6 +12,87 @@ export function scrollToBottom() {
     }
 }
 
+// Procesar tablas Markdown
+function processMarkdownTables(text) {
+    const lines = text.split('\n');
+    const result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const currentLine = lines[i];
+        
+        // Detectar inicio de tabla (linea con pipes)
+        if (currentLine.includes('|') && i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            
+            // Verificar que la siguiente linea sea el separador (---|---|---)
+            if (nextLine.match(/^\s*\|?\s*[-:]+\s*\|/)) {
+                // Eliminar lineas vacias previas en el resultado
+                while (result.length > 0 && result[result.length - 1].trim() === '') {
+                    result.pop();
+                }
+                
+                // Es una tabla
+                const tableLines = [currentLine, nextLine];
+                let j = i + 2;
+                
+                // Recolectar todas las filas de la tabla
+                while (j < lines.length && lines[j].includes('|')) {
+                    tableLines.push(lines[j]);
+                    j++;
+                }
+                
+                // Convertir a HTML
+                result.push(convertTableToHtml(tableLines));
+                i = j;
+                continue;
+            }
+        }
+        
+        result.push(currentLine);
+        i++;
+    }
+    
+    return result.join('\n');
+}
+
+// Convertir array de lineas de tabla a HTML
+function convertTableToHtml(tableLines) {
+    if (tableLines.length < 2) return tableLines.join('\n');
+    
+    const headerLine = tableLines[0];
+    const dataLines = tableLines.slice(2); // Saltar header y separador
+    
+    // Procesar header
+    const headers = headerLine.split('|')
+        .map(h => h.trim())
+        .filter(h => h.length > 0);
+    
+    let html = '<table class="markdown-table">\n<thead>\n<tr>\n';
+    headers.forEach(header => {
+        html += `<th>${header}</th>\n`;
+    });
+    html += '</tr>\n</thead>\n<tbody>\n';
+    
+    // Procesar filas de datos
+    dataLines.forEach(line => {
+        const cells = line.split('|')
+            .map(c => c.trim())
+            .filter(c => c.length > 0);
+        
+        if (cells.length > 0) {
+            html += '<tr>\n';
+            cells.forEach(cell => {
+                html += `<td>${cell}</td>\n`;
+            });
+            html += '</tr>\n';
+        }
+    });
+    
+    html += '</tbody>\n</table>';
+    return html;
+}
+
 // Convertir Markdown a HTML (mejorado)
 export function markdownToHtml(text) {
     let html = text;
@@ -20,6 +101,9 @@ export function markdownToHtml(text) {
     html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
         return `<pre><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre>`;
     });
+
+    // Tablas (procesarse antes de codigo inline para evitar conflictos con |)
+    html = processMarkdownTables(html);
 
     // Codigo inline
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -49,6 +133,21 @@ export function markdownToHtml(text) {
         const isUnorderedItem = /^[\*\-\+] (.+)$/.test(line);
         const isOrderedItem = /^\d+\. (.+)$/.test(line);
         const isEmpty = line === '';
+        const isHtmlTag = /^<(table|\/table|thead|\/thead|tbody|\/tbody|tr|\/tr|th|td|h1|h2|h3|pre|\/pre)/.test(line);
+
+        // Si es una etiqueta HTML (tabla, heading, etc), agregarla sin modificar
+        if (isHtmlTag) {
+            if (inUnorderedList) {
+                processedLines.push('</ul>');
+                inUnorderedList = false;
+            }
+            if (inOrderedList) {
+                processedLines.push('</ol>');
+                inOrderedList = false;
+            }
+            processedLines.push(line);
+            continue;
+        }
 
         // Lista no ordenada
         if (isUnorderedItem) {
@@ -117,9 +216,12 @@ export function markdownToHtml(text) {
     // Limpiar <br> excesivos (mas de 2 consecutivos)
     html = html.replace(/(<br>){3,}/g, '<br><br>');
     
-    // Eliminar <br> justo antes/despues de tags de bloque
-    html = html.replace(/<br>(<ul>|<ol>|<\/ul>|<\/ol>|<h1>|<h2>|<h3>|<pre>)/g, '$1');
-    html = html.replace(/(<\/ul>|<\/ol>|<\/h1>|<\/h2>|<\/h3>|<\/pre>)<br>/g, '$1');
+    // Eliminar <br> justo antes/despues de tags de bloque (incluyendo tablas)
+    html = html.replace(/<br>(<ul>|<ol>|<\/ul>|<\/ol>|<h1>|<h2>|<h3>|<pre>|<table)/g, '$1');
+    html = html.replace(/(<\/ul>|<\/ol>|<\/h1>|<\/h2>|<\/h3>|<\/pre>|<\/table>)<br>/g, '$1');
+    
+    // Eliminar multiples <br> antes de tablas
+    html = html.replace(/(<br>\s*){2,}<table/g, '<table');
 
     return html;
 }

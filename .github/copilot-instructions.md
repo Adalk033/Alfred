@@ -113,7 +113,26 @@ def _extract_personal_data(self, text: str) -> Dict[str, str]:
 ```
 This is **explicit by design** - prompts grant full consent for local data extraction.
 
-### 4. Electron-Backend Lifecycle
+### 4. Markdown Rendering with Table Support
+`renderer/dom/dom-utils.js` includes full Markdown parser with table support:
+```javascript
+export function markdownToHtml(text) {
+    // Supports: code blocks, tables, bold, italic, links, lists, headings
+    // Tables processed BEFORE inline code to handle pipe characters
+}
+```
+Tables are rendered with professional styling (gradient headers, hover effects, auto-aligned numbers).
+
+**Table Syntax**:
+```markdown
+| Column 1 | Column 2 | Column 3 |
+|----------|----------|----------|
+| Data 1   | Data 2   | Data 3   |
+```
+
+See `TABLA_MARKDOWN_EJEMPLOS.md` for full examples and usage patterns.
+
+### 5. Electron-Backend Lifecycle
 `AlfredElectron/main.js` manages backend as child process:
 ```javascript
 backendProcess = spawn('python', ['alfred_backend.py'], {cwd: BACKEND_CONFIG.path});
@@ -123,7 +142,7 @@ app.on('before-quit', () => stopBackend());
 
 **Never start backend manually** when using Electron - it auto-spawns and terminates.
 
-### 5. Async FastAPI with LangChain Sync Chains
+### 6. Async FastAPI with LangChain Sync Chains
 `alfred_backend.py` uses `async def` but calls sync LangChain methods:
 ```python
 @app.post("/query")
