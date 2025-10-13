@@ -1,62 +1,137 @@
-# .gitignore para proyecto Electron
+# ============================================================================
+# .gitignore para Alfred - Asistente Personal Inteligente
+# ============================================================================
 
-# Dependencias
+# === Configuración Local ===
+.env
+.env.local
+.env.*.local
+config.local.json
+
+# === Entornos Virtuales Python ===
+backend/venv/
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# === Dependencias Node.js ===
 node_modules/
 package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Build outputs
+# === Archivos Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Bases de Datos ===
+*.db
+*.sqlite
+*.sqlite3
+chroma_db/
+db/
+*.db-journal
+
+# === Archivos de Log ===
+logs/
+*.log
+*.log.*
+backend/logs/
+
+# === Datos Sensibles ===
+*.key
+secret.key
+.notReadable
+alfred_qa_history.json
+alfred_qa_history_backup_*.json
+conversations/*.json
+
+# === Información de GPU ===
+backend/gpu/gpu_info.json
+
+# === Build y Dist ===
 dist/
 build/
 out/
+.electron/
 
-# Electron
-*.log
-.DS_Store
-Thumbs.db
-
-# IDEs
+# === IDEs y Editores ===
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# === Sistema Operativo ===
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Configuración local
-config.local.json
-.env
+# === Archivos Temporales ===
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
 
-
-# .gitignore
-venv/
-.venv/
-env/
-__pycache__/
-*.pyc
-chroma_db/
-
-# Variables de entorno
-*.env
-*.env.*
-
-# Logs
-logs/
-*.log
-
-# Archivos con información personal sensible
-.notReadable
-alfred_qa_history.json
-alfred_qa_history_backup_*.json
-# <-- Ignorar todos los archivos JSON en la carpeta conversations
-conversations/*.json
-
-# .key
+# === Certificados y Claves ===
+*.pem
 *.key
+*.crt
+*.cer
 
-# Archivos de base de datos
-*.sqlite
-*.db
-db/
+# === Testing ===
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# === Jupyter Notebooks ===
+.ipynb_checkpoints/
+
+# === Documentos de Usuario ===
+# No versionar documentos personales de prueba
+test_docs/
+sample_docs/
+
+# === Cache ===
+.cache/
+*.cache
+.parcel-cache/
+
+# === Archivos Grandes ===
+*.mp4
+*.avi
+*.mov
+*.zip
+*.tar
+*.gz
+*.rar
+
+# ============================================================================
+# IMPORTANTE: Archivos a NO Ignorar (mantener en repositorio)
+# ============================================================================
+# !.env.template
+# !.gitkeep
+# !README.md

@@ -12,8 +12,46 @@ let backendProcess = null;
 let isBackendStartedByElectron = false;
 let isCheckingBackend = false; // Flag para evitar chequeos simultáneos
 
-const BACKEND_PORT = 8000;
-const HOST = '127.0.0.1';
+// === Cargar configuración desde .env ===
+function loadEnvConfig() {
+    const envPath = path.join(__dirname, '.env');
+    const config = {
+        host: '127.0.0.1',
+        port: 8000
+    };
+    
+    try {
+        if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, 'utf-8');
+            const lines = envContent.split('\n');
+            
+            lines.forEach(line => {
+                line = line.trim();
+                if (line && !line.startsWith('#')) {
+                    const [key, ...valueParts] = line.split('=');
+                    const value = valueParts.join('=').trim();
+                    
+                    if (key === 'ALFRED_HOST' && value) {
+                        config.host = value;
+                    } else if (key === 'ALFRED_PORT' && value) {
+                        config.port = parseInt(value, 10) || 8000;
+                    }
+                }
+            });
+            console.log('Configuración cargada desde .env:', config);
+        } else {
+            console.warn('Archivo .env no encontrado, usando valores por defecto');
+        }
+    } catch (error) {
+        console.error('Error al cargar .env:', error);
+    }
+    
+    return config;
+}
+
+const ENV_CONFIG = loadEnvConfig();
+const BACKEND_PORT = ENV_CONFIG.port;
+const HOST = ENV_CONFIG.host;
 const PATH_BACKEND = path.join(__dirname, '.', 'backend'); // Ruta al proyecto Alfred
 const SCRIPT_BACKEND = 'alfred_backend.py';
 
