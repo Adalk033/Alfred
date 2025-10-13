@@ -1,4 +1,63 @@
 {
-  "name": "AlfredElectron",
+  "name": "alfred-electron",
+  "version": "2.0.0",
+  "description": "Alfred - Asistente Personal Inteligente con interfaz gráfica",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "app:dir": "electron-builder --dir",
+    "app:dist": "electron-builder"
+  },
+  "keywords": [
+    "alfred",
+    "assistant",
+    "ai",
+    "electron",
+    "chatbot"
+  ],
+  "author": "Adalk033",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "38.2.2",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "com.adalk033.alfred",
+    "productName": "Alfred",
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis",
+        "msi"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    },
+    "files": [
+      "main.js",
+      "renderer/**",
+      "styles.css",
+      "assets/**",
+      "backend/**",
+      "fonts/**",
+      ".env.template"
+    ]
+  },
+  "directories": {
+    "buildResources": "assets",
+    "output": "dist"
+  },
   "packageManager": "yarn@4.10.3"
 }
