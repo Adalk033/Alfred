@@ -30,11 +30,12 @@
     "appId": "com.adalk033.alfred",
     "productName": "Alfred",
     "asar": true,
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
+    },
     "win": {
-      "target": [
-        "nsis",
-        "msi"
-      ],
+      "target": "nsis",
       "icon": "assets/icon.ico"
     },
     "mac": {
@@ -45,6 +46,18 @@
       "target": "AppImage",
       "icon": "assets/icon.png"
     },
+    "nsis": {
+      "customNsisBinary": {
+        "url": "C:\\Program Files (x86)\\NSIS\\makensis.exe",
+        "version": "3.11"
+      },
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "useZip": false,
+      "unicode": true,
+      "warningsAsErrors": false
+    },
     "files": [
       "main.js",
       "renderer/**",
@@ -54,10 +67,6 @@
       "fonts/**",
       ".env.template"
     ]
-  },
-  "directories": {
-    "buildResources": "assets",
-    "output": "dist"
   },
   "packageManager": "yarn@4.10.3"
 }
