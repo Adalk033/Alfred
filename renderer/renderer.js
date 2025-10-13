@@ -113,6 +113,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar modo desde BD antes de continuar
     await loadMode();
+    
+    // Cargar modelos disponibles en el selector del topbar
+    await loadModelsIntoSelector();
 
     setupEventListeners();
     loadSettings();
@@ -1249,6 +1252,44 @@ async function saveOllamaKeepAlive() {
 // FUNCIONES DE GESTION DE MODELOS OLLAMA
 // ===============================================
 
+// Cargar modelos en el selector del topbar
+async function loadModelsIntoSelector() {
+    if (!modelSelect) {
+        console.error('modelSelect no esta inicializado');
+        return;
+    }
+
+    try {
+        const response = await fetch('http://127.0.0.1:8000/ollama/models/list');
+        const data = await response.json();
+
+        if (data.models && data.models.length > 0) {
+            // Limpiar opciones actuales
+            modelSelect.innerHTML = '';
+
+            // Agregar cada modelo como opcion
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.name;
+                option.textContent = model.name;
+                modelSelect.appendChild(option);
+            });
+
+            console.log(`Cargados ${data.models.length} modelos en el selector del topbar`);
+
+            // Cargar el modelo actualmente seleccionado
+            await loadCurrentModel();
+        } else {
+            // No hay modelos instalados
+            modelSelect.innerHTML = '<option value="">No hay modelos instalados</option>';
+            console.warn('No hay modelos de Ollama instalados');
+        }
+    } catch (error) {
+        console.error('Error al cargar modelos en selector:', error);
+        modelSelect.innerHTML = '<option value="">Error al cargar modelos</option>';
+    }
+}
+
 // Cargar lista de modelos instalados
 async function loadOllamaModels() {
     const modelsList = document.getElementById('modelsList');
@@ -1426,8 +1467,13 @@ function startDownloadPolling(modelName) {
 
                     // Recargar lista de modelos despues de 2 segundos
                     if (data.status === 'completed') {
-                        setTimeout(() => {
+                        setTimeout(async () => {
+                            // Recargar lista de modelos en la seccion de configuracion
                             loadOllamaModels();
+                            
+                            // Actualizar selector del topbar
+                            await loadModelsIntoSelector();
+                            
                             showNotification(`Modelo ${modelName} descargado exitosamente`, 'success');
 
                             // Ocultar el item de progreso después de 3 segundos más
@@ -1519,6 +1565,9 @@ async function selectModel(modelName) {
             if (modelSelect) {
                 modelSelect.value = modelName;
             }
+            
+            // Actualizar el modelo actual en el sistema
+            await loadCurrentModel();
         } else {
             showNotification(`Error al seleccionar modelo: ${data.detail}`, 'error');
         }
@@ -1543,7 +1592,12 @@ async function deleteModel(modelName) {
 
         if (response.ok) {
             showNotification(`Modelo ${modelName} eliminado`, 'success');
-            loadOllamaModels(); // Recargar lista
+            
+            // Recargar lista de modelos en la seccion de configuracion
+            loadOllamaModels();
+            
+            // Actualizar selector del topbar
+            await loadModelsIntoSelector();
         } else {
             showNotification(`Error al eliminar modelo: ${data.detail}`, 'error');
         }
