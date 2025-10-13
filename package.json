@@ -28,7 +28,10 @@
     "appId": "com.adalk033.alfred",
     "productName": "Alfred",
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "msi"
+      ],
       "icon": "assets/icon.ico"
     },
     "mac": {
@@ -41,10 +44,12 @@
     },
     "files": [
       "main.js",
-      "js/**/*",
-      "renderer/index.html",
+      "renderer/**",
       "styles.css",
-      "assets/**/*"
+      "assets/**",
+      "backend/**",
+      "fonts/**",
+      ".env.template"
     ]
   }
 }
