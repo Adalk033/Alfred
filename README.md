@@ -32,13 +32,14 @@
 - ✅ Temas visuales personalizables
 - ✅ Notificaciones visuales inteligentes
 
-### 🚀 **Instalación en Un Solo Comando**
-- ✅ Script de arranque universal (`stP.ps1` / `stP.sh`)
-- ✅ Verificación automática de requisitos
-- ✅ Instalación de dependencias automática
-- ✅ Descarga de modelos de IA automática
-- ✅ Detección de GPU automática
-- ✅ Configuración interactiva en primer arranque
+### 🚀 **Instalacion Automatica Completa**
+- ✅ Deteccion y instalacion automatica de Python 3.10+
+- ✅ Descarga e instalacion de Ollama en primer arranque
+- ✅ Descarga automatica de modelos de IA (gemma2:9b + embeddings)
+- ✅ Configuracion de entorno virtual Python
+- ✅ Instalacion de dependencias desde requirements.txt
+- ✅ Funciona en VM limpia sin configuracion previa
+- ✅ Notificaciones de progreso en tiempo real
 
 ### 🎮 **Aceleración por GPU**
 - ✅ Soporte NVIDIA CUDA
