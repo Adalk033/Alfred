@@ -1,0 +1,38 @@
+{
+  "description": "Paquetes que frecuentemente causan WinError 32 en Windows durante pip install",
+  "strategy": "Estos paquetes se instalan UNO POR UNO con delays largos DESPUÉS de los paquetes estables",
+  "problematic_packages": [
+    "greenlet",
+    "grpcio",
+    "numpy",
+    "scipy",
+    "pandas",
+    "pillow",
+    "matplotlib",
+    "lxml",
+    "psycopg2-binary",
+    "cryptography",
+    "cffi",
+    "sympy",
+    "nltk",
+    "spacy",
+    "tensorflow",
+    "scikit-learn",
+    "opencv-python"
+  ],
+  "install_config": {
+    "delay_between_packages_ms": 2000,
+    "retries_per_package": 5,
+    "timeout_per_package_seconds": 300
+  },
+  "notes": {
+    "greenlet": "SQLAlchemy dependency - compila extensiones C",
+    "grpcio": "gRPC library - compila bindings C++",
+    "numpy": "Numerical computing - binarios grandes",
+    "scipy": "Scientific computing - depende de numpy",
+    "torch": "PyTorch - archivos muy grandes (>700MB)",
+    "matplotlib": "Plotting library - muchos archivos pequeños",
+    "cryptography": "Compila extensiones C con OpenSSL",
+    "nltk": "Natural language - descarga datos adicionales"
+  }
+}

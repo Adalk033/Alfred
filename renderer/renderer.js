@@ -24,6 +24,59 @@ window.alfredAPI.onBackendStatus((data) => {
     updateConnectionStatus(status === 'connected');
 });
 
+// Escuchar progreso de instalación
+window.alfredAPI.onInstallationProgress((data) => {
+    const { stage, message, progress } = data;
+    updateLoadingUI(stage, message, progress);
+});
+
+// Escuchar cuando el backend está listo para ocultar el loader
+window.alfredAPI.onBackendReady(() => {
+    console.log('Backend confirmado listo - ocultando loader');
+    hideLoadingOverlay();
+    updateConnectionStatus(true);
+});
+
+// Actualizar UI del loader con progreso detallado
+function updateLoadingUI(stage, message, progress) {
+    const statusText = document.getElementById('loadingStatusText');
+    const progressBar = document.getElementById('loadingProgressBar');
+    
+    if (statusText) {
+        statusText.textContent = message || 'Iniciando Alfred...';
+    }
+    
+    if (progressBar && typeof progress === 'number') {
+        progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+    }
+    
+    console.log(`[INSTALLATION] ${stage}: ${message} (${progress}%)`);
+}
+
+// Ocultar loading overlay
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('backendLoadingOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        
+        // Eliminar del DOM después de la animación
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }, 500);
+    }
+    
+    // Habilitar input
+    if (State.messageInput) {
+        State.messageInput.disabled = false;
+        State.messageInput.placeholder = 'Escribe tu mensaje...';
+    }
+    if (State.sendBtn) {
+        State.sendBtn.disabled = false;
+    }
+}
+
 // Elementos del DOM (locales a renderer.js)
 let historyBtn;
 let settingsBtn;
@@ -332,12 +385,14 @@ function setupEventListeners() {
 }
 
 // Esperar a que el backend este completamente listo
+// NOTA: Esta función YA NO oculta el loader automáticamente
+// El loader se mantiene visible hasta que main.js envíe 'backend-ready'
 async function waitForBackendReady() {
     const API_BASE_URL = 'http://127.0.0.1:8000';
     const MAX_RETRIES = 60; // 2 minutos maximo (60 * 2 segundos)
     const RETRY_INTERVAL = 2000; // 2 segundos
 
-    // Referencias al overlay
+    // Referencias al overlay (NO lo ocultaremos aquí)
     const overlay = document.getElementById('backendLoadingOverlay');
     const statusText = document.getElementById('loadingStatusText');
     const progressBar = document.getElementById('loadingProgressBar');
@@ -389,26 +444,12 @@ async function waitForBackendReady() {
                         statusText.textContent = 'Alfred esta listo!';
                     }
 
-                    // Esperar un momento antes de ocultar el overlay
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    // Ocultar overlay
-                    if (overlay) {
-                        overlay.classList.add('hidden');
-                    }
+                    // NO ocultar el overlay aquí - esperamos la señal de 'backend-ready' desde main.js
+                    // El loader permanecerá visible hasta que main.js confirme todo
 
                     updateStatus('connected', 'Conectado', State.statusElement);
 
-                    // Habilitar input
-                    if (State.messageInput) {
-                        State.messageInput.disabled = false;
-                        State.messageInput.placeholder = 'Escribe tu mensaje aqui...';
-                    }
-                    if (State.sendBtn) {
-                        State.sendBtn.disabled = false;
-                    }
-
-                    showNotification('success', 'Alfred esta listo para ayudarte');
+                    // showNotification ya se mostrará cuando se reciba 'backend-ready'
                     return true;
                 }
 
@@ -444,15 +485,16 @@ async function waitForBackendReady() {
     }
 
     // Si llegamos aqui, el backend no se inicio en el tiempo esperado
-    if (overlay) {
-        overlay.classList.add('hidden');
-    }
+    // NO ocultar el loader - dejar que el usuario vea el error en el loader
     if (statusText) {
-        statusText.textContent = 'Error al conectar con el backend';
+        statusText.textContent = 'Error: Backend no responde despues de 2 minutos';
+    }
+    if (progressBar) {
+        progressBar.style.width = '0%'; // Resetear barra a 0 para indicar error
     }
 
     updateStatus('error', 'Error al iniciar backend', State.statusElement);
-    showNotification('error', 'No se pudo conectar con el backend despues de varios intentos. Intenta reiniciar la aplicacion.');
+    showNotification('error', 'No se pudo conectar con el backend. Revisa los logs en la consola.');
 
     return false;
 }

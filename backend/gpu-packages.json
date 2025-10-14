@@ -1,0 +1,75 @@
+{
+  "description": "Paquetes relacionados con GPU/CUDA que requieren hardware especifico",
+  "strategy": "Estos paquetes se instalan SOLO si se detecta GPU compatible",
+  
+  "gpu_packages": {
+    "nvidia_cuda": {
+      "description": "Paquetes para GPU NVIDIA con CUDA",
+      "detection": "nvidia-smi",
+      "packages": [
+        "torch==2.5.1",
+        "torchvision==0.20.1",
+        "torchaudio==2.5.1"
+      ],
+      "index_url": "https://download.pytorch.org/whl/cu121",
+      "notes": "PyTorch con CUDA 12.1 - requiere NVIDIA GPU"
+    },
+    
+    "amd_rocm": {
+      "description": "Paquetes para GPU AMD con ROCm (futuro)",
+      "detection": "rocm-smi",
+      "packages": [],
+      "notes": "No implementado aún"
+    },
+    
+    "apple_mps": {
+      "description": "Paquetes para Apple Silicon (M1/M2/M3)",
+      "detection": "platform.processor() == 'arm'",
+      "packages": [
+        "torch==2.5.1",
+        "torchvision==0.20.1",
+        "torchaudio==2.5.1"
+      ],
+      "notes": "PyTorch con Metal Performance Shaders"
+    }
+  },
+  
+  "cpu_fallback": {
+    "description": "Paquetes CPU cuando NO hay GPU",
+    "packages": [
+      "torch==2.5.1",
+      "torchvision==0.20.1",
+      "torchaudio==2.5.1"
+    ],
+    "index_url": "https://download.pytorch.org/whl/cpu",
+    "notes": "PyTorch CPU-only - mas lento pero compatible universalmente"
+  },
+  
+  "optional_gpu_accelerated": {
+    "description": "Paquetes opcionales que se benefician de GPU pero no la requieren",
+    "packages": [
+      "onnxruntime-gpu",
+      "cupy-cuda12x",
+      "tensorflow-gpu"
+    ],
+    "notes": "Instalar solo si usuario lo requiere explicitamente"
+  },
+  
+  "install_config": {
+    "gpu": {
+      "timeout_per_package_seconds": 600,
+      "retries_per_package": 3,
+      "note": "PyTorch es ~2GB, puede tardar 10-15 minutos"
+    },
+    "cpu": {
+      "timeout_per_package_seconds": 300,
+      "retries_per_package": 3,
+      "note": "PyTorch CPU es ~200MB, 2-3 minutos"
+    }
+  },
+  
+  "verification": {
+    "torch_cuda_check": "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')",
+    "torch_mps_check": "import torch; print('MPS' if torch.backends.mps.is_available() else 'CPU')"
+  }
+}

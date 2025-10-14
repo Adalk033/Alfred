@@ -46,6 +46,12 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   },
   onBackendStatus: (callback) => {
     ipcRenderer.on('backend-status', (event, data) => callback(data));
+  },
+  onInstallationProgress: (callback) => {
+    ipcRenderer.on('installation-progress', (event, data) => callback(data));
+  },
+  onBackendReady: (callback) => {
+    ipcRenderer.on('backend-ready', (event) => callback());
   }
 });
 

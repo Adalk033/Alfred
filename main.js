@@ -62,8 +62,8 @@ const BACKEND_CONFIG = {
     path: PATH_BACKEND,
     script: SCRIPT_BACKEND,
     maxRetries: 3,
-    retryDelay: 2000,
-    startupTimeout: 900000  // 15 minutos para instalaciones grandes (modelos de 2GB)
+    retryDelay: 10000, // 10 segundos
+    startupTimeout: 1200000  // 20 minutos para instalaciones grandes (modelos de 2GB)
 };
 
 // Modelos de Ollama requeridos
@@ -96,10 +96,10 @@ function createWindow() {
     mainWindow.once('ready-to-show', () => {
         console.log('Ventana principal lista');
         mainWindow.show();
-        // Verificar/iniciar backend después de mostrar la ventana
+        // NO iniciar backend automáticamente aquí
+        // El loader se mostrará y esperará a que initializeAppWithProgress termine
         initializeAppWithProgress();
-        // Iniciar monitoreo del estado del backend
-        startStatusMonitoring();
+        // Iniciar monitoreo del estado del backend DESPUÉS de la inicialización
     });
 
     // Manejar recarga de la página (Ctrl+R)
@@ -186,11 +186,32 @@ async function initializeAppWithProgress() {
         notifyUser('info', 'Configurando entorno Python...');
         await ensurePythonEnv(BACKEND_CONFIG.path);
 
-        // 5. Iniciar backend
+        // 5. Iniciar backend y ESPERAR a que responda
         notifyUser('info', 'Iniciando servidor de Alfred...');
-        await checkAndStartBackend();
+        notifyInstallationProgress('backend-start', 'Iniciando backend...', 80);
+        
+        const backendReady = await startBackendAndWait();
+        
+        if (!backendReady) {
+            notifyUser('error', 'El backend no responde. Revisa los logs.');
+            return false;
+        }
 
+        // 6. Backend confirmado - ocultar loader y mostrar UI
         notifyUser('success', 'Alfred esta listo para usar');
+        notifyInstallationProgress('complete', 'Inicializacion completa', 100);
+        
+        // Esperar un momento antes de ocultar el loader
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Notificar al renderer que puede ocultar el loader
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('backend-ready');
+        }
+        
+        // AHORA iniciar monitoreo continuo
+        startStatusMonitoring();
+        
         return true;
 
     } catch (error) {
@@ -231,6 +252,7 @@ async function checkPython() {
 // Asegurar que Python esté instalado
 async function ensurePython() {
     console.log('Verificando instalacion de Python...');
+    notifyInstallationProgress('python-check', 'Verificando Python...', 0);
 
     // Verificar PRIMERO si Python ya está disponible (puede estar instalado aunque no esté en PATH del comando)
     const pythonInstalledMarker = path.join(app.getPath('userData'), '.python_installed');
@@ -239,6 +261,7 @@ async function ensurePython() {
     if (fs.existsSync(pythonInstalledMarker)) {
         console.log('Detectada marca de instalacion previa de Python.');
         notifyUser('info', 'Verificando Python instalado previamente...');
+        notifyInstallationProgress('python-verify', 'Verificando Python instalado...', 2);
 
         // Intentar encontrar Python usando findPythonExecutable (busca en rutas comunes)
         try {
@@ -254,6 +277,7 @@ async function ensurePython() {
             }
 
             // Python encontrado, continuar sin reiniciar
+            notifyInstallationProgress('python-ready', 'Python listo', 20);
             return true;
         } catch (findError) {
             // No se pudo encontrar Python, requiere reinicio
@@ -326,12 +350,14 @@ async function downloadAndInstallPythonWindows() {
 
     console.log('Descargando Python desde:', downloadUrl);
     notifyUser('info', 'Descargando Python 3.12... esto puede tomar varios minutos');
+    notifyInstallationProgress('python-download', 'Descargando Python 3.12...', 5);
 
     try {
         // Descargar el instalador
         await downloadFile(downloadUrl, installerPath);
 
         notifyUser('info', 'Instalando Python... esto puede tomar unos minutos');
+        notifyInstallationProgress('python-install', 'Instalando Python 3.12...', 15);
         console.log('Ejecutando instalador de Python...');
 
         // Instalar Python de forma silenciosa con opciones importantes
@@ -405,7 +431,7 @@ async function downloadAndInstallPythonWindows() {
         } catch (findError) {
             // Python no está disponible aún, necesita reinicio
             console.log('Python requiere reinicio para actualizar PATH.');
-            
+
             // Crear archivo de marca para indicar que Python se instaló
             const pythonInstalledMarker = path.join(app.getPath('userData'), '.python_installed');
             try {
@@ -487,10 +513,12 @@ async function checkOllama() {
 // Asegurar que Ollama esté instalado y corriendo
 async function ensureOllama() {
     console.log('Verificando instalacion de Ollama...');
+    notifyInstallationProgress('ollama-check', 'Verificando Ollama...', 40);
 
     // Verificar si Ollama está corriendo
     if (await checkOllama()) {
         console.log('Ollama ya esta corriendo');
+        notifyInstallationProgress('ollama-ready', 'Ollama listo', 50);
         return true;
     }
 
@@ -498,6 +526,7 @@ async function ensureOllama() {
     try {
         execSync('ollama --version', { stdio: 'pipe' });
         console.log('Ollama instalado, intentando iniciar...');
+        notifyInstallationProgress('ollama-start', 'Iniciando Ollama...', 45);
 
         // Intentar iniciar Ollama
         try {
@@ -516,6 +545,7 @@ async function ensureOllama() {
 
             if (await checkOllama()) {
                 console.log('Ollama iniciado correctamente');
+                notifyInstallationProgress('ollama-ready', 'Ollama iniciado', 50);
                 return true;
             }
         } catch (startError) {
@@ -525,6 +555,7 @@ async function ensureOllama() {
         // Ollama no está instalado
         console.log('Ollama no esta instalado');
         notifyUser('warning', 'Descargando Ollama... esto puede tomar varios minutos');
+        notifyInstallationProgress('ollama-download', 'Descargando Ollama...', 42);
 
         try {
             // Descargar e instalar Ollama automáticamente
@@ -649,6 +680,7 @@ function downloadFile(url, destPath) {
 // Verificar y descargar modelos de Ollama
 async function ensureOllamaModels() {
     console.log('Verificando modelos de Ollama...');
+    notifyInstallationProgress('models-check', 'Verificando modelos de IA...', 55);
 
     try {
         // Obtener lista de modelos instalados
@@ -658,14 +690,19 @@ async function ensureOllamaModels() {
         });
 
         const installedModels = modelsOutput.toLowerCase();
+        let modelIndex = 0;
+        const totalModels = REQUIRED_OLLAMA_MODELS.length;
 
         // Verificar cada modelo requerido
         for (const model of REQUIRED_OLLAMA_MODELS) {
             const modelName = model.toLowerCase();
+            modelIndex++;
+            const baseProgress = 55 + (modelIndex - 1) * (30 / totalModels);
 
             if (!installedModels.includes(modelName.split(':')[0])) {
                 console.log(`Descargando modelo ${model}...`);
                 notifyUser('info', `Descargando modelo ${model}... (puede ser grande, hasta 2GB)`);
+                notifyInstallationProgress('models-download', `Descargando ${model}... (${modelIndex}/${totalModels})`, baseProgress);
 
                 try {
                     // Descargar modelo de forma asíncrona para no congelar la UI
@@ -684,17 +721,21 @@ async function ensureOllamaModels() {
 
                         pullProcess.stdout.on('data', (data) => {
                             const output = data.toString().trim();
-                            
+
                             // Detectar progreso de descarga (ej: "pulling 4f1b43ef9323... 45%")
                             const progressMatch = output.match(/(\d+)%/);
                             if (progressMatch) {
                                 const progress = parseInt(progressMatch[1]);
                                 const now = Date.now();
-                                
+
+                                // Calcular progreso total considerando todos los modelos
+                                const modelProgress = baseProgress + (progress / 100) * (30 / totalModels);
+
                                 // Notificar cada 10% o cada 5 segundos
                                 if (progress % 10 === 0 || now - lastNotification > 5000) {
                                     console.log(`[Ollama] Descargando ${model}: ${progress}%`);
                                     notifyUser('info', `Descargando ${model}: ${progress}%`);
+                                    notifyInstallationProgress('models-download', `Descargando ${model}: ${progress}% (${modelIndex}/${totalModels})`, modelProgress);
                                     lastNotification = now;
                                 }
                             } else if (output.includes('pulling')) {
@@ -702,15 +743,17 @@ async function ensureOllamaModels() {
                                 if (layerMatch && output !== lastProgress) {
                                     console.log(`[Ollama] Descargando capa: ${layerMatch[1].substring(0, 12)}...`);
                                     notifyUser('info', `Descargando componente del modelo...`);
+                                    notifyInstallationProgress('models-download', `Descargando componentes de ${model}...`, baseProgress + 5);
                                     lastProgress = output;
                                 }
                             } else if (output.includes('verifying')) {
                                 console.log(`[Ollama] Verificando integridad...`);
                                 notifyUser('info', `Verificando ${model}...`);
+                                notifyInstallationProgress('models-verify', `Verificando ${model}...`, baseProgress + 25);
                             } else if (output.includes('success')) {
                                 console.log(`[Ollama] Modelo descargado exitosamente`);
                             }
-                            
+
                             // Solo mostrar lineas significativas en consola
                             if (output && output !== lastProgress && !output.includes('pulling')) {
                                 console.log(`[Ollama] ${output}`);
@@ -737,6 +780,7 @@ async function ensureOllamaModels() {
                     });
 
                     notifyUser('success', `Modelo ${model} listo`);
+                    notifyInstallationProgress('models-ready', `Modelo ${model} listo (${modelIndex}/${totalModels})`, baseProgress + 30 / totalModels);
 
                 } catch (pullError) {
                     console.error(`Error al descargar ${model}:`, pullError);
@@ -807,9 +851,907 @@ function findPythonExecutable() {
     throw new Error('No se pudo encontrar Python instalado');
 }
 
-async function ensurePythonEnv(backendPath) {
+// Cargar configuración de paquetes problemáticos
+function loadProblematicPackages(backendPath) {
+    try {
+        const configPath = path.join(backendPath, 'problematic-packages.json');
+        if (fs.existsSync(configPath)) {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            console.log(`✓ Configuracion de paquetes problematicos cargada: ${config.problematic_packages.length} paquetes`);
+            return config;
+        }
+    } catch (error) {
+        console.log('No se pudo cargar problematic-packages.json, usando defaults:', error.message);
+    }
+    
+    // Fallback si no existe el archivo
+    return {
+        problematic_packages: [
+            'greenlet', 'grpcio', 'numpy', 'scipy', 'pandas', 'pillow', 
+            'matplotlib', 'lxml', 'cryptography', 'cffi', 'sympy', 
+            'nltk'
+        ],
+        install_config: {
+            delay_between_packages_ms: 2000,
+            retries_per_package: 5,
+            timeout_per_package_seconds: 300
+        }
+    };
+}
+
+// Cargar configuración de paquetes GPU
+function loadGPUPackages(backendPath) {
+    try {
+        const configPath = path.join(backendPath, 'gpu-packages.json');
+        if (fs.existsSync(configPath)) {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            console.log('✓ Configuracion de paquetes GPU cargada');
+            return config;
+        }
+    } catch (error) {
+        console.log('No se pudo cargar gpu-packages.json, usando defaults:', error.message);
+    }
+    
+    // Fallback
+    return {
+        gpu_packages: {
+            nvidia_cuda: {
+                packages: ['torch==2.5.1', 'torchvision==0.20.1', 'torchaudio==2.5.1'],
+                index_url: 'https://download.pytorch.org/whl/cu121'
+            }
+        },
+        cpu_fallback: {
+            packages: ['torch==2.5.1', 'torchvision==0.20.1', 'torchaudio==2.5.1'],
+            index_url: 'https://download.pytorch.org/whl/cpu'
+        },
+        install_config: {
+            gpu: { timeout_per_package_seconds: 600, retries_per_package: 3 },
+            cpu: { timeout_per_package_seconds: 300, retries_per_package: 3 }
+        }
+    };
+}
+
+// Detectar tipo de GPU disponible
+async function detectGPUType() {
+    console.log('Detectando hardware GPU...');
+    
+    // Verificar NVIDIA
+    try {
+        if (process.platform === 'win32') {
+            execSync('nvidia-smi', { stdio: 'pipe' });
+            console.log('✓ GPU NVIDIA detectada');
+            return 'nvidia_cuda';
+        }
+    } catch {
+        // No hay NVIDIA GPU
+    }
+    
+    // Verificar Apple Silicon
+    try {
+        if (process.platform === 'darwin') {
+            const arch = execSync('uname -m', { encoding: 'utf8' }).trim();
+            if (arch === 'arm64') {
+                console.log('✓ Apple Silicon detectado (M1/M2/M3)');
+                return 'apple_mps';
+            }
+        }
+    } catch {
+        // No es Apple Silicon
+    }
+    
+    // TODO: AMD ROCm detection
+    
+    console.log('⚠️  No se detecto GPU compatible, usando CPU');
+    return 'cpu';
+}
+
+// Instalar paquetes de GPU/CPU según hardware
+async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
+    const gpuType = await detectGPUType();
+    const tempDir = path.join(backendPath, 'temp');
+    
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    let packagesToInstall = [];
+    let indexUrl = null;
+    let config = gpuConfig.install_config.cpu;
+    let label = 'CPU';
+    
+    if (gpuType === 'nvidia_cuda' && gpuConfig.gpu_packages.nvidia_cuda) {
+        packagesToInstall = gpuConfig.gpu_packages.nvidia_cuda.packages;
+        indexUrl = gpuConfig.gpu_packages.nvidia_cuda.index_url;
+        config = gpuConfig.install_config.gpu;
+        label = 'GPU NVIDIA (CUDA)';
+    } else if (gpuType === 'apple_mps' && gpuConfig.gpu_packages.apple_mps) {
+        packagesToInstall = gpuConfig.gpu_packages.apple_mps.packages;
+        config = gpuConfig.install_config.gpu;
+        label = 'Apple Silicon (MPS)';
+    } else {
+        packagesToInstall = gpuConfig.cpu_fallback.packages;
+        indexUrl = gpuConfig.cpu_fallback.index_url;
+    }
+    
+    if (packagesToInstall.length === 0) {
+        console.log('No hay paquetes GPU/CPU para instalar');
+        return [];
+    }
+    
+    console.log(`\n=== Instalando PyTorch para ${label} ===`);
+    console.log(`Paquetes: ${packagesToInstall.join(', ')}`);
+    if (indexUrl) {
+        console.log(`Index URL: ${indexUrl}`);
+    }
+    notifyUser('info', `Instalando PyTorch para ${label}... (esto puede tardar varios minutos)`);
+    notifyInstallationProgress('gpu-install', `Instalando PyTorch (${label})...`, 43);
+    
+    let installed = 0;
+    let failed = [];
+    const total = packagesToInstall.length;
+    
+    for (const pkg of packagesToInstall) {
+        installed++;
+        const progress = 43 + Math.min(2, (installed / total) * 2);
+        console.log(`[pip gpu] ${installed}/${total}: Instalando ${pkg}...`);
+        notifyInstallationProgress('gpu-install', `Instalando ${pkg}... (${installed}/${total})`, progress);
+        
+        try {
+            const success = await new Promise((resolve) => {
+                const args = [
+                    "-m", "pip", "install",
+                    "--prefer-binary",
+                    "--no-cache-dir",
+                    "--no-color",
+                    "--progress-bar", "off",
+                    "--disable-pip-version-check",
+                    "--retries", String(config.retries_per_package),
+                    "--timeout", String(config.timeout_per_package_seconds)
+                ];
+                
+                // Agregar index-url si existe
+                if (indexUrl) {
+                    args.push("--index-url", indexUrl);
+                }
+                
+                args.push(pkg);
+                
+                const proc = spawn(pythonCmd, args, {
+                    cwd: backendPath,
+                    stdio: "pipe",
+                    env: {
+                        ...process.env,
+                        PYTHONIOENCODING: 'utf-8',
+                        PYTHONUNBUFFERED: '1',
+                        TEMP: tempDir,
+                        TMP: tempDir
+                    }
+                });
+                
+                let output = '';
+                let errorOut = '';
+                
+                proc.stdout.on('data', (data) => {
+                    output += data.toString();
+                    const lines = output.split('\n');
+                    for (const line of lines) {
+                        if (line.includes('Downloading') && line.includes('MB')) {
+                            console.log(`  ${line.trim()}`);
+                        }
+                    }
+                });
+                
+                proc.stderr.on('data', (data) => {
+                    const err = data.toString();
+                    errorOut += err;
+                    if (!err.includes('WARNING') && !err.includes('DEPRECATION')) {
+                        console.error(`  [stderr] ${err.trim()}`);
+                    }
+                });
+                
+                proc.on('close', (code) => {
+                    if (code === 0) {
+                        console.log(`  ✓ ${pkg} instalado correctamente`);
+                        resolve(true);
+                    } else {
+                        console.error(`  ✗ ${pkg} fallo: ${errorOut.substring(0, 150)}`);
+                        resolve(false);
+                    }
+                });
+                
+                proc.on('error', (err) => {
+                    console.error(`  ✗ Error de proceso: ${err.message}`);
+                    resolve(false);
+                });
+            });
+            
+            if (!success) {
+                failed.push(pkg.split('==')[0]); // Solo el nombre sin versión
+            }
+            
+            // Delay entre paquetes grandes
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+        } catch (error) {
+            console.error(`  ✗ Error al instalar ${pkg}:`, error.message);
+            failed.push(pkg.split('==')[0]);
+        }
+    }
+    
+    if (failed.length > 0) {
+        console.log(`\n⚠️  Paquetes GPU/CPU que fallaron (${failed.length}): ${failed.join(', ')}`);
+        notifyUser('warning', `${total - failed.length}/${total} paquetes GPU instalados`);
+    } else {
+        console.log(`✓ PyTorch instalado correctamente para ${label}`);
+        notifyUser('success', `PyTorch instalado para ${label}`);
+    }
+    
+    notifyInstallationProgress('gpu-ready', 'PyTorch instalado', 45);
+    return failed;
+}
+
+// Cargar configuración de paquetes problemáticos
+function loadProblematicPackages(backendPath) {
+    try {
+        const configPath = path.join(backendPath, 'problematic-packages.json');
+        if (fs.existsSync(configPath)) {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            console.log(`✓ Configuracion de paquetes problematicos cargada: ${config.problematic_packages.length} paquetes`);
+            return config;
+        }
+    } catch (error) {
+        console.log('No se pudo cargar problematic-packages.json, usando defaults:', error.message);
+    }
+    
+    // Fallback si no existe el archivo
+    return {
+        problematic_packages: [
+            'greenlet', 'grpcio', 'numpy', 'scipy', 'pandas', 'pillow', 
+            'matplotlib', 'lxml', 'cryptography', 'cffi', 'sympy', 
+            'torch', 'torchvision', 'torchaudio', 'nltk'
+        ],
+        install_config: {
+            delay_between_packages_ms: 2000,
+            retries_per_package: 5,
+            timeout_per_package_seconds: 300
+        }
+    };
+}
+
+// Instalar paquetes problemáticos con estrategia especial
+async function installProblematicPackages(pythonCmd, backendPath, problematicPackages, installConfig) {
+    const tempDir = path.join(backendPath, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    // Leer requirements.txt para obtener las especificaciones completas de versión
+    const requirementsPath = path.join(backendPath, 'requirements.txt');
+    const requirementsContent = fs.readFileSync(requirementsPath, 'utf8');
+    const allPackages = requirementsContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
+
+    // Mapear nombres de paquetes a sus especificaciones completas
+    const packageMap = {};
+    allPackages.forEach(spec => {
+        const nameMatch = spec.match(/^([a-zA-Z0-9_-]+)/);
+        if (nameMatch) {
+            packageMap[nameMatch[1].toLowerCase()] = spec;
+        }
+    });
+
+    let installed = 0;
+    let failed = [];
+    const total = problematicPackages.length;
+    const delay = installConfig.delay_between_packages_ms || 2000;
+
+    console.log(`⚠️  Instalando ${total} paquetes problematicos con delays de ${delay}ms...`);
+
+    for (const pkgName of problematicPackages) {
+        installed++;
+        const progress = 38 + Math.min(4, (installed / total) * 4);
+        
+        // Buscar la especificación completa del paquete
+        const pkgSpec = packageMap[pkgName.toLowerCase()] || pkgName;
+        
+        console.log(`[pip problematic] ${installed}/${total}: Instalando ${pkgSpec}...`);
+        notifyInstallationProgress(
+            'deps-problematic', 
+            `Instalando ${pkgName}... (${installed}/${total})`, 
+            progress
+        );
+
+        try {
+            const success = await new Promise((resolve) => {
+                const proc = spawn(pythonCmd, [
+                    "-m", "pip", "install",
+                    "--prefer-binary",
+                    "--no-cache-dir",
+                    "--no-color",
+                    "--progress-bar", "off",
+                    "--disable-pip-version-check",
+                    "--retries", String(installConfig.retries_per_package || 5),
+                    "--timeout", String(installConfig.timeout_per_package_seconds || 300),
+                    pkgSpec
+                ], {
+                    cwd: backendPath,
+                    stdio: "pipe",
+                    env: {
+                        ...process.env,
+                        PYTHONIOENCODING: 'utf-8',
+                        PYTHONUNBUFFERED: '1',
+                        TEMP: tempDir,
+                        TMP: tempDir
+                    }
+                });
+
+                let output = '';
+                let errorOut = '';
+
+                proc.stdout.on('data', (data) => {
+                    output += data.toString();
+                    // Mostrar progreso importante
+                    const lines = output.split('\n');
+                    for (const line of lines) {
+                        if (line.includes('Downloading') || line.includes('Installing')) {
+                            console.log(`  ${line.trim()}`);
+                        }
+                    }
+                });
+
+                proc.stderr.on('data', (data) => {
+                    const err = data.toString();
+                    errorOut += err;
+                    if (!err.includes('WARNING') && !err.includes('DEPRECATION')) {
+                        console.error(`  [stderr] ${err.trim()}`);
+                    }
+                });
+
+                proc.on('close', (code) => {
+                    if (code === 0) {
+                        console.log(`  ✓ ${pkgName} instalado correctamente`);
+                        resolve(true);
+                    } else {
+                        console.error(`  ✗ ${pkgName} fallo: ${errorOut.substring(0, 150)}`);
+                        resolve(false);
+                    }
+                });
+
+                proc.on('error', (err) => {
+                    console.error(`  ✗ Error de proceso: ${err.message}`);
+                    resolve(false);
+                });
+            });
+
+            if (!success) {
+                failed.push(pkgName);
+            }
+
+            // DELAY LARGO entre paquetes problemáticos para liberar recursos
+            console.log(`  Esperando ${delay}ms antes del siguiente paquete...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+
+        } catch (error) {
+            console.error(`  ✗ Error al instalar ${pkgName}:`, error.message);
+            failed.push(pkgName);
+        }
+    }
+
+    if (failed.length > 0) {
+        console.log(`\n⚠️  Paquetes problematicos que fallaron (${failed.length}): ${failed.join(', ')}`);
+    } else {
+        console.log(`✓ Todos los paquetes problematicos instalados correctamente`);
+    }
+
+    return failed;
+}
+
+// Función para instalar paquetes en bloque (rápido pero puede fallar algunos)
+async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, packagesToInstall) {
+    const tempDir = path.join(backendPath, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const failedPackages = [];
+    
+    // Leer requirements.txt y filtrar solo los paquetes que queremos instalar
+    const requirementsContent = fs.readFileSync(requirementsPath, 'utf8');
+    const allSpecs = requirementsContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
+    
+    // Crear mapa de nombre → especificación completa
+    const packageMap = {};
+    allSpecs.forEach(spec => {
+        const nameMatch = spec.match(/^([a-zA-Z0-9_-]+)/);
+        if (nameMatch) {
+            packageMap[nameMatch[1].toLowerCase()] = spec;
+        }
+    });
+    
+    // Obtener especificaciones completas de los paquetes a instalar
+    const specsToInstall = packagesToInstall
+        .map(pkg => packageMap[pkg.toLowerCase()] || pkg)
+        .filter(spec => spec);
+    
+    if (specsToInstall.length === 0) {
+        console.log('No hay paquetes para instalar en bloque');
+        return [];
+    }
+    
+    console.log(`Instalando ${specsToInstall.length} paquetes en bloque...`);
+
+    return new Promise((resolve) => {
+        // Instalar directamente con los nombres de paquetes (no -r requirements.txt)
+        const proc = spawn(pythonCmd, [
+            "-m", "pip", "install",
+            "--prefer-binary",
+            "--no-cache-dir",
+            "--no-color",
+            "--progress-bar", "off",
+            "--disable-pip-version-check",
+            "--retries", "3",
+            "--timeout", "120",
+            ...specsToInstall  // Expandir array de especificaciones
+        ], {
+            cwd: backendPath,
+            stdio: ["ignore", "pipe", "pipe"],
+            env: {
+                ...process.env,
+                PYTHONIOENCODING: 'utf-8',
+                PYTHONUNBUFFERED: '1',
+                TEMP: tempDir,
+                TMP: tempDir
+            }
+        });
+
+        let installOutput = '';
+        let errorOutput = '';
+        let lastPackage = '';
+        let packagesInstalled = 0;
+
+        proc.stdout.on("data", (data) => {
+            const output = data.toString('utf8').trim();
+            installOutput += output + '\n';
+            
+            const collectingMatch = output.match(/Collecting ([^\s]+)/);
+            const installingMatch = output.match(/Installing collected packages: (.+)/);
+            
+            if (collectingMatch && collectingMatch[1] !== lastPackage) {
+                lastPackage = collectingMatch[1];
+                packagesInstalled++;
+                const progress = 36 + Math.min(6, (packagesInstalled / packagesToInstall.length) * 6);
+                console.log(`[pip bulk] Procesando: ${lastPackage}`);
+                notifyInstallationProgress('deps-download', `Instalando ${lastPackage}... (${packagesInstalled}/${packagesToInstall.length})`, progress);
+            } else if (installingMatch) {
+                notifyInstallationProgress('deps-finalizing', 'Finalizando instalacion...', 42);
+            }
+        });
+
+        proc.stderr.on("data", (data) => {
+            const error = data.toString('utf8').trim();
+            errorOutput += error + '\n';
+            
+            // Detectar paquetes que fallaron - MEJORADO
+            // Patrón 1: ERROR: Could not install packages... 'path\package\file'
+            const errorMatch1 = error.match(/ERROR:.*?'[^']*[\\/]site-packages[\\/]([^\\/]+)/);
+            if (errorMatch1 && !failedPackages.includes(errorMatch1[1])) {
+                failedPackages.push(errorMatch1[1]);
+                console.log(`[pip] Paquete con error detectado: ${errorMatch1[1]}`);
+            }
+            
+            // Patrón 2: ERROR: Could not install packages... temp\...\package-version.whl
+            const errorMatch2 = error.match(/temp[\\/][^\\/]+[\\/]([a-zA-Z0-9_-]+)-[\d.]+/);
+            if (errorMatch2 && !failedPackages.includes(errorMatch2[1])) {
+                failedPackages.push(errorMatch2[1]);
+                console.log(`[pip] Paquete con error detectado: ${errorMatch2[1]}`);
+            }
+            
+            // Patrón 3: Collecting package_name (failed)
+            const errorMatch3 = error.match(/ERROR:.*?Could not find.*?for ([a-zA-Z0-9_-]+)/);
+            if (errorMatch3 && !failedPackages.includes(errorMatch3[1])) {
+                failedPackages.push(errorMatch3[1]);
+                console.log(`[pip] Paquete con error detectado: ${errorMatch3[1]}`);
+            }
+            
+            if (error && !error.includes('WARNING') && !error.includes('DEPRECATION')) {
+                console.error(`[pip stderr] ${error}`);
+            }
+        });
+
+        proc.on("close", (code) => {
+            if (code === 0) {
+                console.log("✓ Instalacion en bloque completada correctamente");
+                console.log("✓ Instalacion en bloque completada correctamente");
+                resolve([]);
+            } else {
+                console.log(`⚠️  Instalacion en bloque termino con errores (code ${code})`);
+                
+                // Si no detectamos paquetes específicos, devolver los que intentamos instalar
+                if (failedPackages.length === 0) {
+                    console.log('⚠️  No se detectaron paquetes especificos con errores.');
+                    console.log('Por seguridad, se marcaran como fallidos para retry...');
+                    resolve(packagesToInstall.slice());
+                } else {
+                    console.log(`Paquetes detectados con errores (${failedPackages.length}): ${failedPackages.join(', ')}`);
+                    resolve(failedPackages);
+                }
+            }
+        });
+
+        proc.on("error", (err) => {
+            console.error('Error al ejecutar pip:', err);
+            resolve(failedPackages);
+        });
+    });
+}
+
+// Función para reintentar paquetes fallidos uno por uno
+async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
+    const tempDir = path.join(backendPath, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    // Leer requirements.txt para obtener las especificaciones completas de versión
+    const requirementsPath = path.join(backendPath, 'requirements.txt');
+    const requirementsContent = fs.readFileSync(requirementsPath, 'utf8');
+    const allPackages = requirementsContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'));
+
+    // Mapear nombres de paquetes a sus especificaciones completas
+    const packageMap = {};
+    allPackages.forEach(spec => {
+        const nameMatch = spec.match(/^([a-zA-Z0-9_-]+)/);
+        if (nameMatch) {
+            packageMap[nameMatch[1].toLowerCase()] = spec;
+        }
+    });
+
+    let retried = 0;
+    let stillFailed = [];
+
+    for (const pkgName of failedPackages) {
+        retried++;
+        const progress = 40 + Math.min(5, (retried / failedPackages.length) * 5);
+        
+        // Buscar la especificación completa del paquete
+        const pkgSpec = packageMap[pkgName.toLowerCase()] || pkgName;
+        
+        console.log(`[pip retry] Reintentando ${pkgSpec}... (${retried}/${failedPackages.length})`);
+        notifyInstallationProgress('deps-retry', `Reintentando ${pkgName}... (${retried}/${failedPackages.length})`, progress);
+
+        try {
+            const success = await new Promise((resolve) => {
+                const proc = spawn(pythonCmd, [
+                    "-m", "pip", "install",
+                    "--prefer-binary",
+                    "--no-cache-dir",
+                    "--no-color",
+                    "--progress-bar", "off",
+                    "--disable-pip-version-check",
+                    "--retries", "5",
+                    "--timeout", "180",
+                    pkgSpec  // Usar especificación completa con versión
+                ], {
+                    cwd: backendPath,
+                    stdio: "pipe",
+                    env: {
+                        ...process.env,
+                        PYTHONIOENCODING: 'utf-8',
+                        PYTHONUNBUFFERED: '1',
+                        TEMP: tempDir,
+                        TMP: tempDir
+                    }
+                });
+
+                let errorOut = '';
+
+                proc.stdout.on('data', (data) => {
+                    const output = data.toString();
+                    // Mostrar output importante
+                    if (output.includes('Successfully installed') || output.includes('Requirement already satisfied')) {
+                        console.log(`[pip retry] ${output.trim()}`);
+                    }
+                });
+
+                proc.stderr.on('data', (data) => {
+                    const err = data.toString();
+                    errorOut += err;
+                });
+
+                proc.on('close', (code) => {
+                    if (code === 0) {
+                        console.log(`✓ ${pkgName} instalado correctamente en retry`);
+                        resolve(true);
+                    } else {
+                        console.error(`✗ ${pkgName} sigue fallando: ${errorOut.substring(0, 150)}`);
+                        resolve(false);
+                    }
+                });
+
+                proc.on('error', () => {
+                    resolve(false);
+                });
+            });
+
+            if (!success) {
+                stillFailed.push(pkgName);
+            }
+
+            // Pausa mayor entre reintentos para dar tiempo a Windows
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+        } catch (error) {
+            console.error(`Error al reintentar ${pkgName}:`, error.message);
+            stillFailed.push(pkgName);
+        }
+    }
+
+    if (stillFailed.length > 0) {
+        console.log(`\n⚠️  Paquetes que aun fallan (${stillFailed.length}):`);
+        stillFailed.forEach(pkg => console.log(`   - ${pkg}`));
+        notifyUser('warning', `${failedPackages.length - stillFailed.length}/${failedPackages.length} paquetes recuperados. ${stillFailed.length} siguen fallando.`);
+    } else {
+        console.log(`✓ Todos los paquetes fallidos fueron instalados correctamente`);
+        notifyUser('success', `${failedPackages.length} paquetes recuperados exitosamente`);
+    }
+    
+    notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 45);
+}
+
+// Función auxiliar para cerrar procesos de Python bloqueantes
+async function killPythonProcesses(venvPath) {
+    if (process.platform !== 'win32') return;
+
+    try {
+        console.log('Cerrando procesos de Python que puedan estar bloqueando archivos...');
+
+        // Obtener PIDs de procesos Python usando el venv
+        const tasklist = execSync('tasklist /FI "IMAGENAME eq python.exe" /FO CSV /NH', {
+            encoding: 'utf8',
+            stdio: 'pipe'
+        });
+
+        const lines = tasklist.trim().split('\n');
+        for (const line of lines) {
+            const parts = line.split(',');
+            if (parts.length >= 2) {
+                const pid = parts[1].replace(/"/g, '').trim();
+                if (pid && !isNaN(pid)) {
+                    try {
+                        // Intentar cerrar el proceso amablemente primero
+                        execSync(`taskkill /PID ${pid}`, {
+                            stdio: 'pipe',
+                            timeout: 5000
+                        });
+                        console.log(`Proceso Python (PID ${pid}) cerrado`);
+                    } catch (killError) {
+                        // Si falla, ignorar (puede que ya no exista)
+                    }
+                }
+            }
+        }
+
+        // Esperar un momento para que los archivos se liberen
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+    } catch (error) {
+        console.log('No se pudieron cerrar procesos Python:', error.message);
+    }
+}
+
+// Función para instalar paquetes con reintentos
+async function installPackagesWithRetry(pythonCmd, backendPath, requirementsPath, missing) {
+    const tempDir = path.join(backendPath, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    return new Promise((resolve, reject) => {
+        const proc = spawn(pythonCmd, [
+            "-m", "pip", "install",
+            "--prefer-binary",
+            "--no-cache-dir",
+            "--no-color",
+            "--progress-bar", "off",
+            "--disable-pip-version-check",
+            "--retries", "3",  // Reintentar 3 veces en caso de errores de red
+            "--timeout", "120",  // Timeout de 120 segundos
+            "-r", "requirements.txt"
+        ], {
+            cwd: backendPath,
+            stdio: ["ignore", "pipe", "pipe"],
+            env: {
+                ...process.env,
+                PYTHONIOENCODING: 'utf-8',
+                PYTHONUNBUFFERED: '1',
+                TEMP: tempDir,
+                TMP: tempDir
+            }
+        });
+
+        let installOutput = '';
+        let errorOutput = '';
+        let lastPackage = '';
+        let packagesInstalled = 0;
+
+        proc.stdout.on("data", (data) => {
+            const output = data.toString('utf8').trim();
+            installOutput += output + '\n';
+
+            const collectingMatch = output.match(/Collecting ([^\s]+)/);
+            const installingMatch = output.match(/Installing collected packages: (.+)/);
+
+            if (collectingMatch && collectingMatch[1] !== lastPackage) {
+                lastPackage = collectingMatch[1];
+                packagesInstalled++;
+                const progress = 36 + Math.min(8, (packagesInstalled / missing.length) * 8);
+                console.log(`[pip] Procesando: ${lastPackage}`);
+                notifyInstallationProgress('deps-download', `Instalando ${lastPackage}... (${packagesInstalled}/${missing.length})`, progress);
+            } else if (installingMatch) {
+                notifyInstallationProgress('deps-finalizing', 'Finalizando instalacion...', 44);
+            }
+        });
+
+        proc.stderr.on("data", (data) => {
+            const error = data.toString('utf8').trim();
+            errorOutput += error + '\n';
+            if (error && !error.includes('WARNING') && !error.includes('DEPRECATION')) {
+                console.error(`[pip stderr] ${error}`);
+            }
+        });
+
+        proc.on("close", (code) => {
+            if (code === 0) {
+                console.log("Dependencias instaladas correctamente.");
+                notifyUser('success', 'Todas las dependencias instaladas correctamente');
+                notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 45);
+                resolve();
+            } else {
+                const errorMsg = errorOutput || installOutput || 'Error desconocido';
+                const isFileLocked = errorMsg.includes('WinError 32') ||
+                    errorMsg.includes('being used by another process') ||
+                    errorMsg.includes('OSError') ||
+                    errorMsg.includes('.tmp');
+
+                if (isFileLocked) {
+                    reject(new Error('VENV_LOCKED'));
+                } else {
+                    reject(new Error(`Bulk install failed: ${errorMsg.substring(0, 200)}`));
+                }
+            }
+        });
+
+        proc.on("error", (err) => {
+            reject(err);
+        });
+    });
+}
+
+// Función para instalar paquetes uno por uno
+async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
+    const tempDir = path.join(backendPath, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    let installed = 0;
+    let failed = [];
+    const total = reqs.length;
+
+    for (const req of reqs) {
+        // Saltar comentarios y lineas vacias
+        if (!req || req.startsWith('#')) continue;
+
+        // Extraer nombre del paquete
+        const pkgMatch = req.match(/^([a-zA-Z0-9\-_]+)/);
+        if (!pkgMatch) continue;
+
+        const pkgName = pkgMatch[1].toLowerCase();
+        
+        // Solo instalar si está en la lista de faltantes
+        if (!missing.includes(pkgName)) {
+            console.log(`[pip] Saltando ${pkgName} (ya instalado)`);
+            continue;
+        }
+
+        installed++;
+        const progress = 36 + Math.min(8, (installed / total) * 8);
+        console.log(`[pip] Instalando ${req}... (${installed}/${missing.length})`);
+        notifyInstallationProgress('deps-individual', `Instalando ${pkgName}... (${installed}/${missing.length})`, progress);
+
+        try {
+            const installSuccess = await new Promise((resolve, reject) => {
+                const proc = spawn(pythonCmd, [
+                    "-m", "pip", "install",
+                    "--prefer-binary",
+                    "--no-cache-dir",
+                    "--no-color",
+                    "--progress-bar", "off",
+                    "--disable-pip-version-check",
+                    "--retries", "3",
+                    "--timeout", "120",
+                    req
+                ], {
+                    cwd: backendPath,
+                    stdio: "pipe",
+                    env: {
+                        ...process.env,
+                        PYTHONIOENCODING: 'utf-8',
+                        PYTHONUNBUFFERED: '1',
+                        TEMP: tempDir,
+                        TMP: tempDir
+                    }
+                });
+
+                let output = '';
+                let errorOut = '';
+
+                proc.stdout.on('data', (data) => {
+                    output += data.toString();
+                });
+
+                proc.stderr.on('data', (data) => {
+                    const err = data.toString();
+                    errorOut += err;
+                    if (!err.includes('WARNING') && !err.includes('DEPRECATION')) {
+                        console.error(`[pip] ${err.trim()}`);
+                    }
+                });
+
+                proc.on('close', (code) => {
+                    if (code === 0) {
+                        console.log(`[pip] ${pkgName} instalado correctamente`);
+                        resolve(true);
+                    } else {
+                        console.error(`[pip] Error al instalar ${pkgName}: ${errorOut.substring(0, 200)}`);
+                        resolve(false); // No fallar, solo marcar como no exitoso
+                    }
+                });
+
+                proc.on('error', (err) => {
+                    console.error(`[pip] Error de proceso: ${err.message}`);
+                    resolve(false);
+                });
+            });
+
+            if (!installSuccess) {
+                failed.push(pkgName);
+            }
+
+            // Pequeña pausa entre instalaciones para liberar recursos
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+        } catch (error) {
+            console.error(`Error al instalar ${pkgName}:`, error.message);
+            failed.push(pkgName);
+        }
+    }
+
+    console.log(`Instalacion individual completada. ${installed} paquetes procesados.`);
+    
+    if (failed.length > 0) {
+        console.log(`\n⚠️  Paquetes con errores (${failed.length}):`);
+        failed.forEach(pkg => console.log(`   - ${pkg}`));
+        notifyUser('warning', `${installed - failed.length}/${installed} dependencias instaladas. ${failed.length} con errores (WinError 32).`);
+    } else {
+        notifyUser('success', `${installed} dependencias instaladas correctamente`);
+    }
+    
+    notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 45);
+    
+    return { installed: installed - failed.length, failed };
+}async function ensurePythonEnv(backendPath, retryCount = 0) {
     const venvPath = path.join(backendPath, "venv");
     const requirementsPath = path.join(backendPath, "requirements.txt");
+    const MAX_RETRIES = 2;
 
     // Detectar rutas del binario Python
     const pythonCmd = process.platform === "win32"
@@ -820,10 +1762,12 @@ async function ensurePythonEnv(backendPath) {
         // Encontrar Python base instalado
         const basePython = findPythonExecutable();
         console.log('Usando Python base:', basePython);
+        notifyInstallationProgress('venv-check', 'Configurando entorno de Python...', 25);
 
         // Verificar si el venv existe y está corrupto
         if (fs.existsSync(venvPath)) {
             console.log("Verificando entorno virtual existente...");
+            notifyInstallationProgress('venv-verify', 'Verificando entorno virtual...', 27);
 
             // Intentar ejecutar python del venv para verificar si funciona
             try {
@@ -835,6 +1779,7 @@ async function ensurePythonEnv(backendPath) {
                 console.log("Entorno virtual existente funciona correctamente");
             } catch (venvError) {
                 console.log("Entorno virtual corrupto detectado. Eliminando...");
+                notifyInstallationProgress('venv-cleanup', 'Reparando entorno virtual...', 28);
                 // Eliminar venv corrupto recursivamente
                 try {
                     if (process.platform === 'win32') {
@@ -865,6 +1810,7 @@ async function ensurePythonEnv(backendPath) {
         if (!fs.existsSync(venvPath)) {
             console.log("Creando entorno virtual...");
             notifyUser('info', 'Creando entorno virtual de Python...');
+            notifyInstallationProgress('venv-create', 'Creando entorno virtual...', 30);
 
             // Usar la ruta completa de Python para crear el venv
             const createVenvCmd = `"${basePython}" -m venv venv`;
@@ -891,6 +1837,7 @@ async function ensurePythonEnv(backendPath) {
             // Actualizar pip a la última versión
             console.log("Actualizando pip...");
             notifyUser('info', 'Actualizando pip...');
+            notifyInstallationProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 32);
             execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
                 cwd: backendPath,
                 encoding: 'utf8',
@@ -901,6 +1848,7 @@ async function ensurePythonEnv(backendPath) {
         } catch (pipError) {
             console.log("Error al verificar/actualizar pip:", pipError.message);
             console.log("Instalando pip...");
+            notifyInstallationProgress('pip-install', 'Instalando pip...', 32);
             try {
                 execSync(`"${pythonCmd}" -m ensurepip --upgrade`, {
                     cwd: backendPath,
@@ -915,6 +1863,7 @@ async function ensurePythonEnv(backendPath) {
 
         // Verificar dependencias instaladas
         console.log("Verificando dependencias...");
+        notifyInstallationProgress('deps-check', 'Verificando dependencias de Python...', 35);
         const installedPkgs = execSync(`"${pythonCmd}" -m pip freeze`, {
             encoding: "utf8",
             stdio: 'pipe'
@@ -941,97 +1890,100 @@ async function ensurePythonEnv(backendPath) {
         if (missing.length > 0) {
             console.log(`Instalando ${missing.length} dependencias faltantes: ${missing.join(', ')}`);
             notifyUser('info', `Instalando ${missing.length} dependencias de Python. Esto puede tomar varios minutos...`);
+            notifyInstallationProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
 
-            await new Promise((resolve, reject) => {
-                const proc = spawn(pythonCmd, [
-                    "-m", "pip", "install",
-                    "--prefer-binary",  // Preferir binarios pero permitir compilación si es necesario
-                    "--no-color",  // Deshabilitar colores ANSI
-                    "--progress-bar", "off",  // Deshabilitar barra de progreso
-                    "-r", "requirements.txt"
-                ], {
-                    cwd: backendPath,
-                    stdio: ["ignore", "pipe", "pipe"],
-                    env: {
-                        ...process.env,
-                        PYTHONIOENCODING: 'utf-8',  // Forzar UTF-8
-                        PYTHONUNBUFFERED: '1'  // Sin buffer
-                    }
-                });
+            // Cerrar cualquier proceso de Python que pueda estar bloqueando archivos
+            await killPythonProcesses(venvPath);
 
-                let installOutput = '';
-                let errorOutput = '';
-                let lastPackage = '';
+            // Pequeña pausa para asegurar que no hay procesos bloqueantes
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-                proc.stdout.on("data", (data) => {
-                    const output = data.toString('utf8').trim();
-                    installOutput += output + '\n';
-                    
-                    // Detectar qué paquete se está instalando
-                    const collectingMatch = output.match(/Collecting ([^\s]+)/);
-                    const downloadingMatch = output.match(/Downloading ([^\s]+)/);
-                    const installingMatch = output.match(/Installing collected packages: (.+)/);
-                    
-                    if (collectingMatch && collectingMatch[1] !== lastPackage) {
-                        lastPackage = collectingMatch[1];
-                        console.log(`[pip] Descargando: ${lastPackage}`);
-                        notifyUser('info', `Descargando: ${lastPackage}...`);
-                    } else if (downloadingMatch && downloadingMatch[1] !== lastPackage) {
-                        lastPackage = downloadingMatch[1];
-                        console.log(`[pip] Obteniendo: ${lastPackage}`);
-                        notifyUser('info', `Obteniendo: ${lastPackage}...`);
-                    } else if (installingMatch) {
-                        const packages = installingMatch[1];
-                        console.log(`[pip] Instalando: ${packages}`);
-                        notifyUser('info', `Instalando paquetes finales...`);
-                    }
-                    
-                    if (output && !output.includes('Requirement already satisfied')) {
-                        console.log(`[pip] ${output}`);
-                    }
-                });
+            // NUEVA ESTRATEGIA: Separar paquetes estables de problemáticos
+            console.log('Cargando configuracion de paquetes problematicos...');
+            const problematicConfig = loadProblematicPackages(backendPath);
+            const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
+            
+            // Separar paquetes
+            const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
+            const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
+            
+            console.log(`📦 Paquetes estables: ${stablePackages.length}`);
+            console.log(`⚠️  Paquetes problematicos: ${problematicPackages.length} (${problematicPackages.join(', ')})`);
+            
+            // FASE 1: Instalar paquetes estables en bloque (rápido)
+            let failedStable = [];
+            if (stablePackages.length > 0) {
+                console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
+                notifyUser('info', `Instalando ${stablePackages.length} paquetes estables...`);
+                notifyInstallationProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
+                
+                failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages);
+            }
+            
+            // FASE 2: Instalar paquetes problemáticos UNO POR UNO con delays largos
+            let failedProblematic = [];
+            if (problematicPackages.length > 0) {
+                console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
+                notifyUser('info', `Instalando ${problematicPackages.length} paquetes problematicos (mas lento pero seguro)...`);
+                notifyInstallationProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
+                
+                failedProblematic = await installProblematicPackages(
+                    pythonCmd, 
+                    backendPath, 
+                    problematicPackages,
+                    problematicConfig.install_config
+                );
+            }
+            
+            // FASE 3: Instalar paquetes GPU/CPU según hardware
+            console.log('\n=== FASE 3: Instalando PyTorch (GPU/CPU) ===');
+            const gpuConfig = loadGPUPackages(backendPath);
+            const failedGPU = await installGPUPackages(pythonCmd, backendPath, gpuConfig);
+            
+            // FASE 4: Reintentar todos los fallidos
+            const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
+            if (allFailed.length > 0) {
+                console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
+                notifyUser('warning', `Reintentando ${allFailed.length} paquetes que fallaron...`);
+                notifyInstallationProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
+                
+                await retryFailedPackages(pythonCmd, backendPath, allFailed);
+            } else {
+                notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 48);
+            }
 
-                proc.stderr.on("data", (data) => {
-                    const error = data.toString('utf8').trim();
-                    errorOutput += error + '\n';
-                    
-                    // Filtrar warnings no críticos
-                    if (error && !error.includes('WARNING') && !error.includes('DEPRECATION')) {
-                        console.error(`[pip stderr] ${error}`);
-                    }
-                });
-
-                proc.on("close", (code) => {
-                    if (code === 0) {
-                        console.log("Dependencias instaladas correctamente.");
-                        notifyUser('success', 'Todas las dependencias instaladas correctamente');
-                        resolve();
-                    } else {
-                        console.error("=== Error durante la instalacion de dependencias ===");
-                        console.error("STDOUT:", installOutput);
-                        console.error("STDERR:", errorOutput);
-                        console.error("Exit code:", code);
-
-                        // Notificar al usuario con más detalle
-                        const errorMsg = errorOutput || installOutput || 'Error desconocido';
-                        notifyUser('error', `Error al instalar dependencias: ${errorMsg.substring(0, 100)}`);
-
-                        reject(new Error(`pip exited with code ${code}. Error: ${errorMsg}`));
-                    }
-                });
-
-                proc.on("error", (err) => {
-                    console.error("Error al ejecutar pip:", err);
-                    notifyUser('error', `Error al ejecutar pip: ${err.message}`);
-                    reject(err);
-                });
-            });
+            // Limpiar directorio temporal DESPUÉS de todos los reintentos
+            console.log('Limpiando directorio temporal...');
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar que pip libere archivos
+            
+            try {
+                const tempDir = path.join(backendPath, 'temp');
+                if (fs.existsSync(tempDir)) {
+                    fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
+                    console.log('Directorio temporal limpiado');
+                }
+            } catch (cleanupErr) {
+                console.log('No se pudo limpiar directorio temporal (no es critico):', cleanupErr.message);
+            }
+            
         } else {
             console.log("Todas las dependencias ya estan instaladas.");
+            
+            // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
+            console.log('Verificando instalacion de PyTorch...');
+            const hasTorch = installedPackages.some(pkg => pkg.toLowerCase() === 'torch');
+            if (!hasTorch) {
+                console.log('PyTorch no detectado, instalando...');
+                const gpuConfig = loadGPUPackages(backendPath);
+                await installGPUPackages(pythonCmd, backendPath, gpuConfig);
+            }
+            
+            notifyInstallationProgress('deps-ready', 'Dependencias verificadas', 48);
         }
 
-        // Verificar PyTorch con CUDA (si hay GPU NVIDIA)
-        await checkPyTorchCuda(pythonCmd);
+        // Verificar que PyTorch funcione correctamente
+        console.log('\n=== Verificacion Final de PyTorch ===');
+        await verifyPyTorchInstallation(pythonCmd);
 
         // NOTA: Poppler ya no es necesario - usamos PyPDFLoader que es nativo de Python
         // await checkPoppler();
@@ -1039,51 +1991,97 @@ async function ensurePythonEnv(backendPath) {
         return pythonCmd;
     } catch (err) {
         console.error("Error en ensurePythonEnv:", err);
+
+        // Si el error es por archivos bloqueados y no hemos alcanzado el límite de reintentos
+        if (err.message === 'VENV_LOCKED' && retryCount < MAX_RETRIES) {
+            console.log(`Intento ${retryCount + 1}/${MAX_RETRIES}: Limpiando entorno virtual bloqueado...`);
+            notifyUser('warning', `Reintentando instalacion (intento ${retryCount + 1}/${MAX_RETRIES})...`);
+            notifyInstallationProgress('venv-cleanup', 'Limpiando entorno virtual bloqueado...', 20);
+
+            // Cerrar procesos de Python que puedan estar bloqueando archivos
+            await killPythonProcesses(venvPath);
+
+            // Esperar un momento adicional para que los procesos liberen archivos
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Forzar eliminación del venv
+            try {
+                console.log('Eliminando entorno virtual bloqueado...');
+                if (fs.existsSync(venvPath)) {
+                    // Intentar eliminar con PowerShell (más robusto en Windows)
+                    if (process.platform === 'win32') {
+                        try {
+                            execSync(`powershell -Command "Remove-Item -Path '${venvPath}' -Recurse -Force -ErrorAction SilentlyContinue"`, {
+                                encoding: 'utf8',
+                                stdio: 'pipe',
+                                timeout: 30000
+                            });
+                            console.log('Entorno virtual eliminado con PowerShell');
+                        } catch (psError) {
+                            console.log('PowerShell fallo, intentando con rmdir...');
+                            try {
+                                execSync(`rmdir /s /q "${venvPath}"`, {
+                                    encoding: 'utf8',
+                                    stdio: 'pipe',
+                                    timeout: 30000
+                                });
+                            } catch (rmdirError) {
+                                // Último recurso: fs.rmSync
+                                fs.rmSync(venvPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
+                            }
+                        }
+                    } else {
+                        execSync(`rm -rf "${venvPath}"`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe'
+                        });
+                    }
+                    console.log('Entorno virtual eliminado exitosamente');
+                }
+
+                // Esperar otro momento antes de reintentar
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Reintentar la instalación
+                return await ensurePythonEnv(backendPath, retryCount + 1);
+
+            } catch (cleanupError) {
+                console.error('Error al limpiar entorno virtual:', cleanupError);
+                notifyUser('error', 'No se pudo limpiar el entorno virtual. Intenta cerrar otros programas y reiniciar Alfred.');
+                throw new Error(`No se pudo limpiar el entorno virtual: ${cleanupError.message}`);
+            }
+        }
+
         throw err;
     }
 }
 
 // Verificar si PyTorch tiene soporte CUDA
-async function checkPyTorchCuda(pythonCmd) {
+// Verificar estado de PyTorch (solo informativo)
+async function verifyPyTorchInstallation(pythonCmd) {
     try {
-        console.log("Verificando soporte GPU de PyTorch...");
+        console.log("Verificando instalacion de PyTorch...");
 
-        // Verificar si hay GPU NVIDIA
-        const hasNvidiaGpu = await checkNvidiaGpu();
-
-        if (!hasNvidiaGpu) {
-            console.log("No se detecto GPU NVIDIA, usando version CPU de PyTorch");
-            return;
-        }
-
-        // Verificar si PyTorch tiene CUDA - usar comillas simples para evitar conflictos
-        const checkScript = "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')";
+        // Verificar que PyTorch esté importable
+        const checkScript = "import torch; print(f'PyTorch {torch.__version__} - CUDA: {torch.cuda.is_available()}')";
         const result = execSync(`"${pythonCmd}" -c "${checkScript}"`, {
             encoding: 'utf8',
-            stdio: 'pipe'
+            stdio: 'pipe',
+            timeout: 10000
         }).trim();
 
-        if (result === 'CUDA') {
-            console.log("PyTorch con soporte CUDA detectado correctamente");
+        console.log(`✓ ${result}`);
+        
+        if (result.includes('CUDA: True')) {
+            notifyUser('success', 'PyTorch con aceleracion GPU instalado correctamente');
         } else {
-            console.log("==== PyTorch instalado SIN soporte CUDA");
-            console.log("Para habilitar aceleracion GPU, ejecuta: .\\install-pytorch-gpu.ps1");
-            notifyUser('warning', 'PyTorch sin GPU - Alfred usara CPU (más lento). Ejecuta install-pytorch-gpu.ps1 para habilitar GPU.');
+            notifyUser('info', 'PyTorch CPU instalado (GPU no disponible)');
         }
+        
+        return true;
     } catch (err) {
-        console.log("No se pudo verificar PyTorch GPU:", err.message);
-    }
-}
-
-// Verificar si hay GPU NVIDIA
-async function checkNvidiaGpu() {
-    try {
-        if (process.platform === 'win32') {
-            execSync('nvidia-smi', { stdio: 'pipe' });
-            return true;
-        }
-        return false;
-    } catch {
+        console.log("⚠️  No se pudo verificar PyTorch:", err.message);
+        notifyUser('warning', 'PyTorch podria no estar instalado correctamente');
         return false;
     }
 }
@@ -1128,18 +2126,76 @@ async function isBackendRunning() {
 // Esperar a que el backend esté disponible
 async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
     const startTime = Date.now();
+    notifyInstallationProgress('backend-init', 'Iniciando servidor Alfred...', 85);
 
     while (Date.now() - startTime < timeout) {
+        // Verificar si el proceso del backend sigue vivo
+        if (!backendProcess || backendProcess.exitCode !== null) {
+            console.error('⚠️  El proceso del backend ha terminado inesperadamente');
+            notifyUser('error', 'El backend se cerró. Verifica que todas las dependencias estén instaladas.');
+            notifyBackendStatus(false);
+            return false;
+        }
+        
         if (await isBackendRunning()) {
             console.log('Backend esta disponible');
             notifyBackendStatus(true);  // Notificar que esta conectado
+            notifyInstallationProgress('backend-ready', 'Alfred iniciado correctamente', 100);
             return true;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Actualizar progreso mientras espera
+        const elapsed = Date.now() - startTime;
+        const progress = 85 + Math.min(10, (elapsed / timeout) * 10);
         console.log('Esperando al backend...');
+        notifyInstallationProgress('backend-starting', 'Cargando sistema de IA...', progress);
     }
 
     notifyBackendStatus(false);  // Notificar que fallo la conexion
+    return false;
+}
+
+// Iniciar el backend y ESPERAR hasta que responda correctamente
+async function startBackendAndWait() {
+    console.log('Iniciando backend y esperando respuesta...');
+    
+    // Primero iniciar el proceso
+    const started = await startBackend();
+    if (!started) {
+        console.error('No se pudo iniciar el proceso del backend');
+        return false;
+    }
+
+    // Ahora esperar con reintentos más largos hasta que responda
+    console.log('Backend iniciado, esperando respuesta del servidor...');
+    notifyInstallationProgress('backend-init', 'Esperando respuesta del backend...', 85);
+    
+    const maxRetries = 60; // 60 intentos = 2 minutos
+    const retryDelay = 2000; // 2 segundos entre intentos
+    
+    for (let i = 0; i < maxRetries; i++) {
+        const progress = 85 + Math.min(14, (i / maxRetries) * 14);
+        notifyInstallationProgress('backend-starting', `Esperando backend... (${i + 1}/${maxRetries})`, progress);
+        
+        try {
+            const isRunning = await isBackendRunning();
+            if (isRunning) {
+                console.log(`✓ Backend respondio correctamente despues de ${i + 1} intentos`);
+                notifyUser('success', 'Backend conectado correctamente');
+                notifyBackendStatus(true);
+                notifyInstallationProgress('backend-ready', 'Backend listo', 100);
+                return true;
+            }
+        } catch (error) {
+            console.log(`Intento ${i + 1}/${maxRetries} - Backend aun no responde`);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+    
+    console.error('Backend no respondio despues de 2 minutos');
+    notifyUser('error', 'El backend no responde. Revisa los logs en la consola.');
     return false;
 }
 
@@ -1151,6 +2207,7 @@ async function startBackend() {
     }
 
     console.log('Iniciando backend de Alfred...');
+    notifyInstallationProgress('backend-start', 'Preparando servidor de Alfred...', 80);
 
     // Verificar que el directorio y script existan antes de lanzar el proceso
     if (!fs.existsSync(BACKEND_CONFIG.path)) {
@@ -1174,6 +2231,7 @@ async function startBackend() {
         await new Promise(resolve => setTimeout(resolve, 500));
 
         console.log('Iniciando servidor FastAPI...');
+        notifyInstallationProgress('backend-launch', 'Lanzando servidor FastAPI...', 82);
 
         // Ejecutar backend en modo sin buffer (-u)
         backendProcess = spawn(pythonPath, ['-u', scriptPath], {
@@ -1192,14 +2250,27 @@ async function startBackend() {
             if (output) console.log(`[Backend] ${output}`);
         });
 
-        // Captura de errores
+        // Captura de errores - DETECTAR ERRORES CRÍTICOS
+        let hasModuleError = false;
         backendProcess.stderr.on('data', (data) => {
             const error = data.toString('utf8').trim();
             if (error) console.error(`[Backend Error] ${error}`);
+            
+            // Detectar errores de módulo faltante
+            if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
+                hasModuleError = true;
+                console.error('⚠️  ERROR CRÍTICO: Faltan dependencias de Python');
+            }
         });
 
         backendProcess.on('close', (code) => {
             console.log(`[Backend] Proceso finalizado con codigo ${code}`);
+            
+            if (code !== 0 && hasModuleError) {
+                console.error('⚠️  Backend cerrado por dependencias faltantes');
+                notifyUser('error', 'Faltan dependencias. Reinstalando...');
+            }
+            
             backendProcess = null;
             isBackendStartedByElectron = false;
         });
@@ -1287,6 +2358,19 @@ function notifyUser(type, message) {
     console.log(`[NOTIFY] (${type}): ${message}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('backend-notification', { type, message });
+    }
+}
+
+// Notificar progreso de instalación
+function notifyInstallationProgress(stage, message, progress) {
+    console.log(`[INSTALLATION] ${stage}: ${message} (${progress}%)`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('installation-progress', {
+            stage,
+            message,
+            progress,
+            timestamp: Date.now()
+        });
     }
 }
 

@@ -11,16 +11,30 @@
     justify-content: center;
     z-index: 9999;
     backdrop-filter: blur(10px);
+    transition: opacity 0.3s ease;
 }
 
 .backend-loading-overlay.hidden {
-    display: none;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .backend-loading-content {
     text-align: center;
     padding: 40px;
-    max-width: 400px;
+    max-width: 500px;
+    animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .loading-spinner {
@@ -40,33 +54,52 @@
 
 .backend-loading-content h2 {
     color: var(--text-primary);
-    font-size: 24px;
-    margin-bottom: 10px;
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    letter-spacing: -0.5px;
 }
 
 .backend-loading-content p {
     color: var(--text-secondary);
-    font-size: 14px;
-    margin-bottom: 20px;
+    font-size: 15px;
+    margin-bottom: 25px;
+    min-height: 40px;
+    line-height: 1.6;
+    transition: all 0.3s ease;
+}
+
+#loadingStatusText {
+    font-weight: 500;
+    color: var(--primary-color);
 }
 
 .loading-progress {
     width: 100%;
-    height: 4px;
+    height: 6px;
     background: var(--bg-tertiary);
-    border-radius: 2px;
+    border-radius: 3px;
     overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .loading-progress-bar {
     height: 100%;
     background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
     width: 0%;
-    transition: width 0.3s ease;
-    animation: pulse 1.5s ease-in-out infinite;
+    transition: width 0.5s ease;
+    animation: shimmer 2s ease-in-out infinite;
+    box-shadow: 0 0 10px rgba(74, 158, 255, 0.3);
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+@keyframes shimmer {
+    0%, 100% { 
+        opacity: 1;
+        filter: brightness(1);
+    }
+    50% { 
+        opacity: 0.8;
+        filter: brightness(1.2);
+    }
 }
+
