@@ -15,6 +15,9 @@ def get_connection():
     return conn
 
 def init_db():
+    # Verificar si es primera instalacion (DB no existe)
+    is_first_run = not DB_FILE.exists()
+    
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -201,6 +204,20 @@ def init_db():
     """)
 
     conn.commit()
+    
+    # Si es primera instalacion, marcar que necesita configurar cifrado
+    if is_first_run:
+        cursor.execute(
+            "INSERT OR IGNORE INTO user_settings (setting_key, setting_value, setting_type) VALUES (?, ?, ?)",
+            ('needs_encryption_setup', 'true', 'bool')
+        )
+        cursor.execute(
+            "INSERT OR IGNORE INTO user_settings (setting_key, setting_value, setting_type) VALUES (?, ?, ?)",
+            ('encryption_enabled', 'true', 'bool')
+        )
+        conn.commit()
+        db_logger.info("Primera instalacion detectada - configuracion de cifrado pendiente")
+    
     conn.close()
     db_logger.info("Base de datos inicializada correctamente")
 

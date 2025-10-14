@@ -1,0 +1,378 @@
+/* ===================================================
+   ESTILOS DE SEGURIDAD Y CIFRADO
+   =================================================== */
+
+/* Modal de primera instalacion */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease;
+}
+
+.first-time-modal {
+    background: var(--bg-color);
+    border-radius: 16px;
+    padding: 2.5rem;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.4s ease;
+}
+
+.first-time-modal-icon {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.first-time-modal-icon svg {
+    color: var(--primary-color);
+    filter: drop-shadow(0 0 20px rgba(74, 158, 255, 0.5));
+}
+
+.first-time-modal h2 {
+    text-align: center;
+    margin: 0 0 0.5rem 0;
+    font-size: 1.8rem;
+    color: var(--text-color);
+}
+
+.first-time-subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-bottom: 2rem;
+}
+
+.first-time-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.info-card {
+    display: flex;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--hover-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+
+.info-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.info-card-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.info-card-icon.success {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+.info-card-icon.warning {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+}
+
+.info-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    color: var(--text-color);
+}
+
+.info-card p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.first-time-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.button.large {
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.first-time-note {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: rgba(74, 158, 255, 0.1);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.first-time-note svg {
+    flex-shrink: 0;
+    color: var(--primary-color);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Dialogo de primera configuracion */
+.security-first-setup {
+    margin-bottom: 2rem;
+}
+
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.alert svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.alert-info {
+    background: rgba(74, 158, 255, 0.1);
+    border: 1px solid rgba(74, 158, 255, 0.3);
+    color: var(--text-color);
+}
+
+.alert-warning {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    color: var(--text-color);
+}
+
+.alert h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.alert p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.9;
+    line-height: 1.5;
+}
+
+.first-setup-options {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.first-setup-options .button {
+    flex: 1;
+    justify-content: center;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Estado de seguridad */
+.security-status {
+    display: block;
+}
+
+.security-status-header {
+    margin-bottom: 1.5rem;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.status-badge.status-enabled {
+    background: rgba(76, 175, 80, 0.15);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    color: #4caf50;
+}
+
+.status-badge.status-disabled {
+    background: rgba(244, 67, 54, 0.15);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+    color: #f44336;
+}
+
+/* Campo de clave de cifrado */
+.encryption-key-container {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.encryption-key-field {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+}
+
+.encryption-key-field:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.encryption-key-container .icon-button {
+    padding: 0.75rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.encryption-key-container .icon-button:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.encryption-key-container .icon-button svg {
+    display: block;
+}
+
+/* Lista de informacion de seguridad */
+.security-info-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+}
+
+.security-info-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.security-info-list li svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: var(--primary-color);
+}
+
+.security-info-list li svg {
+    opacity: 0.7;
+}
+
+/* Grupos de configuracion dentro de seguridad */
+#securityStatus .setting-group {
+    margin-bottom: 1.5rem;
+}
+
+#securityStatus .setting-group h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+#encryptionKeyGroup {
+    background: var(--hover-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .first-setup-options {
+        flex-direction: column;
+    }
+
+    .encryption-key-container {
+        flex-wrap: wrap;
+    }
+
+    .encryption-key-field {
+        min-width: 100%;
+    }
+
+    .first-time-modal {
+        padding: 1.5rem;
+        width: 95%;
+    }
+
+    .first-time-modal h2 {
+        font-size: 1.5rem;
+    }
+
+    .info-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .info-card-icon {
+        margin: 0 auto;
+    }
+
+    .button.large {
+        padding: 0.875rem 1.25rem;
+        font-size: 0.95rem;
+    }
+}

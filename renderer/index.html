@@ -23,6 +23,69 @@
         </div>
     </div>
 
+    <!-- Modal de primera instalacion (Cifrado) -->
+    <div class="modal-overlay" id="firstTimeEncryptionModal" style="display: none;">
+        <div class="first-time-modal">
+            <div class="first-time-modal-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </div>
+            <h2>Bienvenido a Alfred</h2>
+            <p class="first-time-subtitle">Configuracion inicial de seguridad</p>
+            
+            <div class="first-time-content">
+                <div class="info-card">
+                    <div class="info-card-icon success">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>Cifrado de datos</h3>
+                        <p>Protege tus conversaciones y datos personales con cifrado AES-256. Si pierdes la clave, no podras recuperar tu informacion.</p>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <div class="info-card-icon warning">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>Sin cifrado</h3>
+                        <p>Tus datos se guardaran en texto plano. Mas rapido pero menos seguro. Puedes cambiar esto despues en Configuracion.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="first-time-actions">
+                <button class="button primary large" id="firstTimeEnableEncryption">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    Habilitar cifrado (Recomendado)
+                </button>
+                <button class="button secondary large" id="firstTimeDisableEncryption">
+                    Continuar sin cifrado
+                </button>
+            </div>
+
+            <p class="first-time-note">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Podras cambiar esta configuracion en cualquier momento desde Configuracion → Seguridad
+            </p>
+        </div>
+    </div>
+
     <!-- Barra superior -->
     <div class="topbar">
         <div class="topbar-left">
@@ -274,6 +337,12 @@
                                 <rect x="3" y="14" width="7" height="7"></rect>
                             </svg>
                             <span>Aplicaciones</span>
+                        </button>
+                        <button class="settings-nav-item" data-section="seguridad">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                            <span>Seguridad</span>
                         </button>
                     </nav>
                 </div>
@@ -656,6 +725,155 @@
                                 </div>
                                 <button class="button secondary app-connect-btn">Conectar</button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Seccion Seguridad -->
+                    <div class="settings-section" data-section="seguridad">
+                        <h3 class="section-title">Seguridad y privacidad</h3>
+                        <p class="section-description">Gestiona el cifrado de tus datos personales y conversaciones.</p>
+
+                        <!-- Alerta de primera configuracion -->
+                        <div class="security-first-setup" id="securityFirstSetup" style="display: none;">
+                            <div class="alert alert-info">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                <div>
+                                    <h4>Primera configuracion de seguridad</h4>
+                                    <p>Alfred puede cifrar tus conversaciones y datos personales para mayor seguridad. Te recomendamos habilitar el cifrado.</p>
+                                </div>
+                            </div>
+                            <div class="first-setup-options">
+                                <button class="button primary" id="enableEncryptionBtn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    Habilitar cifrado (Recomendado)
+                                </button>
+                                <button class="button secondary" id="disableEncryptionBtn">
+                                    Continuar sin cifrado
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Estado de cifrado -->
+                        <div class="security-status" id="securityStatus">
+                            <div class="setting-group">
+                                <div class="security-status-header">
+                                    <div class="status-badge" id="encryptionStatusBadge">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                        </svg>
+                                        <span id="encryptionStatusText">Cifrado habilitado</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Clave de cifrado -->
+                            <div class="setting-group" id="encryptionKeyGroup">
+                                <label>Clave de cifrado</label>
+                                <div class="encryption-key-container">
+                                    <input type="password" id="encryptionKeyField" readonly class="encryption-key-field" value="••••••••••••••••••••••••••••••••">
+                                    <button class="icon-button" id="toggleEncryptionKeyBtn" title="Mostrar/Ocultar clave">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="eyeIcon">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                        </svg>
+                                    </button>
+                                    <button class="icon-button" id="reloadEncryptionKeyBtn" title="Recargar clave">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="23 4 23 10 17 10"></polyline>
+                                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                        </svg>
+                                    </button>
+                                    <button class="icon-button" id="copyEncryptionKeyBtn" title="Copiar clave">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="alert alert-warning">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                    </svg>
+                                    <div>
+                                        <strong>IMPORTANTE: Guarda esta clave en un lugar seguro</strong>
+                                        <p>Si pierdes esta clave, no podras recuperar tus datos cifrados. No podemos recuperarla por ti.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Toggle de cifrado -->
+                            <div class="setting-group">
+                                <label>
+                                    <input type="checkbox" id="encryptionToggle" disabled>
+                                    Cifrar nuevos datos
+                                </label>
+                                <small>Los datos existentes no se vuelven a cifrar. Solo afecta datos nuevos.</small>
+                            </div>
+                        </div>
+
+                        <!-- Informacion adicional -->
+                        <div class="setting-group">
+                            <h4>¿Que se cifra?</h4>
+                            <ul class="security-info-list">
+                                <li>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Conversaciones y mensajes
+                                </li>
+                                <li>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Datos personales extraidos (RFC, CURP, NSS, etc.)
+                                </li>
+                                <li>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Historial de consultas y respuestas
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="setting-group">
+                            <h4>¿Que NO se cifra?</h4>
+                            <ul class="security-info-list">
+                                <li>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    Documentos indexados (permanecen en su ubicacion original)
+                                </li>
+                                <li>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    Indices de vectores (no contienen texto completo)
+                                </li>
+                                <li>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    </svg>
+                                    Configuracion de la aplicacion
+                                </li>
+                            </ul>
                         </div>
                     </div>
                 </div>

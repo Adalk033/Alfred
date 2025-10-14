@@ -13,6 +13,7 @@
 @import './components/left-sidebar.css';
 @import './components/loading.css';
 @import './components/progress.css';
+@import './components/security.css';
 
 .container {
     flex: 1;

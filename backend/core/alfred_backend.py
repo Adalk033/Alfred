@@ -18,6 +18,7 @@ sys.path.insert(0, str(backend_root / "utils"))
 
 from utils.logger import get_logger
 from db_manager import init_db
+import db_manager
 
 # Configurar encoding UTF-8 para evitar errores con caracteres especiales en Windows
 if sys.platform == 'win32':
@@ -3248,6 +3249,192 @@ async def validate_document_paths_endpoint():
     except Exception as e:
         backend_logger.error(f"Error validando rutas: {e}")
         raise HTTPException(status_code=500, detail=f"Error al validar rutas: {str(e)}")
+
+
+# ===============================================
+# ENDPOINTS DE SEGURIDAD Y CIFRADO
+# ===============================================
+
+@app.get("/settings/encryption/status")
+async def get_encryption_status():
+    """
+    Obtiene el estado actual de configuracion de cifrado
+    
+    Returns:
+        - encryption_enabled: Si el cifrado esta activo
+        - needs_setup: Si es primera vez y necesita configurar
+        - key_exists: Si existe el archivo de clave
+    """
+    try:
+        from utils.security import is_encryption_enabled, encryption_key_exists
+        
+        needs_setup = db_manager.get_user_setting('needs_encryption_setup', 'false', 'bool')
+        encryption_enabled = is_encryption_enabled()
+        key_exists = encryption_key_exists()
+        
+        return {
+            "success": True,
+            "encryption_enabled": encryption_enabled,
+            "needs_setup": needs_setup,
+            "key_exists": key_exists
+        }
+    except Exception as e:
+        backend_logger.error(f"Error obteniendo estado de cifrado: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.get("/settings/encryption/key")
+async def get_encryption_key():
+    """
+    Obtiene la clave de cifrado en formato legible
+    
+    ADVERTENCIA: Esta clave es sensible y solo debe mostrarse al usuario
+    de forma segura en la interfaz
+    
+    Returns:
+        - key: Clave en formato base64
+    """
+    try:
+        from utils.security import get_encryption_key_display, encryption_key_exists, is_encryption_enabled
+        
+        # Verificar si el cifrado esta habilitado
+        if not is_encryption_enabled():
+            raise HTTPException(
+                status_code=400, 
+                detail="El cifrado no esta habilitado. No hay clave que mostrar."
+            )
+        
+        # Obtener la clave (se genera automaticamente si no existe)
+        key = get_encryption_key_display()
+        
+        if not key:
+            raise HTTPException(
+                status_code=404, 
+                detail="No se pudo obtener la clave de cifrado"
+            )
+        
+        backend_logger.info("Clave de cifrado solicitada")
+        
+        return {
+            "success": True,
+            "key": key,
+            "warning": "IMPORTANTE: Guarda esta clave en un lugar seguro. Si la pierdes, no podras descifrar tu informacion."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        backend_logger.error(f"Error obteniendo clave de cifrado: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+class EncryptionSetupRequest(BaseModel):
+    """Modelo para configurar el cifrado por primera vez"""
+    enable_encryption: bool = Field(..., description="True para habilitar cifrado, False para texto plano")
+
+
+@app.post("/settings/encryption/setup")
+async def setup_encryption(request: EncryptionSetupRequest):
+    """
+    Configura el cifrado por primera vez (solo en primera instalacion)
+    
+    Args:
+        enable_encryption: True para habilitar, False para deshabilitar
+    
+    Returns:
+        - encryption_enabled: Estado final
+        - key: Clave generada (si se habilito)
+    """
+    try:
+        from utils.security import generate_key, get_encryption_key_display
+        
+        needs_setup = db_manager.get_user_setting('needs_encryption_setup', 'false', 'bool')
+        
+        if not needs_setup:
+            raise HTTPException(
+                status_code=400, 
+                detail="El cifrado ya fue configurado. Usa /settings/encryption/toggle para cambiar."
+            )
+        
+        # Guardar preferencia
+        db_manager.set_user_setting('encryption_enabled', request.enable_encryption, 'bool')
+        db_manager.set_user_setting('needs_encryption_setup', False, 'bool')
+        
+        response = {
+            "success": True,
+            "encryption_enabled": request.enable_encryption,
+            "message": "Cifrado habilitado" if request.enable_encryption else "Cifrado deshabilitado - datos en texto plano"
+        }
+        
+        # Si se habilito, generar y devolver la clave
+        if request.enable_encryption:
+            generate_key()
+            response["key"] = get_encryption_key_display()
+            response["warning"] = "IMPORTANTE: Guarda esta clave en un lugar seguro. Si la pierdes, no podras descifrar tu informacion."
+        
+        backend_logger.info(f"Cifrado configurado: {'habilitado' if request.enable_encryption else 'deshabilitado'}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        backend_logger.error(f"Error configurando cifrado: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+class EncryptionToggleRequest(BaseModel):
+    """Modelo para cambiar estado de cifrado"""
+    enable_encryption: bool = Field(..., description="True para habilitar, False para deshabilitar")
+
+
+@app.post("/settings/encryption/toggle")
+async def toggle_encryption(request: EncryptionToggleRequest):
+    """
+    Cambia el estado del cifrado (despues de la configuracion inicial)
+    
+    ADVERTENCIA: Cambiar el cifrado no re-cifra/descifra datos existentes
+    Solo afecta nuevos datos guardados
+    
+    Args:
+        enable_encryption: True para habilitar, False para deshabilitar
+    
+    Returns:
+        - encryption_enabled: Nuevo estado
+    """
+    try:
+        from utils.security import generate_key, get_encryption_key_display
+        
+        # Verificar que ya se hizo la configuracion inicial
+        needs_setup = db_manager.get_user_setting('needs_encryption_setup', 'false', 'bool')
+        
+        if needs_setup:
+            raise HTTPException(
+                status_code=400,
+                detail="Debes configurar el cifrado primero usando /settings/encryption/setup"
+            )
+        
+        # Actualizar configuracion
+        db_manager.set_user_setting('encryption_enabled', request.enable_encryption, 'bool')
+        
+        response = {
+            "success": True,
+            "encryption_enabled": request.enable_encryption,
+            "message": "Cifrado habilitado" if request.enable_encryption else "Cifrado deshabilitado",
+            "warning": "Los datos existentes no se re-cifran. Solo afecta nuevos datos."
+        }
+        
+        # Si se habilito, asegurar que existe la clave
+        if request.enable_encryption:
+            generate_key()
+            response["key"] = get_encryption_key_display()
+        
+        backend_logger.info(f"Cifrado {'habilitado' if request.enable_encryption else 'deshabilitado'}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        backend_logger.error(f"Error cambiando estado de cifrado: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 if __name__ == "__main__":
