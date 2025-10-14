@@ -3255,6 +3255,68 @@ async def validate_document_paths_endpoint():
 # ENDPOINTS DE SEGURIDAD Y CIFRADO
 # ===============================================
 
+@app.get("/settings/welcome/status")
+async def get_welcome_status():
+    """
+    Obtiene el estado de bienvenida inicial
+    
+    Returns:
+        - needs_welcome: Si necesita mostrar el modal de bienvenida
+    """
+    try:
+        needs_welcome = db_manager.get_user_setting('needs_welcome_setup', 'false', 'bool')
+        
+        return {
+            "success": True,
+            "needs_welcome": needs_welcome
+        }
+    except Exception as e:
+        backend_logger.error(f"Error al obtener estado de bienvenida: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class WelcomeSetupRequest(BaseModel):
+    """Modelo para configuracion de bienvenida"""
+    user_name: Optional[str] = Field(None, description="Nombre del usuario (opcional)")
+    user_age: Optional[int] = Field(None, description="Edad del usuario (opcional)")
+    profile_picture: Optional[str] = Field(None, description="Foto de perfil en base64 (opcional)")
+
+
+@app.post("/settings/welcome/complete")
+async def complete_welcome_setup(request: WelcomeSetupRequest):
+    """
+    Completa la configuracion de bienvenida inicial
+    
+    Guarda nombre, edad y foto de perfil si se proporcionan
+    """
+    try:
+        # Guardar nombre si se proporciono
+        if request.user_name:
+            db_manager.set_user_setting('user_name', request.user_name, 'string')
+            backend_logger.info(f"Nombre de usuario configurado: {request.user_name}")
+        
+        # Guardar edad si se proporciono
+        if request.user_age:
+            db_manager.set_user_setting('user_age', request.user_age, 'int')
+            backend_logger.info(f"Edad de usuario configurada: {request.user_age}")
+        
+        # Guardar foto de perfil si se proporciono
+        if request.profile_picture:
+            db_manager.set_user_setting('profile_picture', request.profile_picture, 'string')
+            backend_logger.info("Foto de perfil guardada")
+        
+        # Marcar que ya se completo la bienvenida
+        db_manager.set_user_setting('needs_welcome_setup', False, 'bool')
+        
+        return {
+            "success": True,
+            "message": "Configuracion de bienvenida completada"
+        }
+    except Exception as e:
+        backend_logger.error(f"Error al completar bienvenida: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/settings/encryption/status")
 async def get_encryption_status():
     """

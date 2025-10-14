@@ -2343,6 +2343,12 @@ async function checkAndStartBackend() {
             console.log('El backend ya esta corriendo');
             notifyUser('success', 'Conectado al servidor de Alfred');
             notifyBackendStatus(true);  // Notificar conexion exitosa
+            
+            // Enviar evento backend-ready para que el loader se oculte
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('backend-ready');
+            }
+            
             return true;
         }
 

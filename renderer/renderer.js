@@ -164,7 +164,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Esperar a que el backend este listo antes de habilitar el chat
     await waitForBackendReady();
 
-    // Verificar si es primera instalacion y mostrar modal de cifrado
+    // Verificar si es primera instalacion:
+    // 1. Primero mostrar bienvenida (nombre, edad, foto)
+    // 2. Luego mostrar configuracion de cifrado
+    await checkAndShowWelcomeModal();
     await checkAndShowFirstTimeEncryptionModal();
 
     // Cargar modo desde BD antes de continuar
@@ -1282,6 +1285,127 @@ function saveSettingsHandler() {
 
 let encryptionKeyVisible = false;
 let actualEncryptionKey = '';
+let welcomeProfilePictureData = null;
+
+// ===============================================
+// FUNCIONES DE MODAL DE BIENVENIDA
+// ===============================================
+
+// Verificar y mostrar modal de bienvenida inicial
+async function checkAndShowWelcomeModal() {
+    try {
+        const response = await fetch('http://localhost:8000/settings/welcome/status');
+        const data = await response.json();
+
+        if (data.success && data.needs_welcome) {
+            // Mostrar modal de bienvenida
+            const modal = document.getElementById('firstTimeWelcomeModal');
+            if (modal) {
+                modal.style.display = 'flex';
+
+                // Configurar preview de foto de perfil
+                const profileInput = document.getElementById('welcomeProfileInput');
+                const profilePreview = document.getElementById('welcomeProfilePreview');
+
+                if (profileInput && profilePreview) {
+                    profileInput.addEventListener('change', (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                welcomeProfilePictureData = event.target.result;
+                                profilePreview.innerHTML = `<img src="${event.target.result}" alt="Preview">`;
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                }
+
+                // Configurar botones
+                const continueBtn = document.getElementById('welcomeContinueBtn');
+                const skipBtn = document.getElementById('welcomeSkipBtn');
+
+                if (continueBtn) {
+                    continueBtn.onclick = async () => {
+                        await completeWelcomeSetup();
+                        modal.style.display = 'none';
+                    };
+                }
+
+                if (skipBtn) {
+                    skipBtn.onclick = async () => {
+                        // Omitir sin guardar nada
+                        await completeWelcomeSetup();
+                        modal.style.display = 'none';
+                    };
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error al verificar estado de bienvenida:', error);
+    }
+}
+
+// Completar configuracion de bienvenida
+async function completeWelcomeSetup() {
+    try {
+        const userName = document.getElementById('welcomeName')?.value.trim();
+        const userAge = document.getElementById('welcomeAge')?.value;
+
+        const requestData = {};
+
+        // Solo incluir campos si tienen valor
+        if (userName) {
+            requestData.user_name = userName;
+        }
+
+        if (userAge && parseInt(userAge) > 0) {
+            requestData.user_age = parseInt(userAge);
+        }
+
+        if (welcomeProfilePictureData) {
+            requestData.profile_picture = welcomeProfilePictureData;
+        }
+
+        const response = await fetch('http://localhost:8000/settings/welcome/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            console.log('✅ Configuracion de bienvenida completada');
+            
+            // Actualizar estado local si hay foto de perfil
+            if (welcomeProfilePictureData) {
+                State.updateSettings({ profilePicture: welcomeProfilePictureData });
+                localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+            }
+            
+            // Recargar configuraciones para mostrar los datos nuevos
+            if (userName || userAge || welcomeProfilePictureData) {
+                showNotification('success', 'Perfil configurado correctamente');
+                
+                // Recargar datos en la UI
+                setTimeout(() => {
+                    loadSettings();
+                    loadProfilePicture();
+                    loadUserInfo(); // Recargar nombre y edad en el perfil
+                }, 500);
+            }
+        } else {
+            console.error('Error al completar bienvenida:', data);
+        }
+    } catch (error) {
+        console.error('Error al completar bienvenida:', error);
+    }
+}
+
+// ===============================================
+// FUNCIONES DE MODAL DE CIFRADO
+// ===============================================
 
 // Verificar y mostrar modal de primera instalacion
 async function checkAndShowFirstTimeEncryptionModal() {
@@ -2195,6 +2319,9 @@ async function loadProfilePicture() {
                 profilePictureHistory: history || []
             });
 
+            // Guardar en localStorage para que se use en mensajes
+            localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+
             // Actualizar UI
             if (current) {
                 updateProfilePictureDisplay(current);
@@ -2286,6 +2413,9 @@ async function changeProfilePicture() {
             // Actualizar estado local
             State.updateSettings({ profilePicture: newImageData });
 
+            // Guardar en localStorage para que se use en mensajes
+            localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+
             // Actualizar UI
             updateProfilePictureDisplay(newImageData);
 
@@ -2366,6 +2496,9 @@ async function restoreProfilePicture(imageData, index) {
 
         // Actualizar estado local
         State.updateSettings({ profilePicture: imageData });
+
+        // Guardar en localStorage para que se use en mensajes
+        localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
 
         // Actualizar UI
         updateProfilePictureDisplay(imageData);
@@ -2555,6 +2688,10 @@ async function deleteProfilePicture(index) {
             }
 
             State.updateSettings({ profilePicture: null });
+            
+            // Guardar en localStorage
+            localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
+            
             currentProfilePicture.innerHTML = '<span class="default-avatar">👤</span>';
         }
 

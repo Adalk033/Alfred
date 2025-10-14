@@ -23,6 +23,66 @@
         </div>
     </div>
 
+    <!-- Modal de Bienvenida (Primera vez) -->
+    <div class="modal-overlay" id="firstTimeWelcomeModal" style="display: none;">
+        <div class="first-time-modal">
+            <div class="first-time-modal-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </div>
+            <h2>Bienvenido a Alfred</h2>
+            <p class="first-time-subtitle">Cuentanos un poco sobre ti (todo es opcional)</p>
+            
+            <div class="first-time-content">
+                <div class="form-group">
+                    <label for="welcomeName">Tu nombre</label>
+                    <input type="text" id="welcomeName" placeholder="Ejemplo: Juan Perez" maxlength="100">
+                </div>
+
+                <div class="form-group">
+                    <label for="welcomeAge">Tu edad</label>
+                    <input type="number" id="welcomeAge" placeholder="Ejemplo: 25" min="1" max="120">
+                </div>
+
+                <div class="form-group">
+                    <label>Foto de perfil</label>
+                    <div class="profile-picture-upload">
+                        <div class="profile-picture-preview" id="welcomeProfilePreview">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </div>
+                        <input type="file" id="welcomeProfileInput" accept="image/*" style="display: none;">
+                        <button class="button secondary small" onclick="document.getElementById('welcomeProfileInput').click()">
+                            Seleccionar foto
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="first-time-actions">
+                <button class="button primary large" id="welcomeContinueBtn">
+                    Continuar
+                </button>
+                <button class="button secondary large" id="welcomeSkipBtn">
+                    Omitir
+                </button>
+            </div>
+
+            <p class="first-time-note">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Toda esta informacion es opcional y puede ser modificada despues en Configuracion
+            </p>
+        </div>
+    </div>
+
     <!-- Modal de primera instalacion (Cifrado) -->
     <div class="modal-overlay" id="firstTimeEncryptionModal" style="display: none;">
         <div class="first-time-modal">
