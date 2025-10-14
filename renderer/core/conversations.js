@@ -1,4 +1,5 @@
 import { showNotification } from './notifications.js';
+import { showConfirm } from './dialogs.js';
 import { addMessage, scrollToBottom, formatDate } from '../dom/dom-utils.js';
 import * as State from '../state/state.js';
 
@@ -304,12 +305,12 @@ export async function loadConversation(conversationId) {
 
 // Eliminar una conversacion
 export async function deleteConversationById(conversationId) {
-    // Usar setTimeout para evitar bloqueo del thread principal
-    const confirmed = await new Promise(resolve => {
-        setTimeout(() => {
-            resolve(confirm('Estas seguro de que deseas eliminar esta conversacion?'));
-        }, 0);
-    });
+    // Usar showConfirm personalizado
+    const confirmed = await showConfirm(
+        'Esta accion no se puede deshacer.',
+        'Eliminar esta conversacion?',
+        { type: 'danger', confirmText: 'Eliminar', cancelText: 'Cancelar' }
+    );
 
     if (!confirmed) {
         // Restaurar enfoque al textarea
@@ -476,11 +477,11 @@ export async function deleteSelectedConversations() {
         return;
     }
     
-    const confirmed = await new Promise(resolve => {
-        setTimeout(() => {
-            resolve(confirm(`Estas seguro de eliminar ${selectedConvs.size} conversacion(es)?`));
-        }, 0);
-    });
+    const confirmed = await showConfirm(
+        `Se eliminaran permanentemente ${selectedConvs.size} conversacion(es).`,
+        'Eliminar conversaciones seleccionadas?',
+        { type: 'danger', confirmText: 'Eliminar', cancelText: 'Cancelar' }
+    );
     
     if (!confirmed) return;
     

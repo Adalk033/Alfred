@@ -1,4 +1,5 @@
 import { showNotification } from './core/notifications.js';
+import { showAlert, showConfirm } from './core/dialogs.js';
 import { addMessage, scrollToBottom, markdownToHtml, updateStatus } from './dom/dom-utils.js';
 import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory } from './core/conversations.js';
 import * as State from './state/state.js';
@@ -585,13 +586,15 @@ async function handleFileAttach(event) {
     
     if (fileSize > 50 * 1024 * 1024) {
         // Más de 50MB
-        const confirmed = confirm(
-            `⚠️ ADVERTENCIA: El archivo es muy grande (${sizeMB} MB)\n\n` +
+        const confirmed = await showConfirm(
+            `El archivo es muy grande (${sizeMB} MB)\n\n` +
             `Esto puede causar:\n` +
             `- Procesamiento muy lento\n` +
             `- Uso alto de memoria\n` +
             `- Posible congelamiento de la aplicacion\n\n` +
-            `¿Estas seguro de continuar?`
+            `Estas seguro de continuar?`,
+            'Archivo muy grande',
+            { type: 'warning', confirmText: 'Continuar', cancelText: 'Cancelar' }
         );
         if (!confirmed) {
             event.target.value = '';
@@ -599,10 +602,10 @@ async function handleFileAttach(event) {
         }
     } else if (fileSize > 10 * 1024 * 1024) {
         // Entre 10-50MB
-        const confirmed = confirm(
-            `⚠️ Archivo grande (${sizeMB} MB)\n\n` +
-            `El procesamiento puede tardar un poco.\n` +
-            `¿Deseas continuar?`
+        const confirmed = await showConfirm(
+            `El procesamiento puede tardar un poco.\nDeseas continuar?`,
+            `Archivo grande (${sizeMB} MB)`,
+            { type: 'info', confirmText: 'Continuar', cancelText: 'Cancelar' }
         );
         if (!confirmed) {
             event.target.value = '';
@@ -1432,10 +1435,10 @@ async function checkAndShowFirstTimeEncryptionModal() {
 
                 if (disableBtn) {
                     disableBtn.onclick = async () => {
-                        const confirmed = confirm(
-                            '¿Estas seguro de continuar sin cifrado?\n\n' +
-                            'Tus datos se guardaran en texto plano y seran menos seguros.\n' +
-                            'Siempre puedes habilitar el cifrado despues en Configuracion.'
+                        const confirmed = await showConfirm(
+                            'Tus datos se guardaran en texto plano y seran menos seguros.\nSiempre puedes habilitar el cifrado despues en Configuracion.',
+                            'Continuar sin cifrado?',
+                            { type: 'warning', confirmText: 'Continuar', cancelText: 'Cancelar' }
                         );
                         if (confirmed) {
                             await setupEncryptionFirstTime(false);
@@ -1471,14 +1474,15 @@ async function setupEncryptionFirstTime(enableEncryption) {
                 showNotification('success', 'Cifrado habilitado correctamente');
                 
                 // Mostrar alerta con la clave
-                setTimeout(() => {
-                    alert(
-                        '🔑 IMPORTANTE: Tu clave de cifrado\n\n' +
-                        data.key + '\n\n' +
-                        '⚠️ Guarda esta clave en un lugar seguro.\n' +
+                setTimeout(async () => {
+                    await showAlert(
+                        `${data.key}\n\n` +
+                        'Guarda esta clave en un lugar seguro.\n' +
                         'Si la pierdes, no podras recuperar tus datos.\n\n' +
                         'Puedes verla en cualquier momento en:\n' +
-                        'Configuracion → Seguridad'
+                        'Configuracion → Seguridad',
+                        'Tu clave de cifrado',
+                        'warning'
                     );
                 }, 500);
             } else {
@@ -1684,7 +1688,11 @@ async function enableEncryption() {
 
 // Deshabilitar cifrado (primera vez)
 async function disableEncryption() {
-    const confirmed = confirm('¿Estas seguro? Tus datos se guardaran en texto plano sin cifrado.');
+    const confirmed = await showConfirm(
+        'Tus datos se guardaran en texto plano sin cifrado.',
+        'Estas seguro?',
+        { type: 'warning', confirmText: 'Si, deshabilitar', cancelText: 'Cancelar' }
+    );
     
     if (!confirmed) return;
 
@@ -1712,10 +1720,16 @@ async function disableEncryption() {
 // Toggle cifrado (despues de primera configuracion)
 async function toggleEncryptionStatus(enabled) {
     const message = enabled 
-        ? '¿Habilitar cifrado? Los nuevos datos se cifrarán.'
-        : '¿Deshabilitar cifrado? Los nuevos datos NO se cifrarán.';
+        ? 'Los nuevos datos se cifraran.'
+        : 'Los nuevos datos NO se cifraran.';
     
-    const confirmed = confirm(message);
+    const title = enabled ? 'Habilitar cifrado?' : 'Deshabilitar cifrado?';
+    
+    const confirmed = await showConfirm(
+        message,
+        title,
+        { type: 'warning', confirmText: 'Confirmar', cancelText: 'Cancelar' }
+    );
     
     if (!confirmed) {
         // Revertir el toggle
@@ -2140,7 +2154,13 @@ async function selectModel(modelName) {
 
 // Eliminar un modelo de Ollama
 async function deleteModel(modelName) {
-    if (!confirm(`¿Estas seguro de eliminar el modelo ${modelName}?`)) {
+    const confirmed = await showConfirm(
+        `Se eliminara el modelo y todos sus archivos del sistema.`,
+        `Eliminar modelo ${modelName}?`,
+        { type: 'danger', confirmText: 'Eliminar', cancelText: 'Cancelar' }
+    );
+    
+    if (!confirmed) {
         return;
     }
 
@@ -3063,14 +3083,17 @@ async function toggleDocPath(pathId, enabled) {
     try {
         // Si se está deshabilitando, advertir sobre eliminación de documentos
         if (!enabled) {
-            const confirmMsg = 'DESHABILITAR RUTA\n\n' +
+            const confirmed = await showConfirm(
                 'Al deshabilitar esta ruta:\n' +
                 '- Los documentos indexados se ELIMINARAN de ChromaDB\n' +
                 '- No apareceran mas en las busquedas\n' +
                 '- Puedes reindexar despues para volver a agregarlos\n\n' +
-                '¿Continuar con la deshabilitacion?';
+                'Continuar con la deshabilitacion?',
+                'Deshabilitar ruta',
+                { type: 'warning', confirmText: 'Deshabilitar', cancelText: 'Cancelar' }
+            );
 
-            if (!confirm(confirmMsg)) {
+            if (!confirmed) {
                 return; // Cancelar
             }
         }
@@ -3110,7 +3133,13 @@ async function toggleDocPath(pathId, enabled) {
 
 // Eliminar path
 async function removeDocPath(pathId) {
-    if (!confirm('¿Eliminar esta ruta de documentos?')) return;
+    const confirmed = await showConfirm(
+        'La ruta se eliminara de la configuracion.',
+        'Eliminar esta ruta de documentos?',
+        { type: 'danger', confirmText: 'Eliminar', cancelText: 'Cancelar' }
+    );
+    
+    if (!confirmed) return;
 
     try {
         const response = await fetch(`http://localhost:8000/documents/paths/${pathId}`, {
@@ -3315,17 +3344,19 @@ async function reindexDocuments() {
 
 // Limpiar indice
 async function clearIndex() {
-    const confirmMsg = 'ELIMINAR TODO EL INDICE\n\n' +
+    const confirmed = await showConfirm(
         'Esta accion:\n' +
         '- Borrara TODOS los vectores y chunks\n' +
         '- Eliminara la base de datos ChromaDB completamente\n' +
-        '- Reseteara contadores de TODAS las rutas (habilitadas y deshabilitadas)\n' +
+        '- Reseteara contadores de TODAS las rutas\n' +
         '- NO elimina las rutas configuradas\n\n' +
         'NO SE PUEDE DESHACER\n\n' +
-        'Despues tendras que reindexar para volver a usar el sistema RAG.\n\n' +
-        '¿Estas seguro?';
+        'Despues tendras que reindexar para volver a usar el sistema RAG.',
+        'Eliminar todo el indice?',
+        { type: 'danger', confirmText: 'Si, eliminar todo', cancelText: 'Cancelar' }
+    );
 
-    if (!confirm(confirmMsg)) return;
+    if (!confirmed) return;
 
     // Deshabilitar boton durante el proceso
     const clearBtn = document.getElementById('clearIndexBtn');

@@ -14,6 +14,7 @@
 @import './components/loading.css';
 @import './components/progress.css';
 @import './components/security.css';
+@import './components/dialog.css';
 
 .container {
     flex: 1;
