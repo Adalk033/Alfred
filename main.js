@@ -11,6 +11,9 @@ let mainWindow;
 let backendProcess = null;
 let isBackendStartedByElectron = false;
 let isCheckingBackend = false; // Flag para evitar chequeos simultáneos
+let isDownloadingOllama = false; // Flag para evitar descargas simultáneas
+let ollamaDownloadAbortController = null; // Controller para cancelar descargas
+let isInitializing = false; // Flag para prevenir inicio del backend durante inicializacion
 
 // === Cargar configuración desde .env ===
 function loadEnvConfig() {
@@ -93,20 +96,42 @@ function createWindow() {
     mainWindow.loadFile('./renderer/index.html');
 
     // Mostrar cuando esté listo
-    mainWindow.once('ready-to-show', () => {
+    mainWindow.once('ready-to-show', async () => {
         console.log('Ventana principal lista');
         mainWindow.show();
-        // NO iniciar backend automáticamente aquí
-        // El loader se mostrará y esperará a que initializeAppWithProgress termine
-        initializeAppWithProgress();
-        // Iniciar monitoreo del estado del backend DESPUÉS de la inicialización
+        // NO iniciar backend automaticamente aqui
+        // El loader se mostrara y esperara a que initializeAppWithProgress termine
+
+        // Marcar que estamos en proceso de inicialización
+        isInitializing = true;
+        console.log('[INIT] Flag isInitializing = true - Bloqueando inicio automático del backend');
+
+        try {
+            await initializeAppWithProgress();
+        } catch (error) {
+            console.error('Error en inicializacion:', error);
+            notifyUser('error', 'Error al inicializar Alfred');
+        } finally {
+            // Liberar el flag de inicialización
+            isInitializing = false;
+            console.log('[INIT] Flag isInitializing = false - Inicialización completada');
+        }
+        // Iniciar monitoreo del estado del backend DESPUES de la inicializacion
     });
 
     // Manejar recarga de la página (Ctrl+R)
     mainWindow.webContents.on('did-finish-load', () => {
         console.log('Pagina cargada/recargada');
+
+        // CRÍTICO: No iniciar backend durante la inicialización inicial
+        if (isInitializing) {
+            console.log('[DID-FINISH-LOAD] Inicializacion en progreso, IGNORANDO checkAndStartBackend');
+            return;
+        }
+
         // Solo verificar conexión si ya pasó el ready-to-show inicial
         if (mainWindow.isVisible()) {
+            console.log('[DID-FINISH-LOAD] Ventana visible y fuera de inicializacion, ejecutando checkAndStartBackend');
             // Dar tiempo a que el renderer se inicialice
             setTimeout(() => {
                 checkAndStartBackend();
@@ -124,16 +149,32 @@ function createWindow() {
     });
 }
 
-// Crear ventana cuando la app esté lista
-app.whenReady().then(() => {
-    createWindow();
+// Prevenir múltiples instancias de la aplicación
+const gotTheLock = app.requestSingleInstanceLock();
 
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
+if (!gotTheLock) {
+    console.log('[APP] Ya hay una instancia de Alfred corriendo. Cerrando esta instancia...');
+    app.quit();
+} else {
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Si alguien intenta abrir otra instancia, enfocar la ventana existente
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
         }
     });
-});
+
+    // Crear ventana cuando la app esté lista
+    app.whenReady().then(() => {
+        createWindow();
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) {
+                createWindow();
+            }
+        });
+    });
+}
 
 // Cerrar cuando todas las ventanas estén cerradas
 app.on('window-all-closed', () => {
@@ -159,8 +200,9 @@ async function initializeAppWithProgress() {
     try {
         notifyUser('info', 'Iniciando Alfred...');
 
-        // 1. Verificar/Instalar Python
+        // 1. Verificar/Instalar Python (primero porque es rapido)
         notifyUser('info', 'Verificando Python...');
+        notifyInstallationProgress('python-check', 'Verificando Python...', 10);
         const pythonReady = await ensurePython();
         if (!pythonReady) {
             notifyUser('error', 'No se pudo instalar Python. La aplicacion se cerrara.');
@@ -170,28 +212,60 @@ async function initializeAppWithProgress() {
             return false;
         }
 
-        // 2. Verificar/Instalar Ollama
+        // 2. Verificar/Instalar Ollama (puede tardar - descarga grande)
         notifyUser('info', 'Verificando Ollama...');
+        notifyInstallationProgress('ollama-check', 'Verificando Ollama...', 20);
         const ollamaReady = await ensureOllama();
         if (!ollamaReady) {
             notifyUser('error', 'No se pudo instalar Ollama. Por favor instala manualmente desde ollama.ai');
+            // Dar tiempo para que el usuario vea el mensaje y los logs
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            // Mantener la app abierta pero mostrar estado de error
+            notifyInstallationProgress('error', 'Error: Ollama no disponible', 0);
             return false;
         }
 
-        // 3. Verificar/Descargar modelos de Ollama
+        // 2.1 Verificacion adicional: Confirmar que Ollama responde correctamente
+        console.log('[INIT] Verificando que Ollama este completamente funcional...');
+        notifyUser('info', 'Confirmando que Ollama esta listo...');
+        notifyInstallationProgress('ollama-verify', 'Verificando Ollama...', 55);
+
+        let ollamaFunctional = false;
+        for (let i = 0; i < 5; i++) {
+            if (await checkOllama()) {
+                console.log(`[INIT] Ollama verificado correctamente (intento ${i + 1})`);
+                ollamaFunctional = true;
+                break;
+            }
+            console.log(`[INIT] Esperando confirmacion de Ollama... (${i + 1}/5)`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        if (!ollamaFunctional) {
+            notifyUser('error', 'Ollama instalado pero no responde. Reinicia la aplicacion.');
+            notifyInstallationProgress('error', 'Error: Ollama no responde', 0);
+            return false;
+        }
+
+        console.log('[INIT] Ollama confirmado y funcional');
+        notifyUser('success', 'Ollama listo y funcional');
+
+        // 3. Verificar/Descargar modelos de Ollama (necesita Ollama funcionando)
         notifyUser('info', 'Verificando modelos de IA...');
+        notifyInstallationProgress('models-check', 'Verificando modelos...', 60);
         await ensureOllamaModels();
 
         // 4. Configurar entorno Python y dependencias
         notifyUser('info', 'Configurando entorno Python...');
+        notifyInstallationProgress('python-env', 'Configurando Python...', 70);
         await ensurePythonEnv(BACKEND_CONFIG.path);
 
-        // 5. Iniciar backend y ESPERAR a que responda
+        // 5. Iniciar backend y ESPERAR a que responda (solo despues de que todo este listo)
         notifyUser('info', 'Iniciando servidor de Alfred...');
         notifyInstallationProgress('backend-start', 'Iniciando backend...', 80);
-        
+
         const backendReady = await startBackendAndWait();
-        
+
         if (!backendReady) {
             notifyUser('error', 'El backend no responde. Revisa los logs.');
             return false;
@@ -200,18 +274,18 @@ async function initializeAppWithProgress() {
         // 6. Backend confirmado - ocultar loader y mostrar UI
         notifyUser('success', 'Alfred esta listo para usar');
         notifyInstallationProgress('complete', 'Inicializacion completa', 100);
-        
+
         // Esperar un momento antes de ocultar el loader
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Notificar al renderer que puede ocultar el loader
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('backend-ready');
         }
-        
+
         // AHORA iniciar monitoreo continuo
         startStatusMonitoring();
-        
+
         return true;
 
     } catch (error) {
@@ -512,20 +586,26 @@ async function checkOllama() {
 
 // Asegurar que Ollama esté instalado y corriendo
 async function ensureOllama() {
-    console.log('Verificando instalacion de Ollama...');
+    console.log('[OLLAMA-CHECK] === INICIANDO VERIFICACION DE OLLAMA ===');
+    console.log('[OLLAMA-CHECK] Flag isDownloadingOllama:', isDownloadingOllama);
     notifyInstallationProgress('ollama-check', 'Verificando Ollama...', 40);
 
     // Verificar si Ollama está corriendo
+    console.log('[OLLAMA-CHECK] Paso 1: Verificando si Ollama ya esta corriendo...');
     if (await checkOllama()) {
-        console.log('Ollama ya esta corriendo');
+        console.log('[OLLAMA-CHECK] ✓ Ollama ya esta corriendo y respondiendo en puerto 11434');
         notifyInstallationProgress('ollama-ready', 'Ollama listo', 50);
         return true;
     }
+    console.log('[OLLAMA-CHECK] ✗ Ollama no responde en puerto 11434');
+
+    console.log('[OLLAMA-CHECK] ✗ Ollama no responde en puerto 11434');
 
     // Verificar si Ollama está instalado pero no corriendo
+    console.log('[OLLAMA-CHECK] Paso 2: Verificando si Ollama esta instalado...');
     try {
         execSync('ollama --version', { stdio: 'pipe' });
-        console.log('Ollama instalado, intentando iniciar...');
+        console.log('[OLLAMA-CHECK] ✓ Ollama instalado, intentando iniciar...');
         notifyInstallationProgress('ollama-start', 'Iniciando Ollama...', 45);
 
         // Intentar iniciar Ollama
@@ -544,134 +624,242 @@ async function ensureOllama() {
             await new Promise(resolve => setTimeout(resolve, 3000));
 
             if (await checkOllama()) {
-                console.log('Ollama iniciado correctamente');
+                console.log('[OLLAMA-CHECK] ✓ Ollama iniciado correctamente');
                 notifyInstallationProgress('ollama-ready', 'Ollama iniciado', 50);
                 return true;
             }
         } catch (startError) {
-            console.error('Error al iniciar Ollama:', startError);
+            console.error('[OLLAMA-CHECK] ✗ Error al iniciar Ollama:', startError);
         }
     } catch {
         // Ollama no está instalado
-        console.log('Ollama no esta instalado');
+        console.log('[OLLAMA-CHECK] ✗ Ollama NO esta instalado');
+        console.log('[OLLAMA-CHECK] Paso 3: Descargando e instalando Ollama...');
         notifyUser('warning', 'Descargando Ollama... esto puede tomar varios minutos');
         notifyInstallationProgress('ollama-download', 'Descargando Ollama...', 42);
 
         try {
             // Descargar e instalar Ollama automáticamente
             if (process.platform === 'win32') {
-                return await downloadAndInstallOllamaWindows();
+                console.log('[OLLAMA-CHECK] Llamando a downloadAndInstallOllamaWindows()...');
+                const result = await downloadAndInstallOllamaWindows();
+                console.log('[OLLAMA-CHECK] downloadAndInstallOllamaWindows() retorno:', result);
+                return result;
             } else {
                 notifyUser('error', 'Por favor instala Ollama manualmente desde https://ollama.ai');
                 return false;
             }
         } catch (installError) {
-            console.error('Error al instalar Ollama:', installError);
+            console.error('[OLLAMA-CHECK] ✗ Error al instalar Ollama:', installError);
             notifyUser('error', 'Error al instalar Ollama. Por favor instala manualmente desde https://ollama.ai');
             return false;
         }
     }
 
+    console.log('[OLLAMA-CHECK] ✗ Ollama no pudo iniciarse ni instalarse');
     return false;
 }
 
 // Descargar e instalar Ollama en Windows
 async function downloadAndInstallOllamaWindows() {
+    // Prevenir descargas múltiples simultáneas
+    if (isDownloadingOllama) {
+        console.log('[OLLAMA] Ya hay una descarga en progreso, esperando...');
+        notifyUser('warning', 'Ya hay una descarga de Ollama en progreso');
+        return false;
+    }
+
+    isDownloadingOllama = true;
+
     const installerPath = path.join(app.getPath('temp'), 'OllamaSetup.exe');
     const downloadUrl = 'https://ollama.ai/download/OllamaSetup.exe';
 
-    console.log('Descargando Ollama desde:', downloadUrl);
-    notifyUser('info', 'Descargando Ollama...');
+    console.log('[OLLAMA] Iniciando descarga desde:', downloadUrl);
+    notifyUser('info', 'Descargando Ollama... esto puede tardar varios minutos');
+    notifyInstallationProgress('ollama-download', 'Descargando Ollama...', 42);
 
     try {
         // Descargar el instalador
         await downloadFile(downloadUrl, installerPath);
 
+        console.log('[OLLAMA] Descarga completada, iniciando instalacion...');
         notifyUser('info', 'Instalando Ollama... sigue las instrucciones del instalador');
+        notifyInstallationProgress('ollama-install', 'Instalando Ollama...', 50);
 
         // Ejecutar el instalador
         await new Promise((resolve, reject) => {
-            const installer = spawn(installerPath, [], {
-                stdio: 'inherit'
+            const installer = spawn(installerPath, ['/SILENT'], {
+                stdio: 'pipe'
             });
 
             installer.on('close', (code) => {
-                if (code === 0) {
+                console.log(`[OLLAMA] Instalador termino con codigo: ${code}`);
+                if (code === 0 || code === null) {
                     resolve();
                 } else {
                     reject(new Error(`Instalador termino con codigo ${code}`));
                 }
             });
 
-            installer.on('error', reject);
+            installer.on('error', (err) => {
+                console.error('[OLLAMA] Error al ejecutar instalador:', err);
+                reject(err);
+            });
         });
 
         // Limpiar el instalador
         try {
-            fs.unlinkSync(installerPath);
-        } catch { }
+            if (fs.existsSync(installerPath)) {
+                fs.unlinkSync(installerPath);
+                console.log('[OLLAMA] Instalador eliminado');
+            }
+        } catch (cleanError) {
+            console.warn('[OLLAMA] No se pudo limpiar instalador:', cleanError.message);
+        }
 
-        // Esperar a que Ollama esté disponible
+        // Esperar a que Ollama este disponible
+        console.log('[OLLAMA] Esperando a que Ollama inicie (max 60 segundos)...');
         notifyUser('info', 'Esperando a que Ollama inicie...');
+        notifyInstallationProgress('ollama-wait', 'Esperando Ollama...', 55);
+
         await new Promise(resolve => setTimeout(resolve, 5000));
 
-        // Verificar que Ollama esté corriendo
-        for (let i = 0; i < 10; i++) {
+        // Verificar que Ollama este corriendo con reintentos
+        for (let i = 0; i < 12; i++) {
+            console.log(`[OLLAMA] Intento ${i + 1}/12 de verificacion...`);
+
             if (await checkOllama()) {
-                console.log('Ollama instalado e iniciado correctamente');
+                console.log('[OLLAMA] Ollama instalado e iniciado correctamente');
                 notifyUser('success', 'Ollama instalado correctamente');
+                notifyInstallationProgress('ollama-ready', 'Ollama listo', 60);
                 return true;
             }
-            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Esperar 5 segundos entre intentos
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+
+        console.warn('[OLLAMA] Ollama instalado pero no responde despues de 60 segundos');
+        notifyUser('warning', 'Ollama instalado pero no responde. Intentando iniciar manualmente...');
+
+        // Intentar iniciar Ollama manualmente
+        try {
+            spawn('ollama', ['serve'], {
+                detached: true,
+                stdio: 'ignore'
+            }).unref();
+
+            console.log('[OLLAMA] Comando de inicio enviado, esperando 10 segundos...');
+            await new Promise(resolve => setTimeout(resolve, 10000));
+
+            if (await checkOllama()) {
+                console.log('[OLLAMA] Ollama iniciado manualmente con exito');
+                notifyUser('success', 'Ollama iniciado correctamente');
+                return true;
+            }
+        } catch (startError) {
+            console.error('[OLLAMA] Error al iniciar manualmente:', startError);
         }
 
         notifyUser('warning', 'Ollama instalado pero no responde. Por favor reinicia la aplicacion');
         return false;
 
     } catch (error) {
-        console.error('Error al descargar/instalar Ollama:', error);
-        notifyUser('error', 'Error al instalar Ollama automaticamente');
+        console.error('[OLLAMA] Error critico durante instalacion:', error);
+        notifyUser('error', `Error al instalar Ollama: ${error.message}`);
         return false;
+    } finally {
+        // Siempre liberar el flag de descarga
+        isDownloadingOllama = false;
+        console.log('[OLLAMA] Flag de descarga liberado');
     }
 }
 
 // Descargar archivo con progreso
-function downloadFile(url, destPath) {
+function downloadFile(url, destPath, maxRedirects = 5) {
     return new Promise((resolve, reject) => {
+        if (maxRedirects <= 0) {
+            reject(new Error('Demasiadas redirecciones'));
+            return;
+        }
+
         const file = fs.createWriteStream(destPath);
+        let redirectCount = 5 - maxRedirects;
+
+        console.log(`[DOWNLOAD] Intentando descargar desde: ${url} (redireccion ${redirectCount})`);
 
         https.get(url, (response) => {
-            if (response.statusCode === 302 || response.statusCode === 301) {
-                // Seguir redirección
+            // Manejar todas las redirecciones HTTP (301, 302, 303, 307, 308)
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                // Seguir redireccion
+                console.log(`[DOWNLOAD] Redireccion ${response.statusCode} -> ${response.headers.location}`);
                 file.close();
-                fs.unlinkSync(destPath);
-                downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
+                try {
+                    if (fs.existsSync(destPath)) {
+                        fs.unlinkSync(destPath);
+                    }
+                } catch (e) {
+                    console.warn('[DOWNLOAD] Error al limpiar archivo temporal:', e.message);
+                }
+                downloadFile(response.headers.location, destPath, maxRedirects - 1)
+                    .then(resolve)
+                    .catch(reject);
                 return;
             }
 
             if (response.statusCode !== 200) {
-                reject(new Error(`Error al descargar: ${response.statusCode}`));
+                file.close();
+                reject(new Error(`Error HTTP ${response.statusCode} al descargar desde ${url}`));
                 return;
             }
 
             const totalSize = parseInt(response.headers['content-length'], 10);
             let downloaded = 0;
+            let lastPercent = 0;
+
+            console.log(`[DOWNLOAD] Iniciando descarga: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
 
             response.on('data', (chunk) => {
                 downloaded += chunk.length;
-                const percent = ((downloaded / totalSize) * 100).toFixed(1);
-                console.log(`Descarga: ${percent}%`);
+                const percent = Math.floor((downloaded / totalSize) * 100);
+
+                // Solo mostrar cada 10%
+                if (percent >= lastPercent + 10) {
+                    lastPercent = percent;
+                    console.log(`[DOWNLOAD] Progreso: ${percent}% (${(downloaded / 1024 / 1024).toFixed(2)} MB)`);
+                    notifyInstallationProgress('ollama-download', `Descargando Ollama... ${percent}%`, 42 + (percent * 0.08));
+                }
             });
 
             response.pipe(file);
 
             file.on('finish', () => {
                 file.close();
+                console.log('[DOWNLOAD] Descarga completada exitosamente');
                 resolve();
             });
 
+            file.on('error', (err) => {
+                file.close();
+                try {
+                    if (fs.existsSync(destPath)) {
+                        fs.unlinkSync(destPath);
+                    }
+                } catch (e) {
+                    console.warn('[DOWNLOAD] Error al limpiar archivo con error:', e.message);
+                }
+                reject(err);
+            });
+
         }).on('error', (err) => {
-            fs.unlinkSync(destPath);
+            file.close();
+            try {
+                if (fs.existsSync(destPath)) {
+                    fs.unlinkSync(destPath);
+                }
+            } catch (e) {
+                console.warn('[DOWNLOAD] Error al limpiar archivo tras fallo de conexion:', e.message);
+            }
             reject(err);
         });
     });
@@ -863,12 +1051,12 @@ function loadProblematicPackages(backendPath) {
     } catch (error) {
         console.log('No se pudo cargar problematic-packages.json, usando defaults:', error.message);
     }
-    
+
     // Fallback si no existe el archivo
     return {
         problematic_packages: [
-            'greenlet', 'grpcio', 'numpy', 'scipy', 'pandas', 'pillow', 
-            'matplotlib', 'lxml', 'cryptography', 'cffi', 'sympy', 
+            'greenlet', 'grpcio', 'numpy', 'scipy', 'pandas', 'pillow',
+            'matplotlib', 'lxml', 'cryptography', 'cffi', 'sympy',
             'nltk'
         ],
         install_config: {
@@ -891,7 +1079,7 @@ function loadGPUPackages(backendPath) {
     } catch (error) {
         console.log('No se pudo cargar gpu-packages.json, usando defaults:', error.message);
     }
-    
+
     // Fallback
     return {
         gpu_packages: {
@@ -914,7 +1102,7 @@ function loadGPUPackages(backendPath) {
 // Detectar tipo de GPU disponible
 async function detectGPUType() {
     console.log('Detectando hardware GPU...');
-    
+
     // Verificar NVIDIA
     try {
         if (process.platform === 'win32') {
@@ -925,7 +1113,7 @@ async function detectGPUType() {
     } catch {
         // No hay NVIDIA GPU
     }
-    
+
     // Verificar Apple Silicon
     try {
         if (process.platform === 'darwin') {
@@ -938,9 +1126,9 @@ async function detectGPUType() {
     } catch {
         // No es Apple Silicon
     }
-    
+
     // TODO: AMD ROCm detection
-    
+
     console.log('⚠️  No se detecto GPU compatible, usando CPU');
     return 'cpu';
 }
@@ -949,16 +1137,16 @@ async function detectGPUType() {
 async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
     const gpuType = await detectGPUType();
     const tempDir = path.join(backendPath, 'temp');
-    
+
     if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
     }
-    
+
     let packagesToInstall = [];
     let indexUrl = null;
     let config = gpuConfig.install_config.cpu;
     let label = 'CPU';
-    
+
     if (gpuType === 'nvidia_cuda' && gpuConfig.gpu_packages.nvidia_cuda) {
         packagesToInstall = gpuConfig.gpu_packages.nvidia_cuda.packages;
         indexUrl = gpuConfig.gpu_packages.nvidia_cuda.index_url;
@@ -972,12 +1160,12 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
         packagesToInstall = gpuConfig.cpu_fallback.packages;
         indexUrl = gpuConfig.cpu_fallback.index_url;
     }
-    
+
     if (packagesToInstall.length === 0) {
         console.log('No hay paquetes GPU/CPU para instalar');
         return [];
     }
-    
+
     console.log(`\n=== Instalando PyTorch para ${label} ===`);
     console.log(`Paquetes: ${packagesToInstall.join(', ')}`);
     if (indexUrl) {
@@ -985,17 +1173,17 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
     }
     notifyUser('info', `Instalando PyTorch para ${label}... (esto puede tardar varios minutos)`);
     notifyInstallationProgress('gpu-install', `Instalando PyTorch (${label})...`, 43);
-    
+
     let installed = 0;
     let failed = [];
     const total = packagesToInstall.length;
-    
+
     for (const pkg of packagesToInstall) {
         installed++;
         const progress = 43 + Math.min(2, (installed / total) * 2);
         console.log(`[pip gpu] ${installed}/${total}: Instalando ${pkg}...`);
         notifyInstallationProgress('gpu-install', `Instalando ${pkg}... (${installed}/${total})`, progress);
-        
+
         try {
             const success = await new Promise((resolve) => {
                 const args = [
@@ -1008,14 +1196,14 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
                     "--retries", String(config.retries_per_package),
                     "--timeout", String(config.timeout_per_package_seconds)
                 ];
-                
+
                 // Agregar index-url si existe
                 if (indexUrl) {
                     args.push("--index-url", indexUrl);
                 }
-                
+
                 args.push(pkg);
-                
+
                 const proc = spawn(pythonCmd, args, {
                     cwd: backendPath,
                     stdio: "pipe",
@@ -1027,10 +1215,10 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
                         TMP: tempDir
                     }
                 });
-                
+
                 let output = '';
                 let errorOut = '';
-                
+
                 proc.stdout.on('data', (data) => {
                     output += data.toString();
                     const lines = output.split('\n');
@@ -1040,7 +1228,7 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
                         }
                     }
                 });
-                
+
                 proc.stderr.on('data', (data) => {
                     const err = data.toString();
                     errorOut += err;
@@ -1048,7 +1236,7 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
                         console.error(`  [stderr] ${err.trim()}`);
                     }
                 });
-                
+
                 proc.on('close', (code) => {
                     if (code === 0) {
                         console.log(`  ✓ ${pkg} instalado correctamente`);
@@ -1058,26 +1246,26 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
                         resolve(false);
                     }
                 });
-                
+
                 proc.on('error', (err) => {
                     console.error(`  ✗ Error de proceso: ${err.message}`);
                     resolve(false);
                 });
             });
-            
+
             if (!success) {
                 failed.push(pkg.split('==')[0]); // Solo el nombre sin versión
             }
-            
+
             // Delay entre paquetes grandes
             await new Promise(resolve => setTimeout(resolve, 1500));
-            
+
         } catch (error) {
             console.error(`  ✗ Error al instalar ${pkg}:`, error.message);
             failed.push(pkg.split('==')[0]);
         }
     }
-    
+
     if (failed.length > 0) {
         console.log(`\n⚠️  Paquetes GPU/CPU que fallaron (${failed.length}): ${failed.join(', ')}`);
         notifyUser('warning', `${total - failed.length}/${total} paquetes GPU instalados`);
@@ -1085,7 +1273,7 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
         console.log(`✓ PyTorch instalado correctamente para ${label}`);
         notifyUser('success', `PyTorch instalado para ${label}`);
     }
-    
+
     notifyInstallationProgress('gpu-ready', 'PyTorch instalado', 45);
     return failed;
 }
@@ -1102,12 +1290,12 @@ function loadProblematicPackages(backendPath) {
     } catch (error) {
         console.log('No se pudo cargar problematic-packages.json, usando defaults:', error.message);
     }
-    
+
     // Fallback si no existe el archivo
     return {
         problematic_packages: [
-            'greenlet', 'grpcio', 'numpy', 'scipy', 'pandas', 'pillow', 
-            'matplotlib', 'lxml', 'cryptography', 'cffi', 'sympy', 
+            'greenlet', 'grpcio', 'numpy', 'scipy', 'pandas', 'pillow',
+            'matplotlib', 'lxml', 'cryptography', 'cffi', 'sympy',
             'torch', 'torchvision', 'torchaudio', 'nltk'
         ],
         install_config: {
@@ -1152,14 +1340,14 @@ async function installProblematicPackages(pythonCmd, backendPath, problematicPac
     for (const pkgName of problematicPackages) {
         installed++;
         const progress = 38 + Math.min(4, (installed / total) * 4);
-        
+
         // Buscar la especificación completa del paquete
         const pkgSpec = packageMap[pkgName.toLowerCase()] || pkgName;
-        
+
         console.log(`[pip problematic] ${installed}/${total}: Instalando ${pkgSpec}...`);
         notifyInstallationProgress(
-            'deps-problematic', 
-            `Instalando ${pkgName}... (${installed}/${total})`, 
+            'deps-problematic',
+            `Instalando ${pkgName}... (${installed}/${total})`,
             progress
         );
 
@@ -1256,14 +1444,14 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
     }
 
     const failedPackages = [];
-    
+
     // Leer requirements.txt y filtrar solo los paquetes que queremos instalar
     const requirementsContent = fs.readFileSync(requirementsPath, 'utf8');
     const allSpecs = requirementsContent
         .split('\n')
         .map(line => line.trim())
         .filter(line => line && !line.startsWith('#'));
-    
+
     // Crear mapa de nombre → especificación completa
     const packageMap = {};
     allSpecs.forEach(spec => {
@@ -1272,17 +1460,17 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
             packageMap[nameMatch[1].toLowerCase()] = spec;
         }
     });
-    
+
     // Obtener especificaciones completas de los paquetes a instalar
     const specsToInstall = packagesToInstall
         .map(pkg => packageMap[pkg.toLowerCase()] || pkg)
         .filter(spec => spec);
-    
+
     if (specsToInstall.length === 0) {
         console.log('No hay paquetes para instalar en bloque');
         return [];
     }
-    
+
     console.log(`Instalando ${specsToInstall.length} paquetes en bloque...`);
 
     return new Promise((resolve) => {
@@ -1317,10 +1505,10 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
         proc.stdout.on("data", (data) => {
             const output = data.toString('utf8').trim();
             installOutput += output + '\n';
-            
+
             const collectingMatch = output.match(/Collecting ([^\s]+)/);
             const installingMatch = output.match(/Installing collected packages: (.+)/);
-            
+
             if (collectingMatch && collectingMatch[1] !== lastPackage) {
                 lastPackage = collectingMatch[1];
                 packagesInstalled++;
@@ -1335,7 +1523,7 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
         proc.stderr.on("data", (data) => {
             const error = data.toString('utf8').trim();
             errorOutput += error + '\n';
-            
+
             // Detectar paquetes que fallaron - MEJORADO
             // Patrón 1: ERROR: Could not install packages... 'path\package\file'
             const errorMatch1 = error.match(/ERROR:.*?'[^']*[\\/]site-packages[\\/]([^\\/]+)/);
@@ -1343,21 +1531,21 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
                 failedPackages.push(errorMatch1[1]);
                 console.log(`[pip] Paquete con error detectado: ${errorMatch1[1]}`);
             }
-            
+
             // Patrón 2: ERROR: Could not install packages... temp\...\package-version.whl
             const errorMatch2 = error.match(/temp[\\/][^\\/]+[\\/]([a-zA-Z0-9_-]+)-[\d.]+/);
             if (errorMatch2 && !failedPackages.includes(errorMatch2[1])) {
                 failedPackages.push(errorMatch2[1]);
                 console.log(`[pip] Paquete con error detectado: ${errorMatch2[1]}`);
             }
-            
+
             // Patrón 3: Collecting package_name (failed)
             const errorMatch3 = error.match(/ERROR:.*?Could not find.*?for ([a-zA-Z0-9_-]+)/);
             if (errorMatch3 && !failedPackages.includes(errorMatch3[1])) {
                 failedPackages.push(errorMatch3[1]);
                 console.log(`[pip] Paquete con error detectado: ${errorMatch3[1]}`);
             }
-            
+
             if (error && !error.includes('WARNING') && !error.includes('DEPRECATION')) {
                 console.error(`[pip stderr] ${error}`);
             }
@@ -1370,7 +1558,7 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
                 resolve([]);
             } else {
                 console.log(`⚠️  Instalacion en bloque termino con errores (code ${code})`);
-                
+
                 // Si no detectamos paquetes específicos, devolver los que intentamos instalar
                 if (failedPackages.length === 0) {
                     console.log('⚠️  No se detectaron paquetes especificos con errores.');
@@ -1420,10 +1608,10 @@ async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
     for (const pkgName of failedPackages) {
         retried++;
         const progress = 40 + Math.min(5, (retried / failedPackages.length) * 5);
-        
+
         // Buscar la especificación completa del paquete
         const pkgSpec = packageMap[pkgName.toLowerCase()] || pkgName;
-        
+
         console.log(`[pip retry] Reintentando ${pkgSpec}... (${retried}/${failedPackages.length})`);
         notifyInstallationProgress('deps-retry', `Reintentando ${pkgName}... (${retried}/${failedPackages.length})`, progress);
 
@@ -1502,7 +1690,7 @@ async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
         console.log(`✓ Todos los paquetes fallidos fueron instalados correctamente`);
         notifyUser('success', `${failedPackages.length} paquetes recuperados exitosamente`);
     }
-    
+
     notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 45);
 }
 
@@ -1655,7 +1843,7 @@ async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
         if (!pkgMatch) continue;
 
         const pkgName = pkgMatch[1].toLowerCase();
-        
+
         // Solo instalar si está en la lista de faltantes
         if (!missing.includes(pkgName)) {
             console.log(`[pip] Saltando ${pkgName} (ya instalado)`);
@@ -1736,7 +1924,7 @@ async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
     }
 
     console.log(`Instalacion individual completada. ${installed} paquetes procesados.`);
-    
+
     if (failed.length > 0) {
         console.log(`\n⚠️  Paquetes con errores (${failed.length}):`);
         failed.forEach(pkg => console.log(`   - ${pkg}`));
@@ -1744,11 +1932,11 @@ async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
     } else {
         notifyUser('success', `${installed} dependencias instaladas correctamente`);
     }
-    
+
     notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 45);
-    
+
     return { installed: installed - failed.length, failed };
-}async function ensurePythonEnv(backendPath, retryCount = 0) {
+} async function ensurePythonEnv(backendPath, retryCount = 0) {
     const venvPath = path.join(backendPath, "venv");
     const requirementsPath = path.join(backendPath, "requirements.txt");
     const MAX_RETRIES = 2;
@@ -1902,51 +2090,51 @@ async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
             console.log('Cargando configuracion de paquetes problematicos...');
             const problematicConfig = loadProblematicPackages(backendPath);
             const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
-            
+
             // Separar paquetes
             const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
             const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
-            
+
             console.log(`📦 Paquetes estables: ${stablePackages.length}`);
             console.log(`⚠️  Paquetes problematicos: ${problematicPackages.length} (${problematicPackages.join(', ')})`);
-            
+
             // FASE 1: Instalar paquetes estables en bloque (rápido)
             let failedStable = [];
             if (stablePackages.length > 0) {
                 console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
                 notifyUser('info', `Instalando ${stablePackages.length} paquetes estables...`);
                 notifyInstallationProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
-                
+
                 failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages);
             }
-            
+
             // FASE 2: Instalar paquetes problemáticos UNO POR UNO con delays largos
             let failedProblematic = [];
             if (problematicPackages.length > 0) {
                 console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
                 notifyUser('info', `Instalando ${problematicPackages.length} paquetes problematicos (mas lento pero seguro)...`);
                 notifyInstallationProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
-                
+
                 failedProblematic = await installProblematicPackages(
-                    pythonCmd, 
-                    backendPath, 
+                    pythonCmd,
+                    backendPath,
                     problematicPackages,
                     problematicConfig.install_config
                 );
             }
-            
+
             // FASE 3: Instalar paquetes GPU/CPU según hardware
             console.log('\n=== FASE 3: Instalando PyTorch (GPU/CPU) ===');
             const gpuConfig = loadGPUPackages(backendPath);
             const failedGPU = await installGPUPackages(pythonCmd, backendPath, gpuConfig);
-            
+
             // FASE 4: Reintentar todos los fallidos
             const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
             if (allFailed.length > 0) {
                 console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
                 notifyUser('warning', `Reintentando ${allFailed.length} paquetes que fallaron...`);
                 notifyInstallationProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
-                
+
                 await retryFailedPackages(pythonCmd, backendPath, allFailed);
             } else {
                 notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 48);
@@ -1955,7 +2143,7 @@ async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
             // Limpiar directorio temporal DESPUÉS de todos los reintentos
             console.log('Limpiando directorio temporal...');
             await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar que pip libere archivos
-            
+
             try {
                 const tempDir = path.join(backendPath, 'temp');
                 if (fs.existsSync(tempDir)) {
@@ -1965,10 +2153,10 @@ async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
             } catch (cleanupErr) {
                 console.log('No se pudo limpiar directorio temporal (no es critico):', cleanupErr.message);
             }
-            
+
         } else {
             console.log("Todas las dependencias ya estan instaladas.");
-            
+
             // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
             console.log('Verificando instalacion de PyTorch...');
             const hasTorch = installedPackages.some(pkg => pkg.toLowerCase() === 'torch');
@@ -1977,7 +2165,7 @@ async function installPackagesOneByOne(pythonCmd, backendPath, reqs, missing) {
                 const gpuConfig = loadGPUPackages(backendPath);
                 await installGPUPackages(pythonCmd, backendPath, gpuConfig);
             }
-            
+
             notifyInstallationProgress('deps-ready', 'Dependencias verificadas', 48);
         }
 
@@ -2071,13 +2259,13 @@ async function verifyPyTorchInstallation(pythonCmd) {
         }).trim();
 
         console.log(`✓ ${result}`);
-        
+
         if (result.includes('CUDA: True')) {
             notifyUser('success', 'PyTorch con aceleracion GPU instalado correctamente');
         } else {
             notifyUser('info', 'PyTorch CPU instalado (GPU no disponible)');
         }
-        
+
         return true;
     } catch (err) {
         console.log("⚠️  No se pudo verificar PyTorch:", err.message);
@@ -2136,7 +2324,7 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
             notifyBackendStatus(false);
             return false;
         }
-        
+
         if (await isBackendRunning()) {
             console.log('Backend esta disponible');
             notifyBackendStatus(true);  // Notificar que esta conectado
@@ -2158,55 +2346,84 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
 
 // Iniciar el backend y ESPERAR hasta que responda correctamente
 async function startBackendAndWait() {
-    console.log('Iniciando backend y esperando respuesta...');
-    
-    // Primero iniciar el proceso
-    const started = await startBackend();
-    if (!started) {
-        console.error('No se pudo iniciar el proceso del backend');
-        return false;
+    console.log('[INIT] === PASO 5: INICIANDO BACKEND ===');
+    console.log('[INIT] Ollama ya debe estar completamente funcional en este punto');
+    console.log('[INIT] Iniciando backend y esperando respuesta...');
+    console.log('[INIT] Flag isInitializing:', isInitializing);
+    console.log('[INIT] Este es el UNICO punto autorizado para iniciar el backend durante setup');
+
+    // Temporalmente permitir el inicio del backend desde este flujo
+    const wasInitializing = isInitializing;
+    if (wasInitializing) {
+        console.log('[INIT] Temporalmente deshabilitando flag isInitializing para permitir inicio controlado');
+        isInitializing = false;
     }
 
-    // Ahora esperar con reintentos más largos hasta que responda
-    console.log('Backend iniciado, esperando respuesta del servidor...');
-    notifyInstallationProgress('backend-init', 'Esperando respuesta del backend...', 85);
-    
-    const maxRetries = 60; // 60 intentos = 2 minutos
-    const retryDelay = 2000; // 2 segundos entre intentos
-    
-    for (let i = 0; i < maxRetries; i++) {
-        const progress = 85 + Math.min(14, (i / maxRetries) * 14);
-        notifyInstallationProgress('backend-starting', `Esperando backend... (${i + 1}/${maxRetries})`, progress);
-        
-        try {
-            const isRunning = await isBackendRunning();
-            if (isRunning) {
-                console.log(`✓ Backend respondio correctamente despues de ${i + 1} intentos`);
-                notifyUser('success', 'Backend conectado correctamente');
-                notifyBackendStatus(true);
-                notifyInstallationProgress('backend-ready', 'Backend listo', 100);
-                return true;
-            }
-        } catch (error) {
-            console.log(`Intento ${i + 1}/${maxRetries} - Backend aun no responde`);
+    try {
+        // Primero iniciar el proceso
+        const started = await startBackend();
+
+        if (!started) {
+            console.error('No se pudo iniciar el proceso del backend');
+            return false;
         }
-        
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+        // Ahora esperar con reintentos más largos hasta que responda
+        console.log('Backend iniciado, esperando respuesta del servidor...');
+        notifyInstallationProgress('backend-init', 'Esperando respuesta del backend...', 85);
+
+        const maxRetries = 60; // 60 intentos = 2 minutos
+        const retryDelay = 2000; // 2 segundos entre intentos
+
+        for (let i = 0; i < maxRetries; i++) {
+            const progress = 85 + Math.min(14, (i / maxRetries) * 14);
+            notifyInstallationProgress('backend-starting', `Esperando backend... (${i + 1}/${maxRetries})`, progress);
+
+            try {
+                const isRunning = await isBackendRunning();
+                if (isRunning) {
+                    console.log(`✓ Backend respondio correctamente despues de ${i + 1} intentos`);
+                    notifyUser('success', 'Backend conectado correctamente');
+                    notifyBackendStatus(true);
+                    notifyInstallationProgress('backend-ready', 'Backend listo', 100);
+                    return true;
+                }
+            } catch (error) {
+                console.log(`Intento ${i + 1}/${maxRetries} - Backend aun no responde`);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+
+        console.error('Backend no respondio despues de 2 minutos');
+        notifyUser('error', 'El backend no responde. Revisa los logs en la consola.');
+        return false;
+    } finally {
+        // Restaurar el flag si era necesario
+        if (wasInitializing) {
+            console.log('[INIT] Restaurando flag isInitializing a true');
+            isInitializing = true;
+        }
     }
-    
-    console.error('Backend no respondio despues de 2 minutos');
-    notifyUser('error', 'El backend no responde. Revisa los logs en la consola.');
-    return false;
 }
 
 async function startBackend() {
-    console.log('Verificando si el backend ya esta iniciado...');
+    console.log('[BACKEND] Verificando si el backend ya esta iniciado...');
+    console.log('[BACKEND] Flag isInitializing:', isInitializing);
+
+    // PROTECCIÓN ADICIONAL: No iniciar durante la inicialización
+    if (isInitializing) {
+        console.log('[BACKEND] ⚠️  ABORTADO: isInitializing=true, no se puede iniciar backend ahora');
+        return false;
+    }
+
     if (backendProcess) {
-        console.log('El backend ya esta iniciado');
+        console.log('[BACKEND] El backend ya esta iniciado');
         return true;
     }
 
-    console.log('Iniciando backend de Alfred...');
+    console.log('[BACKEND] === INICIANDO BACKEND DE ALFRED ===');
+    console.log('[BACKEND] IMPORTANTE: Ollama debe estar corriendo ANTES de este paso');
     notifyInstallationProgress('backend-start', 'Preparando servidor de Alfred...', 80);
 
     // Verificar que el directorio y script existan antes de lanzar el proceso
@@ -2255,7 +2472,7 @@ async function startBackend() {
         backendProcess.stderr.on('data', (data) => {
             const error = data.toString('utf8').trim();
             if (error) console.error(`[Backend Error] ${error}`);
-            
+
             // Detectar errores de módulo faltante
             if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
                 hasModuleError = true;
@@ -2265,12 +2482,12 @@ async function startBackend() {
 
         backendProcess.on('close', (code) => {
             console.log(`[Backend] Proceso finalizado con codigo ${code}`);
-            
+
             if (code !== 0 && hasModuleError) {
                 console.error('⚠️  Backend cerrado por dependencias faltantes');
                 notifyUser('error', 'Faltan dependencias. Reinstalando...');
             }
-            
+
             backendProcess = null;
             isBackendStartedByElectron = false;
         });
@@ -2326,6 +2543,12 @@ function stopBackend() {
 
 // Verificar y, si es necesario, iniciar el backend
 async function checkAndStartBackend() {
+    // CRÍTICO: No permitir inicio durante la inicialización
+    if (isInitializing) {
+        console.log('[CHECK-BACKEND] Inicializacion en progreso, ABORTANDO checkAndStartBackend');
+        return false;
+    }
+
     // Evitar chequeos simultáneos
     if (isCheckingBackend) {
         console.log('Ya hay un chequeo en progreso...');
@@ -2343,12 +2566,12 @@ async function checkAndStartBackend() {
             console.log('El backend ya esta corriendo');
             notifyUser('success', 'Conectado al servidor de Alfred');
             notifyBackendStatus(true);  // Notificar conexion exitosa
-            
+
             // Enviar evento backend-ready para que el loader se oculte
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('backend-ready');
             }
-            
+
             return true;
         }
 

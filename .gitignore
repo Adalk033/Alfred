@@ -94,6 +94,7 @@ desktop.ini
 *.bak
 *.backup
 *~
+*.conf
 
 # === Certificados y Claves ===
 *.pem
