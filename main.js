@@ -19,18 +19,18 @@ function loadEnvConfig() {
         host: '127.0.0.1',
         port: 8000
     };
-    
+
     try {
         if (fs.existsSync(envPath)) {
             const envContent = fs.readFileSync(envPath, 'utf-8');
             const lines = envContent.split('\n');
-            
+
             lines.forEach(line => {
                 line = line.trim();
                 if (line && !line.startsWith('#')) {
                     const [key, ...valueParts] = line.split('=');
                     const value = valueParts.join('=').trim();
-                    
+
                     if (key === 'ALFRED_HOST' && value) {
                         config.host = value;
                     } else if (key === 'ALFRED_PORT' && value) {
@@ -45,7 +45,7 @@ function loadEnvConfig() {
     } catch (error) {
         console.error('Error al cargar .env:', error);
     }
-    
+
     return config;
 }
 
@@ -63,8 +63,14 @@ const BACKEND_CONFIG = {
     script: SCRIPT_BACKEND,
     maxRetries: 3,
     retryDelay: 2000,
-    startupTimeout: 30000
+    startupTimeout: 60000  // 60 segundos para dar tiempo a la instalación
 };
+
+// Modelos de Ollama requeridos
+const REQUIRED_OLLAMA_MODELS = [
+    'gemma3n:e4b',
+    'nomic-embed-text:v1.5'
+];
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -91,7 +97,7 @@ function createWindow() {
         console.log('Ventana principal lista');
         mainWindow.show();
         // Verificar/iniciar backend después de mostrar la ventana
-        checkAndStartBackend();
+        initializeAppWithProgress();
         // Iniciar monitoreo del estado del backend
         startStatusMonitoring();
     });
@@ -146,6 +152,623 @@ app.on('before-quit', () => {
     stopBackend();
 });
 
+// === SISTEMA DE INSTALACIÓN AUTOMÁTICA ===
+
+// Función principal de inicialización con progreso
+async function initializeAppWithProgress() {
+    try {
+        notifyUser('info', 'Iniciando Alfred...');
+
+        // 1. Verificar/Instalar Python
+        notifyUser('info', 'Verificando Python...');
+        const pythonReady = await ensurePython();
+        if (!pythonReady) {
+            notifyUser('error', 'No se pudo instalar Python. La aplicacion se cerrara.');
+            // Dar tiempo para que el usuario vea el mensaje
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            app.exit(1);
+            return false;
+        }
+
+        // 2. Verificar/Instalar Ollama
+        notifyUser('info', 'Verificando Ollama...');
+        const ollamaReady = await ensureOllama();
+        if (!ollamaReady) {
+            notifyUser('error', 'No se pudo instalar Ollama. Por favor instala manualmente desde ollama.ai');
+            return false;
+        }
+
+        // 3. Verificar/Descargar modelos de Ollama
+        notifyUser('info', 'Verificando modelos de IA...');
+        await ensureOllamaModels();
+
+        // 4. Configurar entorno Python y dependencias
+        notifyUser('info', 'Configurando entorno Python...');
+        await ensurePythonEnv(BACKEND_CONFIG.path);
+
+        // 5. Iniciar backend
+        notifyUser('info', 'Iniciando servidor de Alfred...');
+        await checkAndStartBackend();
+
+        notifyUser('success', 'Alfred esta listo para usar');
+        return true;
+
+    } catch (error) {
+        console.error('Error durante la inicializacion:', error);
+        notifyUser('error', `Error de inicializacion: ${error.message}`);
+        return false;
+    }
+}
+
+// Verificar si Python está instalado
+async function checkPython() {
+    try {
+        const version = execSync('python --version', {
+            encoding: 'utf8',
+            stdio: 'pipe'
+        }).trim();
+        console.log('Python detectado:', version);
+
+        // Verificar version >= 3.10
+        const match = version.match(/Python (\d+)\.(\d+)/);
+        if (match) {
+            const major = parseInt(match[1]);
+            const minor = parseInt(match[2]);
+            if (major >= 3 && minor >= 10) {
+                return true;
+            } else {
+                console.error('Version de Python muy antigua:', version);
+                return false;
+            }
+        }
+        return true;
+    } catch (error) {
+        console.error('Python no esta instalado o no esta en PATH');
+        return false;
+    }
+}
+
+// Asegurar que Python esté instalado
+async function ensurePython() {
+    console.log('Verificando instalacion de Python...');
+
+    // Verificar PRIMERO si Python ya está disponible (puede estar instalado aunque no esté en PATH del comando)
+    const pythonInstalledMarker = path.join(app.getPath('userData'), '.python_installed');
+
+    // Si existe la marca, intentar encontrar Python instalado
+    if (fs.existsSync(pythonInstalledMarker)) {
+        console.log('Detectada marca de instalacion previa de Python.');
+
+        // Intentar encontrar Python usando findPythonExecutable (busca en rutas comunes)
+        try {
+            const pythonPath = findPythonExecutable();
+            console.log('Python encontrado despues de instalacion:', pythonPath);
+
+            // Eliminar marca ya que Python está disponible
+            try {
+                fs.unlinkSync(pythonInstalledMarker);
+                console.log('Marca eliminada, Python disponible');
+            } catch (err) {
+                console.error('Error al eliminar marca:', err);
+            }
+
+            // Python encontrado, continuar sin reiniciar
+            return true;
+        } catch (findError) {
+            // No se pudo encontrar Python, requiere reinicio
+            console.log('Python aun no disponible. Requiere reinicio.');
+            notifyUser('warning', 'Python fue instalado. Reinicia Alfred para continuar.');
+
+            // Limpiar marca
+            try {
+                fs.unlinkSync(pythonInstalledMarker);
+                console.log('Marca de instalacion eliminada');
+            } catch (err) {
+                console.error('Error al eliminar marca:', err);
+            }
+
+            // Mostrar diálogo de reinicio
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                const result = await dialog.showMessageBox(mainWindow, {
+                    type: 'info',
+                    title: 'Reinicio Requerido',
+                    message: 'Python fue instalado en la sesion anterior. Alfred necesita reiniciarse.',
+                    buttons: ['Reiniciar Ahora', 'Salir'],
+                    defaultId: 0,
+                    cancelId: 1
+                });
+
+                if (result.response === 0) {
+                    app.relaunch();
+                    app.exit(0);
+                } else {
+                    app.exit(0);
+                }
+            }
+            return false;
+        }
+    }
+
+    // No hay marca, verificar si Python ya está instalado y es versión correcta
+    if (await checkPython()) {
+        console.log('Python ya esta instalado con version correcta');
+        return true;
+    }
+
+    console.log('Python no esta instalado o version incorrecta');
+    notifyUser('warning', 'Python no detectado. Descargando Python 3.13...');
+
+    try {
+        // Descargar e instalar Python automáticamente
+        if (process.platform === 'win32') {
+            return await downloadAndInstallPythonWindows();
+        } else if (process.platform === 'darwin') {
+            notifyUser('error', 'Por favor instala Python 3.10+ manualmente desde python.org');
+            return false;
+        } else {
+            notifyUser('error', 'Por favor instala Python 3.10+ usando el gestor de paquetes de tu sistema');
+            return false;
+        }
+    } catch (installError) {
+        console.error('Error al instalar Python:', installError);
+        notifyUser('error', 'Error al instalar Python automaticamente. Visita python.org para instalacion manual');
+        return false;
+    }
+}
+
+// Descargar e instalar Python en Windows
+async function downloadAndInstallPythonWindows() {
+    const pythonVersion = '3.12.0';  // Python 3.12.0 LTS
+    const installerName = 'python-3.12.0-amd64.exe';
+    const installerPath = path.join(app.getPath('temp'), installerName);
+    const downloadUrl = `https://www.python.org/ftp/python/${pythonVersion}/${installerName}`;
+
+    console.log('Descargando Python desde:', downloadUrl);
+    notifyUser('info', 'Descargando Python 3.13... esto puede tomar varios minutos');
+
+    try {
+        // Descargar el instalador
+        await downloadFile(downloadUrl, installerPath);
+
+        notifyUser('info', 'Instalando Python... esto puede tomar unos minutos');
+        console.log('Ejecutando instalador de Python...');
+
+        // Instalar Python de forma silenciosa con opciones importantes
+        // /quiet = instalacion silenciosa
+        // InstallAllUsers=0 = instalar para usuario actual
+        // PrependPath=1 = agregar Python a PATH
+        // Include_test=0 = no incluir tests
+        // Include_pip=1 = incluir pip
+        await new Promise((resolve, reject) => {
+            const installer = spawn(installerPath, [
+                '/quiet',
+                'InstallAllUsers=0',
+                'PrependPath=1',
+                'Include_test=0',
+                'Include_pip=1',
+                'Include_doc=0',
+                'Include_dev=0',
+                'Include_launcher=1',
+                'InstallLauncherAllUsers=0'
+            ], {
+                stdio: 'pipe',
+                windowsHide: true  // Ocultar ventana del instalador
+            });
+
+            installer.stdout.on('data', (data) => {
+                console.log(`[Python Installer] ${data.toString().trim()}`);
+            });
+
+            installer.stderr.on('data', (data) => {
+                console.error(`[Python Installer Error] ${data.toString().trim()}`);
+            });
+
+            installer.on('close', (code) => {
+                if (code === 0) {
+                    console.log('Instalador de Python completado exitosamente');
+                    resolve();
+                } else {
+                    reject(new Error(`Instalador de Python termino con codigo ${code}`));
+                }
+            });
+
+            installer.on('error', (err) => {
+                reject(err);
+            });
+        });
+
+        // Esperar 2 segundos adicionales para que el instalador termine completamente
+        console.log('Esperando a que el instalador finalice completamente...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Limpiar el instalador
+        try {
+            fs.unlinkSync(installerPath);
+            console.log('Instalador de Python eliminado');
+        } catch { }
+
+        // Crear archivo de marca para indicar que Python se instaló
+        const pythonInstalledMarker = path.join(app.getPath('userData'), '.python_installed');
+        try {
+            fs.writeFileSync(pythonInstalledMarker, new Date().toISOString());
+            console.log('Marca de instalacion de Python creada');
+        } catch (err) {
+            console.error('Error al crear marca de instalacion:', err);
+        }
+
+        // Python se instaló correctamente, pero necesita reiniciar para que PATH se actualice
+        console.log('Python instalado correctamente. Requiere reinicio para actualizar PATH.');
+        notifyUser('success', 'Python 3.13 instalado correctamente');
+
+        // Esperar 3 segundos antes de mostrar el diálogo para que termine todo
+        console.log('Esperando finalizacion de procesos...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Solicitar reinicio de la aplicación
+        notifyUser('warning', 'Reinicio requerido para actualizar PATH de Python');
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            const { dialog } = require('electron');
+            const result = await dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Reinicio Requerido',
+                message: 'Python se instalo correctamente. Alfred necesita reiniciarse para que Python este disponible.',
+                detail: 'Al reiniciar, Alfred continuara con la instalacion de los componentes restantes.',
+                buttons: ['Reiniciar Ahora', 'Salir'],
+                defaultId: 0,
+                cancelId: 1
+            });
+
+            if (result.response === 0) {
+                console.log('Reiniciando aplicacion...');
+                app.relaunch();
+                app.exit(0);
+            } else {
+                console.log('Usuario cancelo reinicio. Cerrando aplicacion...');
+                app.exit(0);
+            }
+        } else {
+            // Si no hay ventana, simplemente salir para que el usuario reinicie manualmente
+            console.log('No hay ventana principal. Cerrando aplicacion para reinicio...');
+            app.exit(0);
+        }
+
+        // Esto nunca debería ejecutarse, pero por si acaso
+        return false;
+
+    } catch (error) {
+        console.error('Error al descargar/instalar Python:', error);
+        notifyUser('error', 'Error al instalar Python automaticamente');
+        return false;
+    }
+}
+
+// Verificar si Ollama está instalado y corriendo
+async function checkOllama() {
+    try {
+        // Intentar conectar al endpoint de Ollama
+        const result = await new Promise((resolve) => {
+            const req = http.request({
+                hostname: '127.0.0.1',
+                port: 11434,
+                path: '/api/tags',
+                method: 'GET',
+                timeout: 3000
+            }, (res) => {
+                resolve(res.statusCode === 200);
+            });
+
+            req.on('error', () => resolve(false));
+            req.on('timeout', () => {
+                req.destroy();
+                resolve(false);
+            });
+
+            req.end();
+        });
+
+        return result;
+    } catch {
+        return false;
+    }
+}
+
+// Asegurar que Ollama esté instalado y corriendo
+async function ensureOllama() {
+    console.log('Verificando instalacion de Ollama...');
+
+    // Verificar si Ollama está corriendo
+    if (await checkOllama()) {
+        console.log('Ollama ya esta corriendo');
+        return true;
+    }
+
+    // Verificar si Ollama está instalado pero no corriendo
+    try {
+        execSync('ollama --version', { stdio: 'pipe' });
+        console.log('Ollama instalado, intentando iniciar...');
+
+        // Intentar iniciar Ollama
+        try {
+            if (process.platform === 'win32') {
+                // En Windows, iniciar Ollama en background
+                spawn('ollama', ['serve'], {
+                    detached: true,
+                    stdio: 'ignore'
+                }).unref();
+            } else {
+                execSync('ollama serve &', { stdio: 'ignore' });
+            }
+
+            // Esperar a que Ollama esté disponible
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            if (await checkOllama()) {
+                console.log('Ollama iniciado correctamente');
+                return true;
+            }
+        } catch (startError) {
+            console.error('Error al iniciar Ollama:', startError);
+        }
+    } catch {
+        // Ollama no está instalado
+        console.log('Ollama no esta instalado');
+        notifyUser('warning', 'Descargando Ollama... esto puede tomar varios minutos');
+
+        try {
+            // Descargar e instalar Ollama automáticamente
+            if (process.platform === 'win32') {
+                return await downloadAndInstallOllamaWindows();
+            } else {
+                notifyUser('error', 'Por favor instala Ollama manualmente desde https://ollama.ai');
+                return false;
+            }
+        } catch (installError) {
+            console.error('Error al instalar Ollama:', installError);
+            notifyUser('error', 'Error al instalar Ollama. Por favor instala manualmente desde https://ollama.ai');
+            return false;
+        }
+    }
+
+    return false;
+}
+
+// Descargar e instalar Ollama en Windows
+async function downloadAndInstallOllamaWindows() {
+    const installerPath = path.join(app.getPath('temp'), 'OllamaSetup.exe');
+    const downloadUrl = 'https://ollama.ai/download/OllamaSetup.exe';
+
+    console.log('Descargando Ollama desde:', downloadUrl);
+    notifyUser('info', 'Descargando Ollama...');
+
+    try {
+        // Descargar el instalador
+        await downloadFile(downloadUrl, installerPath);
+
+        notifyUser('info', 'Instalando Ollama... sigue las instrucciones del instalador');
+
+        // Ejecutar el instalador
+        await new Promise((resolve, reject) => {
+            const installer = spawn(installerPath, [], {
+                stdio: 'inherit'
+            });
+
+            installer.on('close', (code) => {
+                if (code === 0) {
+                    resolve();
+                } else {
+                    reject(new Error(`Instalador termino con codigo ${code}`));
+                }
+            });
+
+            installer.on('error', reject);
+        });
+
+        // Limpiar el instalador
+        try {
+            fs.unlinkSync(installerPath);
+        } catch { }
+
+        // Esperar a que Ollama esté disponible
+        notifyUser('info', 'Esperando a que Ollama inicie...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // Verificar que Ollama esté corriendo
+        for (let i = 0; i < 10; i++) {
+            if (await checkOllama()) {
+                console.log('Ollama instalado e iniciado correctamente');
+                notifyUser('success', 'Ollama instalado correctamente');
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        notifyUser('warning', 'Ollama instalado pero no responde. Por favor reinicia la aplicacion');
+        return false;
+
+    } catch (error) {
+        console.error('Error al descargar/instalar Ollama:', error);
+        notifyUser('error', 'Error al instalar Ollama automaticamente');
+        return false;
+    }
+}
+
+// Descargar archivo con progreso
+function downloadFile(url, destPath) {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(destPath);
+
+        https.get(url, (response) => {
+            if (response.statusCode === 302 || response.statusCode === 301) {
+                // Seguir redirección
+                file.close();
+                fs.unlinkSync(destPath);
+                downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
+                return;
+            }
+
+            if (response.statusCode !== 200) {
+                reject(new Error(`Error al descargar: ${response.statusCode}`));
+                return;
+            }
+
+            const totalSize = parseInt(response.headers['content-length'], 10);
+            let downloaded = 0;
+
+            response.on('data', (chunk) => {
+                downloaded += chunk.length;
+                const percent = ((downloaded / totalSize) * 100).toFixed(1);
+                console.log(`Descarga: ${percent}%`);
+            });
+
+            response.pipe(file);
+
+            file.on('finish', () => {
+                file.close();
+                resolve();
+            });
+
+        }).on('error', (err) => {
+            fs.unlinkSync(destPath);
+            reject(err);
+        });
+    });
+}
+
+// Verificar y descargar modelos de Ollama
+async function ensureOllamaModels() {
+    console.log('Verificando modelos de Ollama...');
+
+    try {
+        // Obtener lista de modelos instalados
+        const modelsOutput = execSync('ollama list', {
+            encoding: 'utf8',
+            stdio: 'pipe'
+        });
+
+        const installedModels = modelsOutput.toLowerCase();
+
+        // Verificar cada modelo requerido
+        for (const model of REQUIRED_OLLAMA_MODELS) {
+            const modelName = model.toLowerCase();
+
+            if (!installedModels.includes(modelName.split(':')[0])) {
+                console.log(`Descargando modelo ${model}...`);
+                notifyUser('info', `Descargando modelo ${model}... esto puede tomar varios minutos`);
+
+                try {
+                    // Descargar modelo de forma asíncrona para no congelar la UI
+                    await new Promise((resolve, reject) => {
+                        const pullProcess = spawn('ollama', ['pull', model], {
+                            stdio: ['ignore', 'pipe', 'pipe'],
+                            env: {
+                                ...process.env,
+                                NO_COLOR: '1',  // Deshabilitar colores
+                                TERM: 'dumb'    // Terminal simple sin ANSI
+                            }
+                        });
+
+                        let lastProgress = '';
+
+                        pullProcess.stdout.on('data', (data) => {
+                            const output = data.toString().trim();
+                            // Solo mostrar lineas significativas, no progreso repetitivo
+                            if (output && output !== lastProgress && !output.includes('pulling')) {
+                                console.log(`[Ollama] ${output}`);
+                                lastProgress = output;
+                            }
+                        });
+
+                        pullProcess.stderr.on('data', (data) => {
+                            const error = data.toString().trim();
+                            if (error) console.error(`[Ollama Error] ${error}`);
+                        });
+
+                        pullProcess.on('close', (code) => {
+                            if (code === 0) {
+                                console.log(`Modelo ${model} descargado correctamente`);
+                                resolve();
+                            } else {
+                                reject(new Error(`ollama pull termino con codigo ${code}`));
+                            }
+                        });
+
+                        pullProcess.on('error', (err) => {
+                            reject(err);
+                        });
+                    });
+
+                    notifyUser('success', `Modelo ${model} listo`);
+
+                } catch (pullError) {
+                    console.error(`Error al descargar ${model}:`, pullError);
+                    notifyUser('error', `Error al descargar modelo ${model}`);
+                    throw pullError;
+                }
+            } else {
+                console.log(`Modelo ${model} ya instalado`);
+            }
+        }
+
+        console.log('Todos los modelos estan listos');
+        return true;
+
+    } catch (error) {
+        console.error('Error al verificar modelos:', error);
+        notifyUser('error', 'Error al configurar modelos de IA');
+        throw error;
+    }
+}
+
+// Encontrar la ruta completa de Python instalado
+function findPythonExecutable() {
+    // Rutas comunes donde Python se instala en Windows
+    const commonPaths = [
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python313', 'python.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
+        'C:\\Python313\\python.exe',
+        'C:\\Python312\\python.exe',
+        'C:\\Python311\\python.exe',
+        'C:\\Python310\\python.exe'
+    ];
+
+    // Primero intentar con el comando directo (si PATH está actualizado)
+    try {
+        execSync('python --version', { stdio: 'pipe' });
+        console.log('Python encontrado en PATH');
+        return 'python';
+    } catch { }
+
+    // Buscar en rutas comunes
+    for (const pythonPath of commonPaths) {
+        if (fs.existsSync(pythonPath)) {
+            console.log('Python encontrado en:', pythonPath);
+            return pythonPath;
+        }
+    }
+
+    // Si no se encuentra, intentar buscar en %LOCALAPPDATA%\Programs\Python\
+    try {
+        const pythonBaseDir = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python');
+        if (fs.existsSync(pythonBaseDir)) {
+            const pythonDirs = fs.readdirSync(pythonBaseDir);
+            for (const dir of pythonDirs) {
+                if (dir.startsWith('Python3')) {
+                    const pythonExe = path.join(pythonBaseDir, dir, 'python.exe');
+                    if (fs.existsSync(pythonExe)) {
+                        console.log('Python encontrado en:', pythonExe);
+                        return pythonExe;
+                    }
+                }
+            }
+        }
+    } catch { }
+
+    throw new Error('No se pudo encontrar Python instalado');
+}
+
 async function ensurePythonEnv(backendPath) {
     const venvPath = path.join(backendPath, "venv");
     const requirementsPath = path.join(backendPath, "requirements.txt");
@@ -156,31 +779,100 @@ async function ensurePythonEnv(backendPath) {
         : path.join(venvPath, "bin", "python");
 
     try {
+        // Encontrar Python base instalado
+        const basePython = findPythonExecutable();
+        console.log('Usando Python base:', basePython);
+
+        // Verificar si el venv existe y está corrupto
+        if (fs.existsSync(venvPath)) {
+            console.log("Verificando entorno virtual existente...");
+
+            // Intentar ejecutar python del venv para verificar si funciona
+            try {
+                execSync(`"${pythonCmd}" --version`, {
+                    encoding: 'utf8',
+                    stdio: 'pipe',
+                    timeout: 5000
+                });
+                console.log("Entorno virtual existente funciona correctamente");
+            } catch (venvError) {
+                console.log("Entorno virtual corrupto detectado. Eliminando...");
+                // Eliminar venv corrupto recursivamente
+                try {
+                    if (process.platform === 'win32') {
+                        execSync(`rmdir /s /q "${venvPath}"`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe'
+                        });
+                    } else {
+                        execSync(`rm -rf "${venvPath}"`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe'
+                        });
+                    }
+                    console.log("Entorno virtual corrupto eliminado");
+                } catch (deleteError) {
+                    console.error("Error al eliminar venv corrupto:", deleteError);
+                    // Intentar con fs.rmSync si el comando falla
+                    try {
+                        fs.rmSync(venvPath, { recursive: true, force: true });
+                        console.log("Entorno virtual eliminado con fs.rmSync");
+                    } catch (fsError) {
+                        throw new Error(`No se pudo eliminar el entorno virtual corrupto: ${fsError.message}`);
+                    }
+                }
+            }
+        }
+
         if (!fs.existsSync(venvPath)) {
             console.log("Creando entorno virtual...");
-            execSync("python -m venv venv", {
+            notifyUser('info', 'Creando entorno virtual de Python...');
+
+            // Usar la ruta completa de Python para crear el venv
+            const createVenvCmd = `"${basePython}" -m venv venv`;
+            console.log('Ejecutando:', createVenvCmd);
+
+            execSync(createVenvCmd, {
                 cwd: backendPath,
                 encoding: 'utf8',
                 stdio: 'pipe'
             });
+            console.log("Entorno virtual creado correctamente");
         }
 
         console.log(`Usando Python en: ${pythonCmd}`);
 
-        // Verificar pip
+        // Verificar y actualizar pip
         try {
             const pipVersion = execSync(`"${pythonCmd}" -m pip --version`, {
                 encoding: 'utf8',
                 stdio: 'pipe'
             });
-            console.log(pipVersion.trim());
-        } catch {
-            console.log("Instalando pip...");
-            execSync(`"${pythonCmd}" -m ensurepip --upgrade`, {
+            console.log('pip actual:', pipVersion.trim());
+
+            // Actualizar pip a la última versión
+            console.log("Actualizando pip...");
+            notifyUser('info', 'Actualizando pip...');
+            execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
                 cwd: backendPath,
                 encoding: 'utf8',
-                stdio: 'pipe'
+                stdio: 'pipe',
+                timeout: 60000  // 60 segundos timeout
             });
+            console.log("pip actualizado correctamente");
+        } catch (pipError) {
+            console.log("Error al verificar/actualizar pip:", pipError.message);
+            console.log("Instalando pip...");
+            try {
+                execSync(`"${pythonCmd}" -m ensurepip --upgrade`, {
+                    cwd: backendPath,
+                    encoding: 'utf8',
+                    stdio: 'pipe'
+                });
+            } catch (ensurePipError) {
+                console.error("Error al instalar pip:", ensurePipError.message);
+                throw new Error("No se pudo instalar pip");
+            }
         }
 
         // Verificar dependencias instaladas
@@ -210,10 +902,12 @@ async function ensurePythonEnv(backendPath) {
 
         if (missing.length > 0) {
             console.log(`Instalando ${missing.length} dependencias faltantes: ${missing.join(', ')}`);
+            notifyUser('info', `Instalando ${missing.length} dependencias de Python...`);
 
             await new Promise((resolve, reject) => {
                 const proc = spawn(pythonCmd, [
                     "-m", "pip", "install",
+                    "--prefer-binary",  // Preferir binarios pero permitir compilación si es necesario
                     "--no-color",  // Deshabilitar colores ANSI
                     "--progress-bar", "off",  // Deshabilitar barra de progreso
                     "-r", "requirements.txt"
@@ -228,6 +922,7 @@ async function ensurePythonEnv(backendPath) {
                 });
 
                 let installOutput = '';
+                let errorOutput = '';
 
                 proc.stdout.on("data", (data) => {
                     const output = data.toString('utf8').trim();
@@ -239,21 +934,32 @@ async function ensurePythonEnv(backendPath) {
 
                 proc.stderr.on("data", (data) => {
                     const error = data.toString('utf8').trim();
-                    if (error) console.error(`[pip error] ${error}`);
+                    errorOutput += error + '\n';
+                    if (error) console.error(`[pip stderr] ${error}`);
                 });
 
                 proc.on("close", (code) => {
                     if (code === 0) {
                         console.log("Dependencias instaladas correctamente.");
+                        notifyUser('success', 'Dependencias instaladas correctamente');
                         resolve();
                     } else {
-                        console.error("Error durante la instalacion de dependencias:");
-                        console.error(installOutput);
-                        reject(new Error(`pip exited with code ${code}`));
+                        console.error("=== Error durante la instalacion de dependencias ===");
+                        console.error("STDOUT:", installOutput);
+                        console.error("STDERR:", errorOutput);
+                        console.error("Exit code:", code);
+
+                        // Notificar al usuario con más detalle
+                        const errorMsg = errorOutput || installOutput || 'Error desconocido';
+                        notifyUser('error', `Error al instalar dependencias: ${errorMsg.substring(0, 100)}`);
+
+                        reject(new Error(`pip exited with code ${code}. Error: ${errorMsg}`));
                     }
                 });
 
                 proc.on("error", (err) => {
+                    console.error("Error al ejecutar pip:", err);
+                    notifyUser('error', `Error al ejecutar pip: ${err.message}`);
                     reject(err);
                 });
             });
@@ -525,7 +1231,7 @@ function notifyUser(type, message) {
 function notifyBackendStatus(connected) {
     console.log(`[STATUS] Backend: ${connected ? 'connected' : 'disconnected'}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('backend-status', { 
+        mainWindow.webContents.send('backend-status', {
             status: connected ? 'connected' : 'disconnected',
             timestamp: Date.now()
         });
@@ -540,13 +1246,13 @@ function startStatusMonitoring() {
     if (statusCheckInterval) {
         clearInterval(statusCheckInterval);
     }
-    
+
     // Chequear cada 30 segundos
     statusCheckInterval = setInterval(async () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             const isRunning = await isBackendRunning();
             notifyBackendStatus(isRunning);
-            
+
             // Si el backend esta caido, intentar reiniciarlo
             if (!isRunning && isBackendStartedByElectron) {
                 console.log('[MONITOR] Backend caido, intentando reiniciar...');
@@ -612,10 +1318,10 @@ ipcMain.handle('check-server', async () => {
         console.log('[MAIN] Verificando servidor Alfred en http://127.0.0.1:8000/health');
         const isRunning = await isBackendRunning();
         console.log(`[MAIN] Servidor esta ${isRunning ? 'conectado' : 'no disponible'}`);
-        
+
         // Notificar estado al frontend
         notifyBackendStatus(isRunning);
-        
+
         return {
             connected: isRunning,
             message: isRunning ? 'Servidor conectado' : 'Servidor no disponible'
@@ -1169,12 +1875,12 @@ ipcMain.handle('send-query-with-conversation', async (event, question, conversat
 ipcMain.handle('send-query-with-attachment', async (event, queryData) => {
     try {
         const { message, conversationId, searchDocuments, attachedFile } = queryData;
-        
-        console.log('[MAIN] Enviando consulta con archivo adjunto:', { 
-            message, 
-            conversationId, 
+
+        console.log('[MAIN] Enviando consulta con archivo adjunto:', {
+            message,
+            conversationId,
             searchDocuments,
-            hasAttachment: !!attachedFile 
+            hasAttachment: !!attachedFile
         });
 
         const result = await makeRequest('http://127.0.0.1:8000/query/conversation', {
