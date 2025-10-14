@@ -63,7 +63,7 @@ const BACKEND_CONFIG = {
     script: SCRIPT_BACKEND,
     maxRetries: 3,
     retryDelay: 2000,
-    startupTimeout: 60000  // 60 segundos para dar tiempo a la instalación
+    startupTimeout: 900000  // 15 minutos para instalaciones grandes (modelos de 2GB)
 };
 
 // Modelos de Ollama requeridos
@@ -238,6 +238,7 @@ async function ensurePython() {
     // Si existe la marca, intentar encontrar Python instalado
     if (fs.existsSync(pythonInstalledMarker)) {
         console.log('Detectada marca de instalacion previa de Python.');
+        notifyUser('info', 'Verificando Python instalado previamente...');
 
         // Intentar encontrar Python usando findPythonExecutable (busca en rutas comunes)
         try {
@@ -296,7 +297,7 @@ async function ensurePython() {
     }
 
     console.log('Python no esta instalado o version incorrecta');
-    notifyUser('warning', 'Python no detectado. Descargando Python 3.13...');
+    notifyUser('warning', 'Python no detectado. Iniciando instalacion...');
 
     try {
         // Descargar e instalar Python automáticamente
@@ -324,7 +325,7 @@ async function downloadAndInstallPythonWindows() {
     const downloadUrl = `https://www.python.org/ftp/python/${pythonVersion}/${installerName}`;
 
     console.log('Descargando Python desde:', downloadUrl);
-    notifyUser('info', 'Descargando Python 3.13... esto puede tomar varios minutos');
+    notifyUser('info', 'Descargando Python 3.12... esto puede tomar varios minutos');
 
     try {
         // Descargar el instalador
@@ -387,54 +388,64 @@ async function downloadAndInstallPythonWindows() {
             console.log('Instalador de Python eliminado');
         } catch { }
 
-        // Crear archivo de marca para indicar que Python se instaló
-        const pythonInstalledMarker = path.join(app.getPath('userData'), '.python_installed');
-        try {
-            fs.writeFileSync(pythonInstalledMarker, new Date().toISOString());
-            console.log('Marca de instalacion de Python creada');
-        } catch (err) {
-            console.error('Error al crear marca de instalacion:', err);
-        }
+        // Python se instaló correctamente
+        console.log('Python instalado correctamente.');
+        notifyUser('success', 'Python 3.12 instalado correctamente');
 
-        // Python se instaló correctamente, pero necesita reiniciar para que PATH se actualice
-        console.log('Python instalado correctamente. Requiere reinicio para actualizar PATH.');
-        notifyUser('success', 'Python 3.13 instalado correctamente');
-
-        // Esperar 3 segundos antes de mostrar el diálogo para que termine todo
+        // Esperar 3 segundos para que el sistema actualice PATH
         console.log('Esperando finalizacion de procesos...');
         await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // Solicitar reinicio de la aplicación
-        notifyUser('warning', 'Reinicio requerido para actualizar PATH de Python');
+        // Intentar encontrar Python inmediatamente
+        try {
+            const pythonPath = findPythonExecutable();
+            console.log('Python disponible inmediatamente en:', pythonPath);
+            notifyUser('success', 'Python listo para usar');
+            return true; // Python encontrado, continuar sin reiniciar
+        } catch (findError) {
+            // Python no está disponible aún, necesita reinicio
+            console.log('Python requiere reinicio para actualizar PATH.');
+            
+            // Crear archivo de marca para indicar que Python se instaló
+            const pythonInstalledMarker = path.join(app.getPath('userData'), '.python_installed');
+            try {
+                fs.writeFileSync(pythonInstalledMarker, new Date().toISOString());
+                console.log('Marca de instalacion de Python creada');
+            } catch (err) {
+                console.error('Error al crear marca de instalacion:', err);
+            }
 
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            const { dialog } = require('electron');
-            const result = await dialog.showMessageBox(mainWindow, {
-                type: 'info',
-                title: 'Reinicio Requerido',
-                message: 'Python se instalo correctamente. Alfred necesita reiniciarse para que Python este disponible.',
-                detail: 'Al reiniciar, Alfred continuara con la instalacion de los componentes restantes.',
-                buttons: ['Reiniciar Ahora', 'Salir'],
-                defaultId: 0,
-                cancelId: 1
-            });
+            // Solicitar reinicio de la aplicación
+            notifyUser('warning', 'Reinicio requerido para actualizar PATH de Python');
 
-            if (result.response === 0) {
-                console.log('Reiniciando aplicacion...');
-                app.relaunch();
-                app.exit(0);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                const { dialog } = require('electron');
+                const result = await dialog.showMessageBox(mainWindow, {
+                    type: 'info',
+                    title: 'Reinicio Requerido',
+                    message: 'Python se instalo correctamente. Alfred necesita reiniciarse para que Python este disponible.',
+                    detail: 'Al reiniciar, Alfred continuara con la instalacion de los componentes restantes.',
+                    buttons: ['Reiniciar Ahora', 'Salir'],
+                    defaultId: 0,
+                    cancelId: 1
+                });
+
+                if (result.response === 0) {
+                    console.log('Reiniciando aplicacion...');
+                    app.relaunch();
+                    app.exit(0);
+                } else {
+                    console.log('Usuario cancelo reinicio. Cerrando aplicacion...');
+                    app.exit(0);
+                }
             } else {
-                console.log('Usuario cancelo reinicio. Cerrando aplicacion...');
+                // Si no hay ventana, simplemente salir para que el usuario reinicie manualmente
+                console.log('No hay ventana principal. Cerrando aplicacion para reinicio...');
                 app.exit(0);
             }
-        } else {
-            // Si no hay ventana, simplemente salir para que el usuario reinicie manualmente
-            console.log('No hay ventana principal. Cerrando aplicacion para reinicio...');
-            app.exit(0);
-        }
 
-        // Esto nunca debería ejecutarse, pero por si acaso
-        return false;
+            return false;
+        }
 
     } catch (error) {
         console.error('Error al descargar/instalar Python:', error);
@@ -654,7 +665,7 @@ async function ensureOllamaModels() {
 
             if (!installedModels.includes(modelName.split(':')[0])) {
                 console.log(`Descargando modelo ${model}...`);
-                notifyUser('info', `Descargando modelo ${model}... esto puede tomar varios minutos`);
+                notifyUser('info', `Descargando modelo ${model}... (puede ser grande, hasta 2GB)`);
 
                 try {
                     // Descargar modelo de forma asíncrona para no congelar la UI
@@ -669,13 +680,40 @@ async function ensureOllamaModels() {
                         });
 
                         let lastProgress = '';
+                        let lastNotification = 0;
 
                         pullProcess.stdout.on('data', (data) => {
                             const output = data.toString().trim();
-                            // Solo mostrar lineas significativas, no progreso repetitivo
+                            
+                            // Detectar progreso de descarga (ej: "pulling 4f1b43ef9323... 45%")
+                            const progressMatch = output.match(/(\d+)%/);
+                            if (progressMatch) {
+                                const progress = parseInt(progressMatch[1]);
+                                const now = Date.now();
+                                
+                                // Notificar cada 10% o cada 5 segundos
+                                if (progress % 10 === 0 || now - lastNotification > 5000) {
+                                    console.log(`[Ollama] Descargando ${model}: ${progress}%`);
+                                    notifyUser('info', `Descargando ${model}: ${progress}%`);
+                                    lastNotification = now;
+                                }
+                            } else if (output.includes('pulling')) {
+                                const layerMatch = output.match(/pulling ([a-f0-9]+)/);
+                                if (layerMatch && output !== lastProgress) {
+                                    console.log(`[Ollama] Descargando capa: ${layerMatch[1].substring(0, 12)}...`);
+                                    notifyUser('info', `Descargando componente del modelo...`);
+                                    lastProgress = output;
+                                }
+                            } else if (output.includes('verifying')) {
+                                console.log(`[Ollama] Verificando integridad...`);
+                                notifyUser('info', `Verificando ${model}...`);
+                            } else if (output.includes('success')) {
+                                console.log(`[Ollama] Modelo descargado exitosamente`);
+                            }
+                            
+                            // Solo mostrar lineas significativas en consola
                             if (output && output !== lastProgress && !output.includes('pulling')) {
                                 console.log(`[Ollama] ${output}`);
-                                lastProgress = output;
                             }
                         });
 
@@ -902,7 +940,7 @@ async function ensurePythonEnv(backendPath) {
 
         if (missing.length > 0) {
             console.log(`Instalando ${missing.length} dependencias faltantes: ${missing.join(', ')}`);
-            notifyUser('info', `Instalando ${missing.length} dependencias de Python...`);
+            notifyUser('info', `Instalando ${missing.length} dependencias de Python. Esto puede tomar varios minutos...`);
 
             await new Promise((resolve, reject) => {
                 const proc = spawn(pythonCmd, [
@@ -923,10 +961,31 @@ async function ensurePythonEnv(backendPath) {
 
                 let installOutput = '';
                 let errorOutput = '';
+                let lastPackage = '';
 
                 proc.stdout.on("data", (data) => {
                     const output = data.toString('utf8').trim();
                     installOutput += output + '\n';
+                    
+                    // Detectar qué paquete se está instalando
+                    const collectingMatch = output.match(/Collecting ([^\s]+)/);
+                    const downloadingMatch = output.match(/Downloading ([^\s]+)/);
+                    const installingMatch = output.match(/Installing collected packages: (.+)/);
+                    
+                    if (collectingMatch && collectingMatch[1] !== lastPackage) {
+                        lastPackage = collectingMatch[1];
+                        console.log(`[pip] Descargando: ${lastPackage}`);
+                        notifyUser('info', `Descargando: ${lastPackage}...`);
+                    } else if (downloadingMatch && downloadingMatch[1] !== lastPackage) {
+                        lastPackage = downloadingMatch[1];
+                        console.log(`[pip] Obteniendo: ${lastPackage}`);
+                        notifyUser('info', `Obteniendo: ${lastPackage}...`);
+                    } else if (installingMatch) {
+                        const packages = installingMatch[1];
+                        console.log(`[pip] Instalando: ${packages}`);
+                        notifyUser('info', `Instalando paquetes finales...`);
+                    }
+                    
                     if (output && !output.includes('Requirement already satisfied')) {
                         console.log(`[pip] ${output}`);
                     }
@@ -935,13 +994,17 @@ async function ensurePythonEnv(backendPath) {
                 proc.stderr.on("data", (data) => {
                     const error = data.toString('utf8').trim();
                     errorOutput += error + '\n';
-                    if (error) console.error(`[pip stderr] ${error}`);
+                    
+                    // Filtrar warnings no críticos
+                    if (error && !error.includes('WARNING') && !error.includes('DEPRECATION')) {
+                        console.error(`[pip stderr] ${error}`);
+                    }
                 });
 
                 proc.on("close", (code) => {
                     if (code === 0) {
                         console.log("Dependencias instaladas correctamente.");
-                        notifyUser('success', 'Dependencias instaladas correctamente');
+                        notifyUser('success', 'Todas las dependencias instaladas correctamente');
                         resolve();
                     } else {
                         console.error("=== Error durante la instalacion de dependencias ===");
