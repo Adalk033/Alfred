@@ -3443,7 +3443,8 @@ if __name__ == "__main__":
     # Obtener configuración desde variables de entorno
     host = os.getenv("ALFRED_HOST", "127.0.0.1")
     port = int(os.getenv("ALFRED_PORT", "8000"))
-    reload = os.getenv("ALFRED_RELOAD", "false").lower() == "true"
+    # Auto-reload deshabilitado - usar modo desarrollo de uvicorn manualmente si es necesario
+    reload = False
     
     print(f"""
     ============================================================

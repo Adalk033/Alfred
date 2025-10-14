@@ -55,8 +55,8 @@ def get_user_personalization() -> dict:
     from db_manager import get_user_setting
     
     return {
-        'user_name': get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario')),
-        'user_age': get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada')),
+        'user_name': get_user_setting('user_name', default='Usuario'),
+        'user_age': get_user_setting('user_age', default='No especificada'),
         'assistant_name': get_user_setting('assistant_name', default='Alfred'),
         'custom_instructions': get_user_setting('custom_instructions', default='Ninguna instruccion personalizada.'),
         'user_occupation': get_user_setting('user_occupation', default='No especificada'),
@@ -75,7 +75,7 @@ class AlfredCore:
         load_dotenv()
         
         # Configuracion desde variables de entorno (valores por defecto)
-        # ALFRED_DOCS_PATH ya NO se usa - el sistema ahora usa rutas configuradas por el usuario
+        # Las rutas de documentos ahora se gestionan desde la base de datos
         self.chroma_db_path = os.getenv('ALFRED_CHROMA_PATH', './chroma_db')
         self.force_reload = os.getenv('ALFRED_FORCE_RELOAD', 'false').lower() == 'true'
         # qa_history_file OBSOLETO - ahora se usa SQLite (db_manager.py)
@@ -89,9 +89,9 @@ class AlfredCore:
         except:
             pass
         
-        # Cargar nombre y edad del usuario desde BD o usar valores por defecto
-        self.user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
-        self.user_age = get_user_setting('user_age', default=os.getenv('ALFRED_USER_AGE', 'No especificada'))
+        # Cargar nombre y edad del usuario desde BD
+        self.user_name = get_user_setting('user_name', default='Usuario')
+        self.user_age = get_user_setting('user_age', default='No especificada')
         
         # Modelo LLM: Prioridad BD > .env
         # Cargar desde base de datos si existe, sino desde .env
@@ -131,8 +131,7 @@ class AlfredCore:
             from db_manager import set_user_setting
             set_user_setting('ollama_keep_alive', env_keep_alive, 'int')
         
-        # Ya NO validamos ALFRED_DOCS_PATH - ahora se usan rutas configuradas por el usuario
-        logger.info("Sistema configurado para usar rutas de documentos gestionadas por el usuario")
+        logger.info("Sistema configurado para usar rutas de documentos gestionadas desde la base de datos")
         
         # Componentes lazy-loaded
         self._llm = None
@@ -761,8 +760,8 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         qa_stats = get_qa_history_stats()
         doc_stats = self.vector_manager.get_stats() if self._vector_manager else {}
         
-        # Obtener nombre actualizado desde BD (en cada consulta)
-        current_user_name = get_user_setting('user_name', default=os.getenv('ALFRED_USER_NAME', 'Usuario'))
+        # Obtener nombre actualizado desde BD
+        current_user_name = get_user_setting('user_name', default='Usuario')
         
         # Obtener rutas configuradas desde BD
         from db_manager import get_document_paths
