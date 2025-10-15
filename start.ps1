@@ -66,9 +66,10 @@ try {
 }
 
 Write-Host ""
-Write-Host "🚀 Iniciando Alfred Electron..." -ForegroundColor Cyan
+Write-Host "🚀 Iniciando Alfred Electron con modo debug..." -ForegroundColor Cyan
+Write-Host "   DevTools Debugger: chrome://inspect" -ForegroundColor Gray
 Write-Host ""
 Start-Sleep -Seconds 1
 
-# Ejecutar la aplicación
-npm start
+# Ejecutar la aplicación con inspector
+npm run dev

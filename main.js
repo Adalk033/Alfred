@@ -32,6 +32,7 @@ const BACKEND_CONFIG = {
 // Modelos de Ollama requeridos
 const REQUIRED_OLLAMA_MODELS = ['gemma3n:e4b', 'nomic-embed-text:v1.5'];
 
+// Funciones de notificación al renderer
 function createWindow() {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height } = primaryDisplay.size;
@@ -150,14 +151,10 @@ app.on('before-quit', () => {
 // Función principal de inicialización con progreso
 async function initializeAppWithProgress() {
     try {
-        notifyUser('info', 'Iniciando Alfred...');
-
         // 1. Verificar/Instalar Python (primero porque es rapido)
-        notifyUser('info', 'Verificando Python...');
         notifyInstallationProgress('python-check', 'Verificando Python...', 10);
         const pythonReady = await ensurePython();
         if (!pythonReady) {
-            notifyUser('error', 'No se pudo instalar Python. La aplicacion se cerrara.');
             // Dar tiempo para que el usuario vea el mensaje
             await new Promise(resolve => setTimeout(resolve, 3000));
             app.exit(1);
@@ -165,11 +162,9 @@ async function initializeAppWithProgress() {
         }
 
         // 2. Verificar/Instalar Ollama (puede tardar - descarga grande)
-        notifyUser('info', 'Verificando Ollama...');
         notifyInstallationProgress('ollama-check', 'Verificando Ollama...', 20);
         const ollamaReady = await ensureOllama();
         if (!ollamaReady) {
-            notifyUser('error', 'No se pudo instalar Ollama. Por favor instala manualmente desde ollama.ai');
             // Dar tiempo para que el usuario vea el mensaje y los logs
             await new Promise(resolve => setTimeout(resolve, 5000));
             // Mantener la app abierta pero mostrar estado de error
@@ -179,7 +174,6 @@ async function initializeAppWithProgress() {
 
         // 2.1 Verificacion adicional: Confirmar que Ollama responde correctamente
         console.log('[INIT] Verificando que Ollama este completamente funcional...');
-        notifyUser('info', 'Confirmando que Ollama esta listo...');
         notifyInstallationProgress('ollama-verify', 'Verificando Ollama...', 55);
 
         let ollamaFunctional = false;
@@ -194,37 +188,30 @@ async function initializeAppWithProgress() {
         }
 
         if (!ollamaFunctional) {
-            notifyUser('error', 'Ollama instalado pero no responde. Reinicia la aplicacion.');
             notifyInstallationProgress('error', 'Error: Ollama no responde', 0);
             return false;
         }
 
         console.log('[INIT] Ollama confirmado y funcional');
-        notifyUser('success', 'Ollama listo y funcional');
 
         // 3. Verificar/Descargar modelos de Ollama (necesita Ollama funcionando)
-        notifyUser('info', 'Verificando modelos de IA...');
         notifyInstallationProgress('models-check', 'Verificando modelos...', 60);
         await ensureOllamaModels();
 
         // 4. Configurar entorno Python y dependencias
-        notifyUser('info', 'Configurando entorno Python...');
         notifyInstallationProgress('python-env', 'Configurando Python...', 70);
         await ensurePythonEnv(BACKEND_CONFIG.path);
 
         // 5. Iniciar backend y ESPERAR a que responda (solo despues de que todo este listo)
-        notifyUser('info', 'Iniciando servidor de Alfred...');
         notifyInstallationProgress('backend-start', 'Iniciando backend...', 80);
 
         const backendReady = await startBackendAndWait();
 
         if (!backendReady) {
-            notifyUser('error', 'El backend no responde. Revisa los logs.');
             return false;
         }
 
         // 6. Backend confirmado - ocultar loader y mostrar UI
-        notifyUser('success', 'Alfred esta listo para usar');
         notifyInstallationProgress('complete', 'Inicializacion completa', 100);
 
         // Esperar un momento antes de ocultar el loader
@@ -242,7 +229,6 @@ async function initializeAppWithProgress() {
 
     } catch (error) {
         console.error('Error durante la inicializacion:', error);
-        notifyUser('error', `Error de inicializacion: ${error.message}`);
         return false;
     }
 }
@@ -286,7 +272,6 @@ async function ensurePython() {
     // Si existe la marca, intentar encontrar Python instalado
     if (fs.existsSync(pythonInstalledMarker)) {
         console.log('Detectada marca de instalacion previa de Python.');
-        notifyUser('info', 'Verificando Python instalado previamente...');
         notifyInstallationProgress('python-verify', 'Verificando Python instalado...', 2);
 
         // Intentar encontrar Python usando findPythonExecutable (busca en rutas comunes)
@@ -308,7 +293,6 @@ async function ensurePython() {
         } catch (findError) {
             // No se pudo encontrar Python, requiere reinicio
             console.log('Python aun no disponible. Requiere reinicio.');
-            notifyUser('warning', 'Python fue instalado. Reinicia Alfred para continuar.');
 
             // Limpiar marca
             try {
@@ -347,22 +331,18 @@ async function ensurePython() {
     }
 
     console.log('Python no esta instalado o version incorrecta');
-    notifyUser('warning', 'Python no detectado. Iniciando instalacion...');
 
     try {
         // Descargar e instalar Python automáticamente
         if (process.platform === 'win32') {
             return await downloadAndInstallPythonWindows();
         } else if (process.platform === 'darwin') {
-            notifyUser('error', 'Por favor instala Python 3.10+ manualmente desde python.org');
             return false;
         } else {
-            notifyUser('error', 'Por favor instala Python 3.10+ usando el gestor de paquetes de tu sistema');
             return false;
         }
     } catch (installError) {
         console.error('Error al instalar Python:', installError);
-        notifyUser('error', 'Error al instalar Python automaticamente. Visita python.org para instalacion manual');
         return false;
     }
 }
@@ -375,14 +355,11 @@ async function downloadAndInstallPythonWindows() {
     const downloadUrl = `https://www.python.org/ftp/python/${pythonVersion}/${installerName}`;
 
     console.log('Descargando Python desde:', downloadUrl);
-    notifyUser('info', 'Descargando Python 3.12... esto puede tomar varios minutos');
     notifyInstallationProgress('python-download', 'Descargando Python 3.12...', 5);
 
     try {
         // Descargar el instalador
         await downloadFile(downloadUrl, installerPath);
-
-        notifyUser('info', 'Instalando Python... esto puede tomar unos minutos');
         notifyInstallationProgress('python-install', 'Instalando Python 3.12...', 15);
         console.log('Ejecutando instalador de Python...');
 
@@ -442,7 +419,6 @@ async function downloadAndInstallPythonWindows() {
 
         // Python se instaló correctamente
         console.log('Python instalado correctamente.');
-        notifyUser('success', 'Python 3.12 instalado correctamente');
 
         // Esperar 3 segundos para que el sistema actualice PATH
         console.log('Esperando finalizacion de procesos...');
@@ -452,7 +428,6 @@ async function downloadAndInstallPythonWindows() {
         try {
             const pythonPath = findPythonExecutable();
             console.log('Python disponible inmediatamente en:', pythonPath);
-            notifyUser('success', 'Python listo para usar');
             return true; // Python encontrado, continuar sin reiniciar
         } catch (findError) {
             // Python no está disponible aún, necesita reinicio
@@ -468,8 +443,6 @@ async function downloadAndInstallPythonWindows() {
             }
 
             // Solicitar reinicio de la aplicación
-            notifyUser('warning', 'Reinicio requerido para actualizar PATH de Python');
-
             if (mainWindow && !mainWindow.isDestroyed()) {
                 const { dialog } = require('electron');
                 const result = await dialog.showMessageBox(mainWindow, {
@@ -501,7 +474,6 @@ async function downloadAndInstallPythonWindows() {
 
     } catch (error) {
         console.error('Error al descargar/instalar Python:', error);
-        notifyUser('error', 'Error al instalar Python automaticamente');
         return false;
     }
 }
@@ -587,7 +559,6 @@ async function ensureOllama() {
         // Ollama no está instalado
         console.log('[OLLAMA-CHECK] ✗ Ollama NO esta instalado');
         console.log('[OLLAMA-CHECK] Paso 3: Descargando e instalando Ollama...');
-        notifyUser('warning', 'Descargando Ollama... esto puede tomar varios minutos');
         notifyInstallationProgress('ollama-download', 'Descargando Ollama...', 42);
 
         try {
@@ -598,12 +569,10 @@ async function ensureOllama() {
                 console.log('[OLLAMA-CHECK] downloadAndInstallOllamaWindows() retorno:', result);
                 return result;
             } else {
-                notifyUser('error', 'Por favor instala Ollama manualmente desde https://ollama.ai');
                 return false;
             }
         } catch (installError) {
             console.error('[OLLAMA-CHECK] ✗ Error al instalar Ollama:', installError);
-            notifyUser('error', 'Error al instalar Ollama. Por favor instala manualmente desde https://ollama.ai');
             return false;
         }
     }
@@ -617,7 +586,6 @@ async function downloadAndInstallOllamaWindows() {
     // Prevenir descargas múltiples simultáneas
     if (isDownloadingOllama) {
         console.log('[OLLAMA] Ya hay una descarga en progreso, esperando...');
-        notifyUser('warning', 'Ya hay una descarga de Ollama en progreso');
         return false;
     }
 
@@ -627,7 +595,6 @@ async function downloadAndInstallOllamaWindows() {
     const downloadUrl = 'https://ollama.ai/download/OllamaSetup.exe';
 
     console.log('[OLLAMA] Iniciando descarga desde:', downloadUrl);
-    notifyUser('info', 'Descargando Ollama... esto puede tardar varios minutos');
     notifyInstallationProgress('ollama-download', 'Descargando Ollama...', 42);
 
     try {
@@ -635,7 +602,6 @@ async function downloadAndInstallOllamaWindows() {
         await downloadFile(downloadUrl, installerPath);
 
         console.log('[OLLAMA] Descarga completada, iniciando instalacion...');
-        notifyUser('info', 'Instalando Ollama... sigue las instrucciones del instalador');
         notifyInstallationProgress('ollama-install', 'Instalando Ollama...', 50);
 
         // Ejecutar el instalador
@@ -671,7 +637,6 @@ async function downloadAndInstallOllamaWindows() {
 
         // Esperar a que Ollama este disponible
         console.log('[OLLAMA] Esperando a que Ollama inicie (max 60 segundos)...');
-        notifyUser('info', 'Esperando a que Ollama inicie...');
         notifyInstallationProgress('ollama-wait', 'Esperando Ollama...', 55);
 
         await new Promise(resolve => setTimeout(resolve, 5000));
@@ -682,7 +647,6 @@ async function downloadAndInstallOllamaWindows() {
 
             if (await checkOllama()) {
                 console.log('[OLLAMA] Ollama instalado e iniciado correctamente');
-                notifyUser('success', 'Ollama instalado correctamente');
                 notifyInstallationProgress('ollama-ready', 'Ollama listo', 60);
                 return true;
             }
@@ -692,7 +656,6 @@ async function downloadAndInstallOllamaWindows() {
         }
 
         console.warn('[OLLAMA] Ollama instalado pero no responde despues de 60 segundos');
-        notifyUser('warning', 'Ollama instalado pero no responde. Intentando iniciar manualmente...');
 
         // Intentar iniciar Ollama manualmente
         try {
@@ -706,19 +669,16 @@ async function downloadAndInstallOllamaWindows() {
 
             if (await checkOllama()) {
                 console.log('[OLLAMA] Ollama iniciado manualmente con exito');
-                notifyUser('success', 'Ollama iniciado correctamente');
                 return true;
             }
         } catch (startError) {
             console.error('[OLLAMA] Error al iniciar manualmente:', startError);
         }
 
-        notifyUser('warning', 'Ollama instalado pero no responde. Por favor reinicia la aplicacion');
         return false;
 
     } catch (error) {
         console.error('[OLLAMA] Error critico durante instalacion:', error);
-        notifyUser('error', `Error al instalar Ollama: ${error.message}`);
         return false;
     } finally {
         // Siempre liberar el flag de descarga
@@ -841,7 +801,6 @@ async function ensureOllamaModels() {
 
             if (!installedModels.includes(modelName.split(':')[0])) {
                 console.log(`Descargando modelo ${model}...`);
-                notifyUser('info', `Descargando modelo ${model}... (puede ser grande, hasta 2GB)`);
                 notifyInstallationProgress('models-download', `Descargando ${model}... (${modelIndex}/${totalModels})`, baseProgress);
 
                 try {
@@ -874,7 +833,6 @@ async function ensureOllamaModels() {
                                 // Notificar cada 10% o cada 5 segundos
                                 if (progress % 10 === 0 || now - lastNotification > 5000) {
                                     console.log(`[Ollama] Descargando ${model}: ${progress}%`);
-                                    notifyUser('info', `Descargando ${model}: ${progress}%`);
                                     notifyInstallationProgress('models-download', `Descargando ${model}: ${progress}% (${modelIndex}/${totalModels})`, modelProgress);
                                     lastNotification = now;
                                 }
@@ -882,13 +840,11 @@ async function ensureOllamaModels() {
                                 const layerMatch = output.match(/pulling ([a-f0-9]+)/);
                                 if (layerMatch && output !== lastProgress) {
                                     console.log(`[Ollama] Descargando capa: ${layerMatch[1].substring(0, 12)}...`);
-                                    notifyUser('info', `Descargando componente del modelo...`);
                                     notifyInstallationProgress('models-download', `Descargando componentes de ${model}...`, baseProgress + 5);
                                     lastProgress = output;
                                 }
                             } else if (output.includes('verifying')) {
                                 console.log(`[Ollama] Verificando integridad...`);
-                                notifyUser('info', `Verificando ${model}...`);
                                 notifyInstallationProgress('models-verify', `Verificando ${model}...`, baseProgress + 25);
                             } else if (output.includes('success')) {
                                 console.log(`[Ollama] Modelo descargado exitosamente`);
@@ -919,12 +875,10 @@ async function ensureOllamaModels() {
                         });
                     });
 
-                    notifyUser('success', `Modelo ${model} listo`);
                     notifyInstallationProgress('models-ready', `Modelo ${model} listo (${modelIndex}/${totalModels})`, baseProgress + 30 / totalModels);
 
                 } catch (pullError) {
                     console.error(`Error al descargar ${model}:`, pullError);
-                    notifyUser('error', `Error al descargar modelo ${model}`);
                     throw pullError;
                 }
             } else {
@@ -937,7 +891,6 @@ async function ensureOllamaModels() {
 
     } catch (error) {
         console.error('Error al verificar modelos:', error);
-        notifyUser('error', 'Error al configurar modelos de IA');
         throw error;
     }
 }
@@ -1123,7 +1076,6 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
     if (indexUrl) {
         console.log(`Index URL: ${indexUrl}`);
     }
-    notifyUser('info', `Instalando PyTorch para ${label}... (esto puede tardar varios minutos)`);
     notifyInstallationProgress('gpu-install', `Instalando PyTorch (${label})...`, 43);
 
     let installed = 0;
@@ -1219,11 +1171,9 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
     }
 
     if (failed.length > 0) {
-        console.log(`\n⚠️  Paquetes GPU/CPU que fallaron (${failed.length}): ${failed.join(', ')}`);
-        notifyUser('warning', `${total - failed.length}/${total} paquetes GPU instalados`);
+        console.log(`\nPaquetes GPU/CPU que fallaron (${failed.length}): ${failed.join(', ')}`);
     } else {
-        console.log(`✓ PyTorch instalado correctamente para ${label}`);
-        notifyUser('success', `PyTorch instalado para ${label}`);
+        console.log(`PyTorch instalado correctamente para ${label}`);
     }
 
     notifyInstallationProgress('gpu-ready', 'PyTorch instalado', 45);
@@ -1635,12 +1585,10 @@ async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
     }
 
     if (stillFailed.length > 0) {
-        console.log(`\n⚠️  Paquetes que aun fallan (${stillFailed.length}):`);
+        console.log(`\nPaquetes que aun fallan (${stillFailed.length}):`);
         stillFailed.forEach(pkg => console.log(`   - ${pkg}`));
-        notifyUser('warning', `${failedPackages.length - stillFailed.length}/${failedPackages.length} paquetes recuperados. ${stillFailed.length} siguen fallando.`);
     } else {
         console.log(`✓ Todos los paquetes fallidos fueron instalados correctamente`);
-        notifyUser('success', `${failedPackages.length} paquetes recuperados exitosamente`);
     }
 
     notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 45);
@@ -1749,7 +1697,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
         if (!fs.existsSync(venvPath)) {
             console.log("Creando entorno virtual...");
-            notifyUser('info', 'Creando entorno virtual de Python...');
             notifyInstallationProgress('venv-create', 'Creando entorno virtual...', 30);
 
             // Usar la ruta completa de Python para crear el venv
@@ -1776,7 +1723,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
             // Actualizar pip a la última versión
             console.log("Actualizando pip...");
-            notifyUser('info', 'Actualizando pip...');
             notifyInstallationProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 32);
             execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
                 cwd: backendPath,
@@ -1829,7 +1775,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
         if (missing.length > 0) {
             console.log(`Instalando ${missing.length} dependencias faltantes: ${missing.join(', ')}`);
-            notifyUser('info', `Instalando ${missing.length} dependencias de Python. Esto puede tomar varios minutos...`);
             notifyInstallationProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
 
             // Cerrar cualquier proceso de Python que pueda estar bloqueando archivos
@@ -1854,7 +1799,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             let failedStable = [];
             if (stablePackages.length > 0) {
                 console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
-                notifyUser('info', `Instalando ${stablePackages.length} paquetes estables...`);
                 notifyInstallationProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
 
                 failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages);
@@ -1864,7 +1808,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             let failedProblematic = [];
             if (problematicPackages.length > 0) {
                 console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
-                notifyUser('info', `Instalando ${problematicPackages.length} paquetes problematicos (mas lento pero seguro)...`);
                 notifyInstallationProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
 
                 failedProblematic = await installProblematicPackages(
@@ -1884,7 +1827,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
             if (allFailed.length > 0) {
                 console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
-                notifyUser('warning', `Reintentando ${allFailed.length} paquetes que fallaron...`);
                 notifyInstallationProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
 
                 await retryFailedPackages(pythonCmd, backendPath, allFailed);
@@ -1935,7 +1877,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
         // Si el error es por archivos bloqueados y no hemos alcanzado el límite de reintentos
         if (err.message === 'VENV_LOCKED' && retryCount < MAX_RETRIES) {
             console.log(`Intento ${retryCount + 1}/${MAX_RETRIES}: Limpiando entorno virtual bloqueado...`);
-            notifyUser('warning', `Reintentando instalacion (intento ${retryCount + 1}/${MAX_RETRIES})...`);
             notifyInstallationProgress('venv-cleanup', 'Limpiando entorno virtual bloqueado...', 20);
 
             // Cerrar procesos de Python que puedan estar bloqueando archivos
@@ -1987,7 +1928,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
             } catch (cleanupError) {
                 console.error('Error al limpiar entorno virtual:', cleanupError);
-                notifyUser('error', 'No se pudo limpiar el entorno virtual. Intenta cerrar otros programas y reiniciar Alfred.');
                 throw new Error(`No se pudo limpiar el entorno virtual: ${cleanupError.message}`);
             }
         }
@@ -2012,16 +1952,9 @@ async function verifyPyTorchInstallation(pythonCmd) {
 
         console.log(`✓ ${result}`);
 
-        if (result.includes('CUDA: True')) {
-            notifyUser('success', 'PyTorch con aceleracion GPU instalado correctamente');
-        } else {
-            notifyUser('info', 'PyTorch CPU instalado (GPU no disponible)');
-        }
-
         return true;
     } catch (err) {
-        console.log("⚠️  No se pudo verificar PyTorch:", err.message);
-        notifyUser('warning', 'PyTorch podria no estar instalado correctamente');
+        console.log("No se pudo verificar PyTorch:", err.message);
         return false;
     }
 }
@@ -2057,8 +1990,7 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
     while (Date.now() - startTime < timeout) {
         // Verificar si el proceso del backend sigue vivo
         if (!backendProcess || backendProcess.exitCode !== null) {
-            console.error('⚠️  El proceso del backend ha terminado inesperadamente');
-            notifyUser('error', 'El backend se cerró. Verifica que todas las dependencias estén instaladas.');
+            console.error('El proceso del backend ha terminado inesperadamente');
             notifyBackendStatus(false);
             return false;
         }
@@ -2121,7 +2053,6 @@ async function startBackendAndWait() {
                 const isRunning = await isBackendRunning();
                 if (isRunning) {
                     console.log(`✓ Backend respondio correctamente despues de ${i + 1} intentos`);
-                    notifyUser('success', 'Backend conectado correctamente');
                     notifyBackendStatus(true);
                     notifyInstallationProgress('backend-ready', 'Backend listo', 100);
                     return true;
@@ -2134,7 +2065,6 @@ async function startBackendAndWait() {
         }
 
         console.error('Backend no respondio despues de 2 minutos');
-        notifyUser('error', 'El backend no responde. Revisa los logs en la consola.');
         return false;
     } finally {
         // Restaurar el flag si era necesario
@@ -2167,14 +2097,12 @@ async function startBackend() {
     // Verificar que el directorio y script existan antes de lanzar el proceso
     if (!fs.existsSync(BACKEND_CONFIG.path)) {
         console.error('No se encontro el directorio del backend:', BACKEND_CONFIG.path);
-        notifyUser('error', 'No se encontro el directorio del backend de Alfred');
         return false;
     }
 
     const scriptPath = path.join(BACKEND_CONFIG.path, 'core', BACKEND_CONFIG.script);
     if (!fs.existsSync(scriptPath)) {
         console.error('No se encontro el script del backend:', scriptPath);
-        notifyUser('error', 'No se encontro alfred_backend.py');
         return false;
     }
 
@@ -2214,7 +2142,7 @@ async function startBackend() {
             // Detectar errores de módulo faltante
             if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
                 hasModuleError = true;
-                console.error('⚠️  ERROR CRÍTICO: Faltan dependencias de Python');
+                console.error('ERROR CRITICO: Faltan dependencias de Python');
             }
         });
 
@@ -2222,8 +2150,7 @@ async function startBackend() {
             console.log(`[Backend] Proceso finalizado con codigo ${code}`);
 
             if (code !== 0 && hasModuleError) {
-                console.error('⚠️  Backend cerrado por dependencias faltantes');
-                notifyUser('error', 'Faltan dependencias. Reinstalando...');
+                console.error('Backend cerrado por dependencias faltantes');
             }
 
             backendProcess = null;
@@ -2251,7 +2178,6 @@ async function startBackend() {
         return true;
     } catch (error) {
         console.error('Error al iniciar el backend:', error);
-        notifyUser('error', `Error al iniciar el backend: ${error.message}`);
         stopBackend();
         return false;
     }
@@ -2302,7 +2228,6 @@ async function checkAndStartBackend() {
 
         if (isRunning) {
             console.log('El backend ya esta corriendo');
-            notifyUser('success', 'Conectado al servidor de Alfred');
             notifyBackendStatus(true);  // Notificar conexion exitosa
 
             // Enviar evento backend-ready para que el loader se oculte
@@ -2317,14 +2242,6 @@ async function checkAndStartBackend() {
         return await startBackend();
     } finally {
         isCheckingBackend = false;
-    }
-}
-
-// Notificar al usuario
-function notifyUser(type, message) {
-    console.log(`[NOTIFY] (${type}): ${message}`);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('backend-notification', { type, message });
     }
 }
 
@@ -2603,7 +2520,6 @@ ipcMain.handle('stop-ollama', async () => {
         return { success: true, data: result.data };
     } catch (error) {
         console.error('[MAIN] Error al detener Ollama:', error);
-        notifyUser('error', 'Error al detener Ollama');
         return { success: false, error: error.message };
     }
 });
