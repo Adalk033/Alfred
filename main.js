@@ -70,7 +70,7 @@ function createWindow() {
             console.error('Error en inicializacion:', error);
         } finally {
             isInitializing = false;
-            console.log('[INIT] Flag isInitializing = false - Inicialización completada');
+            console.log('[INIT] Flag isInitializing = false - Inicializacion completada');
         }
         // Iniciar monitoreo del estado del backend DESPUES de la inicializacion
     });
@@ -1981,8 +1981,8 @@ async function startBackendAndWait() {
         console.log('Backend iniciado, esperando respuesta del servidor...');
         notifyInstallationProgress('backend-init', 'Esperando respuesta del backend...', 85);
 
-        const maxRetries = 5000; // 5000 intentos = 100 minutos
-        const retryDelay = 10000; // 10 segundos entre intentos
+        const maxRetries = 5500; // 5500 intentos = 120 minutos
+        const retryDelay = 1300; // 1.3 segundos entre intentos
 
         for (let i = 0; i < maxRetries; i++) {
             const progress = 85 + Math.min(14, (i / maxRetries) * 14);
