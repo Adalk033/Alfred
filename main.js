@@ -276,6 +276,7 @@ async function ensurePython() {
 
         // Intentar encontrar Python usando findPythonExecutable (busca en rutas comunes)
         try {
+            //TEST
             const pythonPath = findPythonExecutable();
             console.log('Python encontrado despues de instalacion:', pythonPath);
 
@@ -897,51 +898,14 @@ async function ensureOllamaModels() {
 
 // Encontrar la ruta completa de Python instalado
 function findPythonExecutable() {
-    // Rutas comunes donde Python se instala en Windows
-    const commonPaths = [
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python313', 'python.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
-        'C:\\Python313\\python.exe',
-        'C:\\Python312\\python.exe',
-        'C:\\Python311\\python.exe',
-        'C:\\Python310\\python.exe'
-    ];
-
     // Primero intentar con el comando directo (si PATH está actualizado)
     try {
         execSync('python --version', { stdio: 'pipe' });
         console.log('Python encontrado en PATH');
         return 'python';
-    } catch { }
-
-    // Buscar en rutas comunes
-    for (const pythonPath of commonPaths) {
-        if (fs.existsSync(pythonPath)) {
-            console.log('Python encontrado en:', pythonPath);
-            return pythonPath;
-        }
+    } catch {
+        throw new Error('No se pudo encontrar Python instalado');
     }
-
-    // Si no se encuentra, intentar buscar en %LOCALAPPDATA%\Programs\Python\
-    try {
-        const pythonBaseDir = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python');
-        if (fs.existsSync(pythonBaseDir)) {
-            const pythonDirs = fs.readdirSync(pythonBaseDir);
-            for (const dir of pythonDirs) {
-                if (dir.startsWith('Python3')) {
-                    const pythonExe = path.join(pythonBaseDir, dir, 'python.exe');
-                    if (fs.existsSync(pythonExe)) {
-                        console.log('Python encontrado en:', pythonExe);
-                        return pythonExe;
-                    }
-                }
-            }
-        }
-    } catch { }
-
-    throw new Error('No se pudo encontrar Python instalado');
 }
 
 // Cargar configuración de paquetes problemáticos
