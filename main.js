@@ -155,7 +155,6 @@ async function initializeAppWithProgress() {
         notifyInstallationProgress('python-check', 'Verificando Python...', 10);
         const pythonReady = await ensurePython();
         if (!pythonReady) {
-            // Dar tiempo para que el usuario vea el mensaje
             await new Promise(resolve => setTimeout(resolve, 3000));
             app.exit(1);
             return false;
@@ -165,9 +164,7 @@ async function initializeAppWithProgress() {
         notifyInstallationProgress('ollama-check', 'Verificando Ollama...', 20);
         const ollamaReady = await ensureOllama();
         if (!ollamaReady) {
-            // Dar tiempo para que el usuario vea el mensaje y los logs
             await new Promise(resolve => setTimeout(resolve, 5000));
-            // Mantener la app abierta pero mostrar estado de error
             notifyInstallationProgress('error', 'Error: Ollama no disponible', 0);
             return false;
         }
@@ -242,12 +239,12 @@ async function checkPython() {
         }).trim();
         console.log('Python detectado:', version);
 
-        // Verificar version >= 3.10
+        // Verificar version >= 3.12
         const match = version.match(/Python (\d+)\.(\d+)/);
         if (match) {
             const major = parseInt(match[1]);
             const minor = parseInt(match[2]);
-            if (major >= 3 && minor >= 10) {
+            if (major >= 3 && minor >= 12) {
                 return true;
             } else {
                 console.error('Version de Python muy antigua:', version);
@@ -274,12 +271,9 @@ async function ensurePython() {
         console.log('Detectada marca de instalacion previa de Python.');
         notifyInstallationProgress('python-verify', 'Verificando Python instalado...', 2);
 
-        // Intentar encontrar Python usando findPythonExecutable (busca en rutas comunes)
+        // Intentar encontrar Python usando findPythonExecutable
         try {
-            //TEST
-            const pythonPath = findPythonExecutable();
-            console.log('Python encontrado despues de instalacion:', pythonPath);
-
+            findPythonExecutable();
             // Eliminar marca ya que Python está disponible
             try {
                 fs.unlinkSync(pythonInstalledMarker);
@@ -331,8 +325,6 @@ async function ensurePython() {
         return true;
     }
 
-    console.log('Python no esta instalado o version incorrecta');
-
     try {
         // Descargar e instalar Python automáticamente
         if (process.platform === 'win32') {
@@ -350,18 +342,16 @@ async function ensurePython() {
 
 // Descargar e instalar Python en Windows
 async function downloadAndInstallPythonWindows() {
-    const pythonVersion = '3.12.0';  // Python 3.12.0 LTS
-    const installerName = 'python-3.12.0-amd64.exe';
+    const pythonVersion = '3.12.0';
+    const installerName = `python-${pythonVersion}-amd64.exe`;
     const installerPath = path.join(app.getPath('temp'), installerName);
     const downloadUrl = `https://www.python.org/ftp/python/${pythonVersion}/${installerName}`;
-
-    console.log('Descargando Python desde:', downloadUrl);
-    notifyInstallationProgress('python-download', 'Descargando Python 3.12...', 5);
+    notifyInstallationProgress('python-download', `Descargando Python ${pythonVersion}...`, 5);
 
     try {
         // Descargar el instalador
         await downloadFile(downloadUrl, installerPath);
-        notifyInstallationProgress('python-install', 'Instalando Python 3.12...', 15);
+        notifyInstallationProgress('python-install', `Instalando Python ${pythonVersion}...`, 15);
         console.log('Ejecutando instalador de Python...');
 
         // Instalar Python de forma silenciosa con opciones importantes
@@ -408,27 +398,28 @@ async function downloadAndInstallPythonWindows() {
             });
         });
 
-        // Esperar 2 segundos adicionales para que el instalador termine completamente
+        // Esperar 5 segundos adicionales para que el instalador termine completamente
         console.log('Esperando a que el instalador finalice completamente...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Limpiar el instalador
         try {
             fs.unlinkSync(installerPath);
             console.log('Instalador de Python eliminado');
-        } catch { }
+        } catch {
+            console.warn('No se pudo eliminar el instalador de Python');
+        }
 
         // Python se instaló correctamente
         console.log('Python instalado correctamente.');
 
-        // Esperar 3 segundos para que el sistema actualice PATH
+        // Esperar 4 segundos para que el sistema actualice PATH
         console.log('Esperando finalizacion de procesos...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 4000));
 
         // Intentar encontrar Python inmediatamente
         try {
-            const pythonPath = findPythonExecutable();
-            console.log('Python disponible inmediatamente en:', pythonPath);
+            findPythonExecutable();
             return true; // Python encontrado, continuar sin reiniciar
         } catch (findError) {
             // Python no está disponible aún, necesita reinicio
@@ -516,16 +507,12 @@ async function ensureOllama() {
     notifyInstallationProgress('ollama-check', 'Verificando Ollama...', 40);
 
     // Verificar si Ollama está corriendo
-    console.log('[OLLAMA-CHECK] Paso 1: Verificando si Ollama ya esta corriendo...');
     if (await checkOllama()) {
-        console.log('[OLLAMA-CHECK] ✓ Ollama ya esta corriendo y respondiendo en puerto 11434');
+        console.log('[OLLAMA-READY] Ollama ya esta corriendo y respondiendo en puerto 11434');
         notifyInstallationProgress('ollama-ready', 'Ollama listo', 50);
         return true;
     }
     console.log('[OLLAMA-CHECK] ✗ Ollama no responde en puerto 11434');
-
-    console.log('[OLLAMA-CHECK] ✗ Ollama no responde en puerto 11434');
-
     // Verificar si Ollama está instalado pero no corriendo
     console.log('[OLLAMA-CHECK] Paso 2: Verificando si Ollama esta instalado...');
     try {
@@ -589,12 +576,9 @@ async function downloadAndInstallOllamaWindows() {
         console.log('[OLLAMA] Ya hay una descarga en progreso, esperando...');
         return false;
     }
-
     isDownloadingOllama = true;
-
     const installerPath = path.join(app.getPath('temp'), 'OllamaSetup.exe');
     const downloadUrl = 'https://ollama.ai/download/OllamaSetup.exe';
-
     console.log('[OLLAMA] Iniciando descarga desde:', downloadUrl);
     notifyInstallationProgress('ollama-download', 'Descargando Ollama...', 42);
 
@@ -689,7 +673,7 @@ async function downloadAndInstallOllamaWindows() {
 }
 
 // Descargar archivo con progreso
-function downloadFile(url, destPath, maxRedirects = 5) {
+function downloadFile(url, destPath, maxRedirects = 6) {
     return new Promise((resolve, reject) => {
         if (maxRedirects <= 0) {
             reject(new Error('Demasiadas redirecciones'));
@@ -697,10 +681,7 @@ function downloadFile(url, destPath, maxRedirects = 5) {
         }
 
         const file = fs.createWriteStream(destPath);
-        let redirectCount = 5 - maxRedirects;
-
-        console.log(`[DOWNLOAD] Intentando descargar desde: ${url} (redireccion ${redirectCount})`);
-
+        let redirectCount = 6 - maxRedirects;
         https.get(url, (response) => {
             // Manejar todas las redirecciones HTTP (301, 302, 303, 307, 308)
             if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
@@ -708,9 +689,7 @@ function downloadFile(url, destPath, maxRedirects = 5) {
                 console.log(`[DOWNLOAD] Redireccion ${response.statusCode} -> ${response.headers.location}`);
                 file.close();
                 try {
-                    if (fs.existsSync(destPath)) {
-                        fs.unlinkSync(destPath);
-                    }
+                    if (fs.existsSync(destPath)) { fs.unlinkSync(destPath); }
                 } catch (e) {
                     console.warn('[DOWNLOAD] Error al limpiar archivo temporal:', e.message);
                 }
@@ -914,7 +893,6 @@ function loadProblematicPackages(backendPath) {
         const configPath = path.join(backendPath, 'problematic-packages.json');
         if (fs.existsSync(configPath)) {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            console.log(`✓ Configuracion de paquetes problematicos cargada: ${config.problematic_packages.length} paquetes`);
             return config;
         }
     } catch (error) {
@@ -976,7 +954,7 @@ async function detectGPUType() {
     try {
         if (process.platform === 'win32') {
             execSync('nvidia-smi', { stdio: 'pipe' });
-            console.log('✓ GPU NVIDIA detectada');
+            console.log('GPU NVIDIA detectada');
             return 'nvidia_cuda';
         }
     } catch {
@@ -988,7 +966,7 @@ async function detectGPUType() {
         if (process.platform === 'darwin') {
             const arch = execSync('uname -m', { encoding: 'utf8' }).trim();
             if (arch === 'arm64') {
-                console.log('✓ Apple Silicon detectado (M1/M2/M3)');
+                console.log('Apple Silicon detectado (M1/M2/M3)');
                 return 'apple_mps';
             }
         }
@@ -998,7 +976,7 @@ async function detectGPUType() {
 
     // TODO: AMD ROCm detection
 
-    console.log('⚠️  No se detecto GPU compatible, usando CPU');
+    console.log('No se detecto GPU compatible, usando CPU');
     return 'cpu';
 }
 
@@ -1092,7 +1070,7 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
                     const lines = output.split('\n');
                     for (const line of lines) {
                         if (line.includes('Downloading') && line.includes('MB')) {
-                            console.log(`  ${line.trim()}`);
+                            console.log(`${line.trim()}`);
                         }
                     }
                 });
@@ -1101,22 +1079,22 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
                     const err = data.toString();
                     errorOut += err;
                     if (!err.includes('WARNING') && !err.includes('DEPRECATION')) {
-                        console.error(`  [stderr] ${err.trim()}`);
+                        console.error(`[stderr] ${err.trim()}`);
                     }
                 });
 
                 proc.on('close', (code) => {
                     if (code === 0) {
-                        console.log(`  ✓ ${pkg} instalado correctamente`);
+                        console.log(`${pkg} instalado correctamente`);
                         resolve(true);
                     } else {
-                        console.error(`  ✗ ${pkg} fallo: ${errorOut.substring(0, 150)}`);
+                        console.error(`${pkg} fallo: ${errorOut.substring(0, 150)}`);
                         resolve(false);
                     }
                 });
 
                 proc.on('error', (err) => {
-                    console.error(`  ✗ Error de proceso: ${err.message}`);
+                    console.error(`Error de proceso: ${err.message}`);
                     resolve(false);
                 });
             });
@@ -1129,7 +1107,7 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
             await new Promise(resolve => setTimeout(resolve, 1500));
 
         } catch (error) {
-            console.error(`  ✗ Error al instalar ${pkg}:`, error.message);
+            console.error(`Error al instalar ${pkg}:`, error.message);
             failed.push(pkg.split('==')[0]);
         }
     }
@@ -1150,7 +1128,6 @@ function loadProblematicPackages(backendPath) {
         const configPath = path.join(backendPath, 'problematic-packages.json');
         if (fs.existsSync(configPath)) {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            console.log(`✓ Configuracion de paquetes problematicos cargada: ${config.problematic_packages.length} paquetes`);
             return config;
         }
     } catch (error) {
@@ -1559,9 +1536,8 @@ async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
 }
 
 // Función auxiliar para cerrar procesos de Python bloqueantes
-async function killPythonProcesses(venvPath) {
-    if (process.platform !== 'win32') return;
-
+async function killPythonProcesses() {
+    if (process.platform !== 'win32') { return; } // Solo Windows
     try {
         console.log('Cerrando procesos de Python que puedan estar bloqueando archivos...');
 
@@ -1593,7 +1569,6 @@ async function killPythonProcesses(venvPath) {
 
         // Esperar un momento para que los archivos se liberen
         await new Promise(resolve => setTimeout(resolve, 1000));
-
     } catch (error) {
         console.log('No se pudieron cerrar procesos Python:', error.message);
     }
@@ -1606,6 +1581,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
     const MAX_RETRIES = 2;
 
     // Detectar rutas del binario Python
+    //En este punto ya estamos usando el venv
     const pythonCmd = process.platform === "win32"
         ? path.join(venvPath, "Scripts", "python.exe")
         : path.join(venvPath, "bin", "python");
@@ -1613,17 +1589,15 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
     try {
         // Encontrar Python base instalado
         const basePython = findPythonExecutable();
-        console.log('Usando Python base:', basePython);
         notifyInstallationProgress('venv-check', 'Configurando entorno de Python...', 25);
 
         // Verificar si el venv existe y está corrupto
         if (fs.existsSync(venvPath)) {
-            console.log("Verificando entorno virtual existente...");
             notifyInstallationProgress('venv-verify', 'Verificando entorno virtual...', 27);
 
             // Intentar ejecutar python del venv para verificar si funciona
             try {
-                execSync(`"${pythonCmd}" --version`, {
+                execSync(`"${basePython}" --version`, {
                     encoding: 'utf8',
                     stdio: 'pipe',
                     timeout: 5000
@@ -1659,6 +1633,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             }
         }
 
+        // Crear el entorno virtual si no existe
         if (!fs.existsSync(venvPath)) {
             console.log("Creando entorno virtual...");
             notifyInstallationProgress('venv-create', 'Creando entorno virtual...', 30);
@@ -1684,17 +1659,24 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
                 stdio: 'pipe'
             });
             console.log('pip actual:', pipVersion.trim());
-
-            // Actualizar pip a la última versión
-            console.log("Actualizando pip...");
-            notifyInstallationProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 32);
-            execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
-                cwd: backendPath,
-                encoding: 'utf8',
-                stdio: 'pipe',
-                timeout: 60000  // 60 segundos timeout
-            });
-            console.log("pip actualizado correctamente");
+            // Validar si pip es version 23.2.1 o superior
+            const versionMatch = pipVersion.match(/pip (\d+)\.(\d+)\.(\d+)/);
+            if (versionMatch) {
+                const major = parseInt(versionMatch[1], 10);
+                const minor = parseInt(versionMatch[2], 10);
+                const patch = parseInt(versionMatch[3], 10);
+                if (major < 23 || (major === 23 && minor < 2) || (major === 23 && minor === 2 && patch < 1)) {
+                    console.log("pip es muy antiguo, se actualizara");
+                    notifyInstallationProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 32);
+                    execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
+                        cwd: backendPath,
+                        encoding: 'utf8',
+                        stdio: 'pipe',
+                        timeout: 80000  // 80 segundos timeout
+                    });
+                }
+                else { console.log("pip está actualizado"); }
+            }
         } catch (pipError) {
             console.log("Error al verificar/actualizar pip:", pipError.message);
             console.log("Instalando pip...");
@@ -1711,8 +1693,20 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             }
         }
 
+        // Verificar que el venv funciona correctamente
+        try {
+            const venvCheck = execSync(`"${pythonCmd}" -m pip --version`, {
+                cwd: backendPath,
+                encoding: 'utf8',
+                stdio: 'pipe'
+            });
+            console.log("Entorno virtual verificado:", venvCheck.trim());
+        } catch (error) {
+            console.error("Error al verificar el entorno virtual:", error.message);
+            throw new Error("No se pudo verificar el entorno virtual");
+        }
+
         // Verificar dependencias instaladas
-        console.log("Verificando dependencias...");
         notifyInstallationProgress('deps-check', 'Verificando dependencias de Python...', 35);
         const installedPkgs = execSync(`"${pythonCmd}" -m pip freeze`, {
             encoding: "utf8",
@@ -1725,16 +1719,31 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             .map(line => line.trim());
 
         // Extraer nombres de paquetes (antes de ==, >=, etc.)
+        // Importante: incluir puntos en el nombre (ej: pdfminer.six, unstructured.pytesseract)
         const reqPkgNames = reqs.map(r => {
-            const match = r.match(/^([a-zA-Z0-9\-_]+)/);
+            const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
             return match ? match[1].toLowerCase() : null;
         }).filter(Boolean);
 
+        console.log(`Dependencias requeridas: ${reqPkgNames.length} paquetes`);
+        console.log(`Dependencias instaladas: ${installedPkgs.split('\n').length} paquetes`);
+
         // Verificar si hay paquetes faltantes
         const missing = reqPkgNames.filter(pkg => {
-            // Buscar el paquete en pip freeze (nombre==version)
-            const pattern = new RegExp(`^${pkg}==`, 'm');
-            return !pattern.test(installedPkgs);
+            // Normalizar el nombre: guiones pueden ser guiones bajos en pip freeze
+            // Los puntos se mantienen como puntos
+            const searchName = pkg.toLowerCase()
+                .replace(/-/g, '[-_]')  // Guion puede ser guion o guion bajo
+                .replace(/\./g, '\\.');  // Escapar puntos para regex
+
+            const pattern = new RegExp(`^${searchName}==`, 'm');
+            const found = pattern.test(installedPkgs);
+
+            if (!found) {
+                console.log(`[deps-check] Falta: ${pkg}`);
+            }
+
+            return !found;
         });
 
         if (missing.length > 0) {
@@ -1747,28 +1756,23 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             // Pequeña pausa para asegurar que no hay procesos bloqueantes
             await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // NUEVA ESTRATEGIA: Separar paquetes estables de problemáticos
-            console.log('Cargando configuracion de paquetes problematicos...');
+            //Separar paquetes estables de problemáticos
             const problematicConfig = loadProblematicPackages(backendPath);
             const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
 
-            // Separar paquetes
+            //Separar paquetes
             const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
             const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
-
-            console.log(`📦 Paquetes estables: ${stablePackages.length}`);
-            console.log(`⚠️  Paquetes problematicos: ${problematicPackages.length} (${problematicPackages.join(', ')})`);
 
             // FASE 1: Instalar paquetes estables en bloque (rápido)
             let failedStable = [];
             if (stablePackages.length > 0) {
                 console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
                 notifyInstallationProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
-
                 failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages);
             }
 
-            // FASE 2: Instalar paquetes problemáticos UNO POR UNO con delays largos
+            // FASE 2: Instalar paquetes problematicos UNO POR UNO con delays largos
             let failedProblematic = [];
             if (problematicPackages.length > 0) {
                 console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
@@ -1792,7 +1796,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             if (allFailed.length > 0) {
                 console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
                 notifyInstallationProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
-
                 await retryFailedPackages(pythonCmd, backendPath, allFailed);
             } else {
                 notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 48);
@@ -1800,7 +1803,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
             // Limpiar directorio temporal DESPUÉS de todos los reintentos
             console.log('Limpiando directorio temporal...');
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar que pip libere archivos
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar que pip libere archivos
 
             try {
                 const tempDir = path.join(backendPath, 'temp');
@@ -1812,28 +1815,29 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
                 console.log('No se pudo limpiar directorio temporal (no es critico):', cleanupErr.message);
             }
 
-        } else {
+        }
+        else {
             console.log("Todas las dependencias ya estan instaladas.");
-
             // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
             console.log('Verificando instalacion de PyTorch...');
-            const hasTorch = installedPackages.some(pkg => pkg.toLowerCase() === 'torch');
+            // Convertir installedPkgs (string) a array de nombres de paquetes
+            const installedPackages = installedPkgs.split('\n')
+                .map(line => {
+                    const match = line.match(/^([a-zA-Z0-9\-_.]+)==/);
+                    return match ? match[1].toLowerCase() : null;
+                })
+                .filter(Boolean);
+            const hasTorch = installedPackages.some(pkg => pkg === 'torch');
             if (!hasTorch) {
                 console.log('PyTorch no detectado, instalando...');
                 const gpuConfig = loadGPUPackages(backendPath);
                 await installGPUPackages(pythonCmd, backendPath, gpuConfig);
             }
-
             notifyInstallationProgress('deps-ready', 'Dependencias verificadas', 48);
         }
 
         // Verificar que PyTorch funcione correctamente
         console.log('\n=== Verificacion Final de PyTorch ===');
-        await verifyPyTorchInstallation(pythonCmd);
-
-        // NOTA: Poppler ya no es necesario - usamos PyPDFLoader que es nativo de Python
-        // await checkPoppler();
-
         return pythonCmd;
     } catch (err) {
         console.error("Error en ensurePythonEnv:", err);
@@ -1900,29 +1904,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
     }
 }
 
-// Verificar si PyTorch tiene soporte CUDA
-// Verificar estado de PyTorch (solo informativo)
-async function verifyPyTorchInstallation(pythonCmd) {
-    try {
-        console.log("Verificando instalacion de PyTorch...");
-
-        // Verificar que PyTorch esté importable
-        const checkScript = "import torch; print(f'PyTorch {torch.__version__} - CUDA: {torch.cuda.is_available()}')";
-        const result = execSync(`"${pythonCmd}" -c "${checkScript}"`, {
-            encoding: 'utf8',
-            stdio: 'pipe',
-            timeout: 10000
-        }).trim();
-
-        console.log(`✓ ${result}`);
-
-        return true;
-    } catch (err) {
-        console.log("No se pudo verificar PyTorch:", err.message);
-        return false;
-    }
-}
-
 // Verificar si el backend está corriendo
 async function isBackendRunning() {
     return new Promise((resolve) => {
@@ -1980,12 +1961,6 @@ async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
 
 // Iniciar el backend y ESPERAR hasta que responda correctamente
 async function startBackendAndWait() {
-    console.log('[INIT] === PASO 5: INICIANDO BACKEND ===');
-    console.log('[INIT] Ollama ya debe estar completamente funcional en este punto');
-    console.log('[INIT] Iniciando backend y esperando respuesta...');
-    console.log('[INIT] Flag isInitializing:', isInitializing);
-    console.log('[INIT] Este es el UNICO punto autorizado para iniciar el backend durante setup');
-
     // Temporalmente permitir el inicio del backend desde este flujo
     const wasInitializing = isInitializing;
     if (wasInitializing) {
@@ -2006,8 +1981,8 @@ async function startBackendAndWait() {
         console.log('Backend iniciado, esperando respuesta del servidor...');
         notifyInstallationProgress('backend-init', 'Esperando respuesta del backend...', 85);
 
-        const maxRetries = 60; // 60 intentos = 2 minutos
-        const retryDelay = 2000; // 2 segundos entre intentos
+        const maxRetries = 5000; // 5000 intentos = 100 minutos
+        const retryDelay = 10000; // 10 segundos entre intentos
 
         for (let i = 0; i < maxRetries; i++) {
             const progress = 85 + Math.min(14, (i / maxRetries) * 14);
@@ -2016,7 +1991,7 @@ async function startBackendAndWait() {
             try {
                 const isRunning = await isBackendRunning();
                 if (isRunning) {
-                    console.log(`✓ Backend respondio correctamente despues de ${i + 1} intentos`);
+                    console.log(`Backend respondio correctamente despues de ${i + 1} intentos`);
                     notifyBackendStatus(true);
                     notifyInstallationProgress('backend-ready', 'Backend listo', 100);
                     return true;
@@ -2040,12 +2015,9 @@ async function startBackendAndWait() {
 }
 
 async function startBackend() {
-    console.log('[BACKEND] Verificando si el backend ya esta iniciado...');
-    console.log('[BACKEND] Flag isInitializing:', isInitializing);
-
     // PROTECCIÓN ADICIONAL: No iniciar durante la inicialización
     if (isInitializing) {
-        console.log('[BACKEND] ⚠️  ABORTADO: isInitializing=true, no se puede iniciar backend ahora');
+        console.log('[BACKEND] ABORTADO: isInitializing=true, no se puede iniciar backend ahora');
         return false;
     }
 
