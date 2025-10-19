@@ -1604,7 +1604,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
     // Detectar modo desarrollo: app NO empaquetada O existe carpeta node_modules en raiz
     const isDevelopment = !app.isPackaged || fs.existsSync(path.join(__dirname, 'node_modules'));
-    
+
     console.log(`Modo: ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'}`);
     console.log(`App empaquetada: ${app.isPackaged}`);
 
@@ -1616,12 +1616,12 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
                 console.log('╔════════════════════════════════════════════════════════╗');
                 console.log('║  Python portable detectado con paquetes pre-instalados ║');
                 console.log('╚════════════════════════════════════════════════════════╝');
-                
+
                 const markerContent = fs.readFileSync(packagesInstalledMarker, 'utf8');
                 console.log('Marker:', markerContent);
-                
+
                 notifyInstallationProgress('portable-ready', 'Usando Python portable optimizado...', 45);
-                
+
                 // Verificar que funciona
                 try {
                     const version = execSync(`"${portablePythonPath}" --version`, {
@@ -1636,7 +1636,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
                 // NO CREAR VENV - usar Python portable directamente
                 console.log('Saltando creacion de venv - usando Python portable con dependencias incluidas');
                 console.log(`Usando Python en: ${portablePythonPath}`);
-                
+
                 notifyInstallationProgress('deps-ready', 'Entorno Python listo (portable)', 48);
                 return portablePythonPath;
             } else {
@@ -1781,6 +1781,9 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             stdio: 'pipe'
         }).toLowerCase();
 
+        console.log(`[DEBUG] pip freeze output (primeras lineas):`);
+        console.log(installedPkgs.split('\n').slice(0, 5).join('\n'));
+
         const reqs = fs.readFileSync(requirementsPath, "utf8")
             .split("\n")
             .filter(line => line.trim() && !line.trim().startsWith('#'))
@@ -1794,7 +1797,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
         }).filter(Boolean);
 
         console.log(`Dependencias requeridas: ${reqPkgNames.length} paquetes`);
-        console.log(`Dependencias instaladas: ${installedPkgs.split('\n').length} paquetes`);
+        console.log(`Dependencias instaladas: ${installedPkgs.split('\n').filter(l => l.trim()).length} paquetes`);
 
         // Verificar si hay paquetes faltantes
         const missing = reqPkgNames.filter(pkg => {
@@ -1815,7 +1818,10 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
         });
 
         if (missing.length > 0) {
-            console.log(`Instalando ${missing.length} dependencias faltantes: ${missing.join(', ')}`);
+            console.log(`\n╔══════════════════════════════════════════════════════════╗`);
+            console.log(`║  INSTALANDO ${missing.length} DEPENDENCIAS FALTANTES`);
+            console.log(`╚══════════════════════════════════════════════════════════╝`);
+            console.log(`Paquetes a instalar: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`);
             notifyInstallationProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
 
             // Cerrar cualquier proceso de Python que pueda estar bloqueando archivos
@@ -1885,7 +1891,9 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
         }
         else {
-            console.log("Todas las dependencias ya estan instaladas.");
+            console.log(`\n╔══════════════════════════════════════════════════════════╗`);
+            console.log(`║  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
+            console.log(`╚══════════════════════════════════════════════════════════╝`);
             // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
             console.log('Verificando instalacion de PyTorch...');
             // Convertir installedPkgs (string) a array de nombres de paquetes
@@ -1904,8 +1912,78 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             notifyInstallationProgress('deps-ready', 'Dependencias verificadas', 48);
         }
 
-        // Verificar que PyTorch funcione correctamente
-        console.log('\n=== Verificacion Final de PyTorch ===');
+        // Verificacion final: Asegurar que dependencias criticas estan instaladas
+        console.log('\n=== Verificacion Final ===');
+        try {
+            // Verificar multiples paquetes criticos (con sus imports reales)
+            const checks = [
+                { module: 'dotenv', package: 'python-dotenv' },
+                { module: 'fastapi', package: 'fastapi' },
+                { module: 'langchain', package: 'langchain' },
+                { module: 'chromadb', package: 'chromadb' },
+                { module: 'numpy', package: 'numpy' },
+                { module: 'dateutil', package: 'python-dateutil' }
+            ];
+
+            const failedChecks = [];
+            for (const check of checks) {
+                try {
+                    execSync(`"${pythonCmd}" -c "import ${check.module}"`, {
+                        encoding: 'utf8',
+                        stdio: 'pipe',
+                        cwd: backendPath
+                    });
+                    console.log(`✓ ${check.package} OK`);
+                } catch (importError) {
+                    console.error(`✗ ERROR: ${check.package} no se puede importar como '${check.module}'`);
+                    failedChecks.push(check);
+                }
+            }
+
+            // Si hay paquetes que fallan, intentar reinstalarlos
+            if (failedChecks.length > 0) {
+                console.log(`\n⚠️  Detectadas ${failedChecks.length} instalaciones corruptas. Reparando...`);
+                notifyInstallationProgress('deps-repair', `Reparando ${failedChecks.length} paquetes corruptos...`, 49);
+
+                for (const check of failedChecks) {
+                    console.log(`Reinstalando ${check.package}...`);
+                    try {
+                        // Desinstalar y reinstalar
+                        execSync(`"${pythonCmd}" -m pip uninstall -y ${check.package}`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe',
+                            cwd: backendPath
+                        });
+                        execSync(`"${pythonCmd}" -m pip install ${check.package}`, {
+                            encoding: 'utf8',
+                            stdio: 'inherit', // Mostrar progreso
+                            cwd: backendPath,
+                            timeout: 120000 // 2 minutos
+                        });
+                        console.log(`✓ ${check.package} reparado exitosamente`);
+                    } catch (repairError) {
+                        console.error(`✗ Error al reparar ${check.package}:`, repairError.message);
+                        throw new Error(`No se pudo reparar ${check.package}`);
+                    }
+                }
+
+                // Verificar nuevamente despues de reparar
+                console.log('\nVerificando reparaciones...');
+                for (const check of failedChecks) {
+                    execSync(`"${pythonCmd}" -c "import ${check.module}"`, {
+                        encoding: 'utf8',
+                        stdio: 'pipe',
+                        cwd: backendPath
+                    });
+                    console.log(`✓ ${check.package} verificado OK`);
+                }
+            }
+        } catch (verifyError) {
+            console.error('ERROR CRITICO: Dependencias no instaladas correctamente');
+            throw verifyError;
+        }
+
+        console.log(`✅ Entorno Python listo en: ${pythonCmd}`);
         return pythonCmd;
     } catch (err) {
         console.error("Error en ensurePythonEnv:", err);
