@@ -42,6 +42,8 @@ build/
 chroma_db/
 db/
 *.db-journal
+backend/chroma_db/
+backend/db/
 
 # === Archivos de Log ===
 logs/
@@ -56,6 +58,7 @@ secret.key
 alfred_qa_history.json
 alfred_qa_history_backup_*.json
 conversations/*.json
+backend/%AppData%/
 
 # === Información de GPU ===
 backend/gpu/gpu_info.json
@@ -95,6 +98,8 @@ desktop.ini
 *.backup
 *~
 *.conf
+backend/temp/
+temp/
 
 # === Certificados y Claves ===
 *.pem
