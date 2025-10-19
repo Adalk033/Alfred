@@ -1,4 +1,0 @@
-Dependencias pre-instaladas: 2025-10-18 23:01:01
-Paquetes instalados: 167
-Tamano total: 414.27 MB
-Nota: PyTorch, scipy, grpcio excluidos (instalacion dinamica segun GPU)

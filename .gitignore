@@ -17,6 +17,14 @@ ENV/
 env.bak/
 venv.bak/
 
+# === Python Portable - Excluir paquetes instalados ===
+# Mantener Python base pero no los paquetes (se instalan en build)
+backend/python-portable/Lib/site-packages/*
+!backend/python-portable/Lib/site-packages/.gitkeep
+backend/python-portable/Scripts/*
+!backend/python-portable/Scripts/.gitkeep
+backend/python-portable/.packages_installed
+
 # === Dependencias Node.js ===
 node_modules/
 package-lock.json

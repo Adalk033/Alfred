@@ -6,7 +6,7 @@
 # ============================================
 
 param(
-    [switch]$SkipPreInstall = $false,  # Salta pre-instalacion de paquetes Python
+    [switch]$SkipPreInstall = $false,  # SOLO para desarrollo rapido - NO recomendado para builds de produccion
     [switch]$Force = $false,            # Omite confirmacion inicial
     [switch]$SkipValidation = $false    # Omite validacion de estructura
 )
@@ -165,49 +165,46 @@ if (-not $SkipValidation) {
 # ============================================
 $markerFile = Join-Path $PSScriptRoot "backend\python-portable\.packages_installed"
 
+# ============================================
+# FASE 3: Pre-instalacion en Python Portable (OBLIGATORIA)
+# ============================================
+$markerFile = Join-Path $PSScriptRoot "backend\python-portable\.packages_installed"
+
+Write-Host "`n╔══════════════════════════════════════════════════════╗" -ForegroundColor Yellow
+Write-Host "║  FASE 3: Pre-instalacion en Python Portable         ║" -ForegroundColor Yellow
+Write-Host "╚══════════════════════════════════════════════════════╝`n" -ForegroundColor Yellow
+
 if (-not $SkipPreInstall -and -not (Test-Path $markerFile)) {
-    Write-Host "`n╔══════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-    Write-Host "║  FASE 3: Pre-instalacion en Python Portable         ║" -ForegroundColor Yellow
-    Write-Host "╚══════════════════════════════════════════════════════╝`n" -ForegroundColor Yellow
-    
-    Write-Host "⚠️  Python portable SIN dependencias pre-instaladas" -ForegroundColor Yellow
+    Write-Host "⚙️  INSTALACION OBLIGATORIA DE PAQUETES" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "   SIN pre-instalacion:" -ForegroundColor White
-    Write-Host "   - Instalador: ~50 MB" -ForegroundColor Gray
-    Write-Host "   - Primera instalacion usuario: 15-20 minutos" -ForegroundColor Gray
+    Write-Host "   Estrategia:" -ForegroundColor White
+    Write-Host "   - 167 paquetes base (NO GPU-dependientes)" -ForegroundColor Gray
+    Write-Host "   - PyTorch se instalara en 1ra ejecucion segun GPU del usuario" -ForegroundColor Gray
+    Write-Host "   - Tiempo estimado: 5-10 minutos" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "   CON pre-instalacion (167 paquetes, SIN PyTorch):" -ForegroundColor White
-    Write-Host "   - Instalador: ~400-500 MB" -ForegroundColor Gray
-    Write-Host "   - Primera instalacion usuario: ~3 minutos (solo PyTorch) ✅" -ForegroundColor Green
-    Write-Host "   - PyTorch se instala segun GPU detectada (NVIDIA/AMD/CPU)" -ForegroundColor Cyan
+    Write-Host "   Beneficios:" -ForegroundColor White
+    Write-Host "   • Instalador: ~400-500 MB (vs ~50 MB sin paquetes)" -ForegroundColor Gray
+    Write-Host "   • Primera instalacion usuario: ~3 min (vs 15-20 min)" -ForegroundColor Green
+    Write-Host "   • PyTorch optimizado segun hardware (CUDA/ROCm/CPU)" -ForegroundColor Green
     Write-Host ""
     
-    $preinstall = Read-Host "Deseas pre-instalar dependencias ahora? (s/n) [Recomendado: s]"
-    
-    if ($preinstall -eq 's') {
-        if (Test-Path ".\create-venv-base.ps1") {
-            Write-Host "`n🔨 Pre-instalando dependencias en Python portable..." -ForegroundColor Cyan
-            Write-Host "   • Instalara 167 paquetes (NO GPU-dependientes)" -ForegroundColor Gray
-            Write-Host "   • PyTorch se instalara en primera ejecucion del usuario" -ForegroundColor Gray
-            Write-Host "   • Tiempo estimado: 5-10 minutos`n" -ForegroundColor Gray
-            
-            & ".\create-venv-base.ps1"
-            
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "`n❌ Error al pre-instalar dependencias" -ForegroundColor Red
-                $continueAnyway = Read-Host "Deseas continuar sin pre-instalacion? (s/n)"
-                if ($continueAnyway -ne 's') {
-                    exit 1
-                }
-            } else {
-                Write-Host "`n✅ Dependencias pre-instaladas exitosamente" -ForegroundColor Green
-            }
+    if (Test-Path ".\create-venv-base.ps1") {
+        Write-Host "🔨 Instalando dependencias..." -ForegroundColor Cyan
+        
+        & ".\create-venv-base.ps1"
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "`n❌ ERROR CRITICO: No se pudieron instalar las dependencias" -ForegroundColor Red
+            Write-Host "   El build no puede continuar sin los paquetes Python." -ForegroundColor Yellow
+            pause
+            exit 1
         } else {
-            Write-Host "`n⚠️  Script create-venv-base.ps1 no encontrado" -ForegroundColor Yellow
-            Write-Host "   Continuando sin pre-instalacion..." -ForegroundColor Gray
+            Write-Host "`n✅ Dependencias pre-instaladas exitosamente" -ForegroundColor Green
         }
     } else {
-        Write-Host "`n⚠️  Saltando pre-instalacion (instalacion sera mas lenta para usuarios)" -ForegroundColor Yellow
+        Write-Host "`n❌ ERROR CRITICO: create-venv-base.ps1 no encontrado" -ForegroundColor Red
+        pause
+        exit 1
     }
 } elseif (Test-Path $markerFile) {
     Write-Host "`n✅ Python portable tiene dependencias pre-instaladas" -ForegroundColor Green
