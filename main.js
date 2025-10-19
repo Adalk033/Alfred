@@ -1605,8 +1605,16 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
     // Detectar modo desarrollo: app NO empaquetada O existe carpeta node_modules en raiz
     const isDevelopment = !app.isPackaged || fs.existsSync(path.join(__dirname, 'node_modules'));
 
+    console.log('╔════════════════════════════════════════════════════════╗');
+    console.log('║  DETECCION DE MODO PYTHON                              ║');
+    console.log('╚════════════════════════════════════════════════════════╝');
     console.log(`Modo: ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'}`);
     console.log(`App empaquetada: ${app.isPackaged}`);
+    console.log(`node_modules existe: ${fs.existsSync(path.join(__dirname, 'node_modules'))}`);
+    console.log(`__dirname: ${__dirname}`);
+    console.log(`Python portable path: ${portablePythonPath}`);
+    console.log(`Python portable existe: ${fs.existsSync(portablePythonPath)}`);
+    console.log(`Marker existe: ${fs.existsSync(packagesInstalledMarker)}`);
 
     try {
         // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
@@ -1656,7 +1664,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             : path.join(venvPath, "bin", "python");
 
         // Encontrar Python base instalado DEL SISTEMA (portable no tiene venv)
-        const basePython = findPythonExecutable(backendPath, true); // true = isDevelopment
+        const basePython = findPythonExecutable(backendPath, isDevelopment);
         notifyInstallationProgress('venv-check', 'Configurando entorno de desarrollo...', 25);
 
         // Verificar si el venv existe y está corrupto

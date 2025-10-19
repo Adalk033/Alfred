@@ -6,7 +6,6 @@
 # ============================================
 
 param(
-    [switch]$SkipPreInstall = $false,  # SOLO para desarrollo rapido - NO recomendado para builds de produccion
     [switch]$Force = $false,            # Omite confirmacion inicial
     [switch]$SkipValidation = $false    # Omite validacion de estructura
 )
@@ -22,7 +21,7 @@ if (-not $Force) {
     Write-Host "Este script realizara:" -ForegroundColor Yellow
     Write-Host "  1. Limpieza de archivos temporales" -ForegroundColor White
     Write-Host "  2. Validacion de estructura" -ForegroundColor White
-    Write-Host "  3. Pre-instalacion opcional en Python portable" -ForegroundColor White
+    Write-Host "  3. Verificacion de Python portable" -ForegroundColor White
     Write-Host "  4. Instalacion de dependencias npm" -ForegroundColor White
     Write-Host "  5. Build con Electron Builder" -ForegroundColor White
     Write-Host ""
@@ -161,72 +160,67 @@ if (-not $SkipValidation) {
 }
 
 # ============================================
-# FASE 3: Pre-instalacion en Python Portable (Opcional)
+# FASE 3: Instalacion de Paquetes Python Portable
 # ============================================
-$markerFile = Join-Path $PSScriptRoot "backend\python-portable\.packages_installed"
-
-# ============================================
-# FASE 3: Pre-instalacion en Python Portable (OBLIGATORIA)
-# ============================================
-$markerFile = Join-Path $PSScriptRoot "backend\python-portable\.packages_installed"
-
 Write-Host "`n╔══════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-Write-Host "║  FASE 3: Pre-instalacion en Python Portable         ║" -ForegroundColor Yellow
+Write-Host "║  FASE 3: Instalacion de Paquetes Python Portable    ║" -ForegroundColor Yellow
 Write-Host "╚══════════════════════════════════════════════════════╝`n" -ForegroundColor Yellow
 
-if (-not $SkipPreInstall -and -not (Test-Path $markerFile)) {
-    Write-Host "⚙️  INSTALACION OBLIGATORIA DE PAQUETES" -ForegroundColor Cyan
+$pythonPortablePath = Join-Path $PSScriptRoot "backend\python-portable\python.exe"
+$markerFile = Join-Path $PSScriptRoot "backend\python-portable\.packages_installed"
+
+# Verificar que existe Python portable
+if (-not (Test-Path $pythonPortablePath)) {
+    Write-Host "❌ ERROR: Python portable no encontrado" -ForegroundColor Red
+    Write-Host "   Ruta esperada: $pythonPortablePath" -ForegroundColor Gray
+    Write-Host "   Descarga Python 3.12.x portable y descomprime en backend/python-portable/" -ForegroundColor Yellow
+    pause
+    exit 1
+}
+
+Write-Host "✅ Python portable encontrado" -ForegroundColor Green
+Write-Host ""
+
+# Verificar si necesita instalar paquetes
+if (-not (Test-Path $markerFile)) {
+    Write-Host "⚙️  INSTALACION DE PAQUETES REQUERIDA" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "   Estrategia:" -ForegroundColor White
-    Write-Host "   - 167 paquetes base (NO GPU-dependientes)" -ForegroundColor Gray
-    Write-Host "   - PyTorch se instalara en 1ra ejecucion segun GPU del usuario" -ForegroundColor Gray
-    Write-Host "   - Tiempo estimado: 5-10 minutos" -ForegroundColor Gray
+    Write-Host "   ℹ️  ESTRATEGIA:" -ForegroundColor Cyan
+    Write-Host "   ✓ Git ignora: site-packages/ y Scripts/ (no se commitean)" -ForegroundColor Yellow
+    Write-Host "   ✓ Build empaqueta: Python base + todos los paquetes instalados" -ForegroundColor Green
+    Write-Host "   ✓ Usuario recibe: App completa lista para usar (~500 MB)" -ForegroundColor Green
     Write-Host ""
-    Write-Host "   Beneficios:" -ForegroundColor White
-    Write-Host "   • Instalador: ~400-500 MB (vs ~50 MB sin paquetes)" -ForegroundColor Gray
-    Write-Host "   • Primera instalacion usuario: ~3 min (vs 15-20 min)" -ForegroundColor Green
-    Write-Host "   • PyTorch optimizado segun hardware (CUDA/ROCm/CPU)" -ForegroundColor Green
+    Write-Host "   Instalando 167 paquetes (~414 MB)..." -ForegroundColor White
+    Write-Host "   Tiempo estimado: 10-15 minutos" -ForegroundColor Gray
     Write-Host ""
     
-    if (Test-Path ".\create-venv-base.ps1") {
-        Write-Host "🔨 Instalando dependencias..." -ForegroundColor Cyan
-        
-        & ".\create-venv-base.ps1"
+    if (Test-Path ".\install-python-packages.ps1") {
+        & ".\install-python-packages.ps1"
         
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "`n❌ ERROR CRITICO: No se pudieron instalar las dependencias" -ForegroundColor Red
-            Write-Host "   El build no puede continuar sin los paquetes Python." -ForegroundColor Yellow
+            Write-Host "`n❌ ERROR: Fallo la instalacion de paquetes Python" -ForegroundColor Red
             pause
             exit 1
-        } else {
-            Write-Host "`n✅ Dependencias pre-instaladas exitosamente" -ForegroundColor Green
         }
     } else {
-        Write-Host "`n❌ ERROR CRITICO: create-venv-base.ps1 no encontrado" -ForegroundColor Red
+        Write-Host "❌ ERROR: install-python-packages.ps1 no encontrado" -ForegroundColor Red
         pause
         exit 1
     }
-} elseif (Test-Path $markerFile) {
-    Write-Host "`n✅ Python portable tiene dependencias pre-instaladas" -ForegroundColor Green
+} else {
+    Write-Host "✅ Paquetes Python ya instalados" -ForegroundColor Green
     
-    $markerContent = Get-Content $markerFile -Raw
-    $packagesMatch = $markerContent -match "Paquetes instalados: (\d+)"
-    $packagesCount = if ($packagesMatch) { $Matches[1] } else { "?" }
+    $markerContent = Get-Content $markerFile -Raw -ErrorAction SilentlyContinue
+    if ($markerContent) {
+        Write-Host ""
+        Write-Host $markerContent -ForegroundColor Gray
+    }
     
-    $sizeMatch = $markerContent -match "Tamano total: ([\d.]+) MB"
-    $pythonSize = if ($sizeMatch) { $Matches[1] } else { "?" }
-    
-    Write-Host "   Paquetes: $packagesCount" -ForegroundColor Gray
-    Write-Host "   Tamano: $pythonSize MB" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "   ℹ️  ESTRATEGIA GPU-AWARE:" -ForegroundColor Cyan
-    Write-Host "   ✓ Pre-instalados: 167 paquetes NO GPU-dependientes (414 MB)" -ForegroundColor Green
-    Write-Host "   ✓ Dinamicos: PyTorch, scipy, grpcio (instalan en 1ra ejecucion)" -ForegroundColor Yellow
-    Write-Host "   ✓ Usuario obtiene version correcta segun SU hardware" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "   ℹ️  MODOS DE EJECUCION:" -ForegroundColor Cyan
-    Write-Host "   • Desarrollo (npm start): Usa Python SISTEMA + venv tradicional" -ForegroundColor White
-    Write-Host "   • Produccion (app.exe): Usa Python portable pre-instalado" -ForegroundColor White
+    Write-Host "   ℹ️  ESTRATEGIA BUILD:" -ForegroundColor Cyan
+    Write-Host "   ✓ Git ignora: site-packages/ (no crece el repositorio)" -ForegroundColor Yellow
+    Write-Host "   ✓ Build empaqueta: Todos los paquetes instalados" -ForegroundColor Green
+    Write-Host "   ✓ Usuario recibe: App lista, sin instalaciones adicionales" -ForegroundColor Green
 }
 
 # ============================================
@@ -259,16 +253,8 @@ Write-Host "╚═════════════════════�
 
 Write-Host "🔨 Empaquetando aplicacion..." -ForegroundColor Cyan
 Write-Host ""
-
-# Determinar tiempo estimado basado en pre-instalacion
-if (Test-Path $markerFile) {
-    Write-Host "   Tiempo estimado: 10-15 minutos (con 167 paquetes pre-instalados)" -ForegroundColor Gray
-    Write-Host "   Tamano final: ~400-500 MB (incluye Python portable optimizado)" -ForegroundColor Gray
-} else {
-    Write-Host "   Tiempo estimado: 5-10 minutos (instalador ligero)" -ForegroundColor Gray
-    Write-Host "   Tamano final: ~50 MB (sin dependencias pre-instaladas)" -ForegroundColor Gray
-}
-
+Write-Host "   Tiempo estimado: 10-15 minutos" -ForegroundColor Gray
+Write-Host "   Tamano final: ~500 MB (Python + 167 paquetes pre-instalados)" -ForegroundColor Gray
 Write-Host "   Por favor espera..." -ForegroundColor Gray
 Write-Host ""
 
@@ -307,23 +293,11 @@ if ($setupExe) {
     Write-Host "   Ruta:     $($setupExe.FullName)" -ForegroundColor Gray
     Write-Host ""
     
-    # Determinar tipo de build basado en pre-instalacion
-    if (Test-Path $markerFile) {
-        $markerContent = Get-Content $markerFile -Raw
-        $packagesMatch = $markerContent -match "Paquetes instalados: (\d+)"
-        $packagesCount = if ($packagesMatch) { $Matches[1] } else { "?" }
-        
-        Write-Host "🚀 Build OPTIMIZADO (con pre-instalacion)" -ForegroundColor Green
-        Write-Host "   - Paquetes pre-instalados: $packagesCount (414 MB)" -ForegroundColor White
-        Write-Host "   - Primera instalacion usuario: ~3 min (solo PyTorch)" -ForegroundColor White
-        Write-Host "   - PyTorch: Se instala segun GPU detectada (CUDA/ROCm/CPU)" -ForegroundColor Green
-        Write-Host "   - Requiere internet: Solo para PyTorch en 1ra ejecucion" -ForegroundColor White
-    } else {
-        Write-Host "⚡ Build BASICO (sin pre-instalacion)" -ForegroundColor Yellow
-        Write-Host "   - Primera instalacion usuario: 15-20 min (todas las deps)" -ForegroundColor White
-        Write-Host "   - Requiere internet para todas las dependencias" -ForegroundColor White
-    }
-    
+    Write-Host "🚀 Build COMPLETO con dependencias pre-instaladas" -ForegroundColor Green
+    Write-Host "   - Python base: ~25 MB" -ForegroundColor White
+    Write-Host "   - Paquetes incluidos: 167 (~414 MB)" -ForegroundColor Green
+    Write-Host "   - Usuario final: App lista para usar, SIN instalaciones adicionales" -ForegroundColor Green
+    Write-Host "   - Repositorio Git: Solo Python base (paquetes ignorados)" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-Host "║           BUILD COMPLETADO EXITOSAMENTE              ║" -ForegroundColor Green
