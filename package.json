@@ -54,7 +54,8 @@
           "!%AppData%/**/*",
           "!**/__pycache__/**/*",
           "!**/*.pyc",
-          "!python-portable/get-pip.py"
+          "!**/*.pyo",
+          "!.env"
         ]
       }
     ],
