@@ -42,15 +42,15 @@ window.alfredAPI.onBackendReady(() => {
 function updateLoadingUI(stage, message, progress) {
     const statusText = document.getElementById('loadingStatusText');
     const progressBar = document.getElementById('loadingProgressBar');
-    
+
     if (statusText) {
         statusText.textContent = message || 'Iniciando Alfred...';
     }
-    
+
     if (progressBar && typeof progress === 'number') {
         progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
     }
-    
+
     console.log(`[INSTALLATION] ${stage}: ${message} (${progress}%)`);
 }
 
@@ -59,7 +59,7 @@ function hideLoadingOverlay() {
     const overlay = document.getElementById('backendLoadingOverlay');
     if (overlay) {
         overlay.classList.add('hidden');
-        
+
         // Eliminar del DOM después de la animación
         setTimeout(() => {
             if (overlay.parentNode) {
@@ -67,7 +67,7 @@ function hideLoadingOverlay() {
             }
         }, 500);
     }
-    
+
     // Habilitar input
     if (State.messageInput) {
         State.messageInput.disabled = false;
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar modo desde BD antes de continuar
     await loadMode();
-    
+
     // Cargar modelos disponibles en el selector del topbar
     await loadModelsIntoSelector();
 
@@ -439,8 +439,8 @@ function setupEventListeners() {
 // El loader se mantiene visible hasta que main.js envíe 'backend-ready'
 async function waitForBackendReady() {
     const API_BASE_URL = 'http://127.0.0.1:8000';
-    const MAX_RETRIES = 60; // 2 minutos maximo (60 * 2 segundos)
-    const RETRY_INTERVAL = 2000; // 2 segundos
+    const MAX_RETRIES = 5500; // 5500 intentos = 120 minutos
+    const RETRY_INTERVAL = 1300; // 1.3 segundos
 
     // Referencias al overlay (NO lo ocultaremos aquí)
     const overlay = document.getElementById('backendLoadingOverlay');
@@ -579,11 +579,11 @@ async function handleFileAttach(event) {
     // Sistema de advertencias progresivas
     const fileSize = file.size;
     const sizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-    
+
     // 0-10MB: Sin advertencia
     // 10-50MB: Advertencia moderada
     // 50MB+: Advertencia fuerte
-    
+
     if (fileSize > 50 * 1024 * 1024) {
         // Más de 50MB
         const confirmed = await showConfirm(
@@ -617,7 +617,7 @@ async function handleFileAttach(event) {
         // Leer el contenido del archivo
         showNotification('info', `Leyendo archivo: ${file.name} (${sizeMB} MB)...`);
         const content = await readFileContent(file);
-        
+
         // Guardar archivo adjunto
         attachedFile = {
             name: file.name,
@@ -628,7 +628,7 @@ async function handleFileAttach(event) {
 
         // Mostrar indicador
         showAttachedFileIndicator(file.name, file.size);
-        
+
         if (fileSize > 10 * 1024 * 1024) {
             showNotification('success', `Archivo adjunto: ${file.name} (${sizeMB} MB) - Puede tardar en procesarse`);
         } else {
@@ -647,19 +647,19 @@ async function handleFileAttach(event) {
 function readFileContent(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        
+
         reader.onload = (e) => {
             resolve(e.target.result);
         };
-        
+
         reader.onerror = (e) => {
             reject(new Error('Error al leer el archivo'));
         };
-        
+
         // Formatos binarios que requieren base64
         const binaryFormats = ['.pdf', '.docx', '.xlsx', '.pptx'];
         const isBinary = binaryFormats.some(ext => file.name.toLowerCase().endsWith(ext));
-        
+
         if (isBinary) {
             // Archivos binarios (PDF, Word, Excel, PowerPoint) como base64
             reader.readAsDataURL(file);
@@ -677,7 +677,7 @@ function showAttachedFileIndicator(fileName, fileSize) {
     const indicator = document.getElementById('attachedFileIndicator');
     const fileNameEl = document.getElementById('attachedFileName');
     const fileSizeEl = document.getElementById('attachedFileSize');
-    
+
     fileNameEl.textContent = fileName;
     fileSizeEl.textContent = formatFileSize(fileSize);
     indicator.style.display = 'flex';
@@ -690,13 +690,13 @@ function removeAttachedFile() {
     attachedFile = null;
     const indicator = document.getElementById('attachedFileIndicator');
     indicator.style.display = 'none';
-    
+
     // Limpiar input de archivo
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
         fileInput.value = '';
     }
-    
+
     showNotification('info', 'Archivo removido');
 }
 
@@ -705,11 +705,11 @@ function removeAttachedFile() {
  */
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
-    
+
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
@@ -749,7 +749,7 @@ async function sendMessage() {
     try {
         // Enviar consulta a Alfred con el modo de busqueda seleccionado y el ID de conversacion
         const searchDocuments = State.searchMode === 'documents';
-        
+
         // Preparar datos con archivo adjunto si existe
         const queryData = {
             message,
@@ -760,7 +760,7 @@ async function sendMessage() {
                 content: attachedFile.content
             } : null
         };
-        
+
         console.log('📤 Enviando consulta:', queryData);
 
         const result = await window.alfredAPI.sendQueryWithAttachment(queryData);
@@ -1380,17 +1380,17 @@ async function completeWelcomeSetup() {
 
         if (data.success) {
             console.log('✅ Configuracion de bienvenida completada');
-            
+
             // Actualizar estado local si hay foto de perfil
             if (welcomeProfilePictureData) {
                 State.updateSettings({ profilePicture: welcomeProfilePictureData });
                 localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
             }
-            
+
             // Recargar configuraciones para mostrar los datos nuevos
             if (userName || userAge || welcomeProfilePictureData) {
                 showNotification('success', 'Perfil configurado correctamente');
-                
+
                 // Recargar datos en la UI
                 setTimeout(() => {
                     loadSettings();
@@ -1469,10 +1469,10 @@ async function setupEncryptionFirstTime(enableEncryption) {
                 // IMPORTANTE: Guardar la clave en la variable global
                 actualEncryptionKey = data.key;
                 console.log('✅ Clave guardada en memoria:', actualEncryptionKey.substring(0, 20) + '...');
-                
+
                 // Mostrar notificacion con la clave
                 showNotification('success', 'Cifrado habilitado correctamente');
-                
+
                 // Mostrar alerta con la clave
                 setTimeout(async () => {
                     await showAlert(
@@ -1528,7 +1528,7 @@ async function loadEncryptionStatus() {
                     statusText.textContent = 'Cifrado habilitado';
                     encryptionToggle.checked = true;
                     keyGroup.style.display = 'block';
-                    
+
                     // Cargar la clave
                     await loadEncryptionKey();
                 } else {
@@ -1554,7 +1554,7 @@ async function loadEncryptionKey() {
     try {
         console.log('🔑 Intentando cargar clave de cifrado...');
         const response = await fetch('http://localhost:8000/settings/encryption/key');
-        
+
         if (!response.ok) {
             console.error('❌ Error HTTP:', response.status, response.statusText);
             const errorText = await response.text();
@@ -1571,7 +1571,7 @@ async function loadEncryptionKey() {
             console.log('✅ Clave de cifrado cargada correctamente');
             console.log('📏 Longitud de la clave:', actualEncryptionKey.length);
             console.log('🔍 Primeros 20 caracteres:', actualEncryptionKey.substring(0, 20) + '...');
-            
+
             // Mostrar puntos por defecto
             const keyField = document.getElementById('encryptionKeyField');
             if (keyField) {
@@ -1666,12 +1666,12 @@ async function enableEncryption() {
 
         if (data.success) {
             showNotification('success', 'Cifrado habilitado correctamente');
-            
+
             // Mostrar la clave al usuario
             if (data.key) {
                 actualEncryptionKey = data.key;
                 await loadEncryptionStatus();
-                
+
                 // Notificacion adicional con advertencia
                 setTimeout(() => {
                     showNotification('warning', 'Guarda tu clave de cifrado en un lugar seguro');
@@ -1693,7 +1693,7 @@ async function disableEncryption() {
         'Estas seguro?',
         { type: 'warning', confirmText: 'Si, deshabilitar', cancelText: 'Cancelar' }
     );
-    
+
     if (!confirmed) return;
 
     try {
@@ -1719,18 +1719,18 @@ async function disableEncryption() {
 
 // Toggle cifrado (despues de primera configuracion)
 async function toggleEncryptionStatus(enabled) {
-    const message = enabled 
+    const message = enabled
         ? 'Los nuevos datos se cifraran.'
         : 'Los nuevos datos NO se cifraran.';
-    
+
     const title = enabled ? 'Habilitar cifrado?' : 'Deshabilitar cifrado?';
-    
+
     const confirmed = await showConfirm(
         message,
         title,
         { type: 'warning', confirmText: 'Confirmar', cancelText: 'Cancelar' }
     );
-    
+
     if (!confirmed) {
         // Revertir el toggle
         document.getElementById('encryptionToggle').checked = !enabled;
@@ -2045,10 +2045,10 @@ function startDownloadPolling(modelName) {
                         setTimeout(async () => {
                             // Recargar lista de modelos en la seccion de configuracion
                             loadOllamaModels();
-                            
+
                             // Actualizar selector del topbar
                             await loadModelsIntoSelector();
-                            
+
                             showNotification(`Modelo ${modelName} descargado exitosamente`, 'success');
 
                             // Ocultar el item de progreso después de 3 segundos más
@@ -2140,7 +2140,7 @@ async function selectModel(modelName) {
             if (modelSelect) {
                 modelSelect.value = modelName;
             }
-            
+
             // Actualizar el modelo actual en el sistema
             await loadCurrentModel();
         } else {
@@ -2159,7 +2159,7 @@ async function deleteModel(modelName) {
         `Eliminar modelo ${modelName}?`,
         { type: 'danger', confirmText: 'Eliminar', cancelText: 'Cancelar' }
     );
-    
+
     if (!confirmed) {
         return;
     }
@@ -2173,10 +2173,10 @@ async function deleteModel(modelName) {
 
         if (response.ok) {
             showNotification(`Modelo ${modelName} eliminado`, 'success');
-            
+
             // Recargar lista de modelos en la seccion de configuracion
             loadOllamaModels();
-            
+
             // Actualizar selector del topbar
             await loadModelsIntoSelector();
         } else {
@@ -2647,8 +2647,8 @@ async function savePersonalization() {
         const userOccupation = document.getElementById('userOccupation')?.value.trim();
         const aboutUser = document.getElementById('aboutUser')?.value.trim();
 
-        console.log('💾 Guardando personalizacion...', { 
-            assistantName, customInstructions, userOccupation, aboutUser 
+        console.log('💾 Guardando personalizacion...', {
+            assistantName, customInstructions, userOccupation, aboutUser
         });
 
         // Guardar nombre del asistente
@@ -2708,10 +2708,10 @@ async function deleteProfilePicture(index) {
             }
 
             State.updateSettings({ profilePicture: null });
-            
+
             // Guardar en localStorage
             localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
-            
+
             currentProfilePicture.innerHTML = '<span class="default-avatar">👤</span>';
         }
 
@@ -3138,7 +3138,7 @@ async function removeDocPath(pathId) {
         'Eliminar esta ruta de documentos?',
         { type: 'danger', confirmText: 'Eliminar', cancelText: 'Cancelar' }
     );
-    
+
     if (!confirmed) return;
 
     try {

@@ -32,6 +32,23 @@ try {
 
 Write-Host ""
 
+# Verificar Python portable
+Write-Host "🔍 Verificando Python portable..." -ForegroundColor Yellow
+$pythonPortablePath = Join-Path $PSScriptRoot "backend\python-portable\python.exe"
+if (Test-Path $pythonPortablePath) {
+    try {
+        $pythonVersion = & $pythonPortablePath --version 2>&1
+        Write-Host "✅ Python portable $pythonVersion" -ForegroundColor Green
+    } catch {
+        Write-Host "⚠️  Python portable encontrado pero no funciona correctamente" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "⚠️  Python portable no encontrado en backend/python-portable/" -ForegroundColor Yellow
+    Write-Host "   La aplicación intentará verificarlo al iniciar" -ForegroundColor Gray
+}
+
+Write-Host ""
+
 # Verificar si node_modules existe
 if (-not (Test-Path "node_modules")) {
     Write-Host "📦 Instalando dependencias..." -ForegroundColor Yellow

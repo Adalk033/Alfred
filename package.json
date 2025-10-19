@@ -34,6 +34,30 @@
       "buildResources": "assets",
       "output": "dist"
     },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "assets/**",
+      "fonts/**",
+      ".env.template"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!venv/**/*",
+          "!chroma_db/**/*",
+          "!temp/**/*",
+          "!%AppData%/**/*",
+          "!**/__pycache__/**/*",
+          "!**/*.pyc",
+          "!python-portable/get-pip.py"
+        ]
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
@@ -57,17 +81,7 @@
       "useZip": false,
       "unicode": true,
       "warningsAsErrors": false
-    },
-    "files": [
-      "main.js",
-      "preload.js",
-      "renderer/**",
-      "styles.css",
-      "assets/**",
-      "backend/**",
-      "fonts/**",
-      ".env.template"
-    ]
+    }
   },
   "packageManager": "yarn@4.10.3"
 }

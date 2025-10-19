@@ -273,7 +273,7 @@ async function ensurePython() {
 
         // Intentar encontrar Python usando findPythonExecutable
         try {
-            findPythonExecutable();
+            findPythonExecutable(null); // Sin backendPath - busca en PATH sistema
             // Eliminar marca ya que Python está disponible
             try {
                 fs.unlinkSync(pythonInstalledMarker);
@@ -419,7 +419,7 @@ async function downloadAndInstallPythonWindows() {
 
         // Intentar encontrar Python inmediatamente
         try {
-            findPythonExecutable();
+            findPythonExecutable(null); // Sin backendPath - busca en PATH sistema
             return true; // Python encontrado, continuar sin reiniciar
         } catch (findError) {
             // Python no está disponible aún, necesita reinicio
@@ -876,11 +876,31 @@ async function ensureOllamaModels() {
 }
 
 // Encontrar la ruta completa de Python instalado
-function findPythonExecutable() {
-    // Primero intentar con el comando directo (si PATH está actualizado)
+function findPythonExecutable(backendPath = null, isDevelopment = false) {
+    // MODO DESARROLLO: SOLO usar Python del sistema (portable no tiene venv)
+    if (isDevelopment) {
+        try {
+            execSync('python --version', { stdio: 'pipe' });
+            console.log('Python del SISTEMA encontrado para desarrollo');
+            return 'python';
+        } catch {
+            throw new Error('Python del sistema no encontrado. En modo desarrollo se requiere Python instalado con venv.');
+        }
+    }
+
+    // MODO PRODUCCION: Python portable incluido con la app
+    if (backendPath) {
+        const portablePython = path.join(backendPath, 'python-portable', 'python.exe');
+        if (fs.existsSync(portablePython)) {
+            console.log('Python portable encontrado en:', portablePython);
+            return portablePython;
+        }
+    }
+
+    // Fallback: Python del sistema
     try {
         execSync('python --version', { stdio: 'pipe' });
-        console.log('Python encontrado en PATH');
+        console.log('Python encontrado en PATH del sistema');
         return 'python';
     } catch {
         throw new Error('No se pudo encontrar Python instalado');
@@ -1578,18 +1598,66 @@ async function killPythonProcesses() {
 async function ensurePythonEnv(backendPath, retryCount = 0) {
     const venvPath = path.join(backendPath, "venv");
     const requirementsPath = path.join(backendPath, "requirements.txt");
+    const portablePythonPath = path.join(backendPath, "python-portable", "python.exe");
+    const packagesInstalledMarker = path.join(backendPath, "python-portable", ".packages_installed");
     const MAX_RETRIES = 2;
 
-    // Detectar rutas del binario Python
-    //En este punto ya estamos usando el venv
-    const pythonCmd = process.platform === "win32"
-        ? path.join(venvPath, "Scripts", "python.exe")
-        : path.join(venvPath, "bin", "python");
+    // Detectar modo desarrollo: app NO empaquetada O existe carpeta node_modules en raiz
+    const isDevelopment = !app.isPackaged || fs.existsSync(path.join(__dirname, 'node_modules'));
+    
+    console.log(`Modo: ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'}`);
+    console.log(`App empaquetada: ${app.isPackaged}`);
 
     try {
-        // Encontrar Python base instalado
-        const basePython = findPythonExecutable();
-        notifyInstallationProgress('venv-check', 'Configurando entorno de Python...', 25);
+        // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
+        if (!isDevelopment) {
+            // Si existe python-portable/ con marker .packages_installed, usar directamente
+            if (fs.existsSync(portablePythonPath) && fs.existsSync(packagesInstalledMarker)) {
+                console.log('╔════════════════════════════════════════════════════════╗');
+                console.log('║  Python portable detectado con paquetes pre-instalados ║');
+                console.log('╚════════════════════════════════════════════════════════╝');
+                
+                const markerContent = fs.readFileSync(packagesInstalledMarker, 'utf8');
+                console.log('Marker:', markerContent);
+                
+                notifyInstallationProgress('portable-ready', 'Usando Python portable optimizado...', 45);
+                
+                // Verificar que funciona
+                try {
+                    const version = execSync(`"${portablePythonPath}" --version`, {
+                        encoding: 'utf8',
+                        stdio: 'pipe'
+                    });
+                    console.log('Python portable version:', version.trim());
+                } catch (error) {
+                    throw new Error(`Python portable no funciona: ${error.message}`);
+                }
+
+                // NO CREAR VENV - usar Python portable directamente
+                console.log('Saltando creacion de venv - usando Python portable con dependencias incluidas');
+                console.log(`Usando Python en: ${portablePythonPath}`);
+                
+                notifyInstallationProgress('deps-ready', 'Entorno Python listo (portable)', 48);
+                return portablePythonPath;
+            } else {
+                // Fallback: Si no hay Python portable en produccion, error critico
+                throw new Error('Python portable no encontrado en modo produccion. Build incompleto.');
+            }
+        }
+
+        // --- MODO DESARROLLO: Crear venv tradicional ---
+        console.log('╔══════════════════════════════════════════════════════════╗');
+        console.log('║  MODO DESARROLLO: Usando venv tradicional                ║');
+        console.log('╚══════════════════════════════════════════════════════════╝');
+
+        // Detectar rutas del binario Python para venv
+        const pythonCmd = process.platform === "win32"
+            ? path.join(venvPath, "Scripts", "python.exe")
+            : path.join(venvPath, "bin", "python");
+
+        // Encontrar Python base instalado DEL SISTEMA (portable no tiene venv)
+        const basePython = findPythonExecutable(backendPath, true); // true = isDevelopment
+        notifyInstallationProgress('venv-check', 'Configurando entorno de desarrollo...', 25);
 
         // Verificar si el venv existe y está corrupto
         if (fs.existsSync(venvPath)) {
