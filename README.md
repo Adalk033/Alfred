@@ -1,310 +1,605 @@
-# 🤖 Alfred - Asistente Personal Inteligente
+# Alfred - Asistente Personal con IA Local# Alfred - Asistente Personal con IA Local
 
-**Alfred** es un asistente personal 100% local y privado con capacidades de Recuperación Aumentada de Generación (RAG). Toda la inteligencia artificial se ejecuta en tu dispositivo - sin enviar datos a la nube.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
-![Electron](https://img.shields.io/badge/Electron-v38.2.2-blue)
-![Python](https://img.shields.io/badge/Python-3.8+-green)
-![Node.js](https://img.shields.io/badge/Node.js-22.20.0+-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
 
----
+**Alfred** es un asistente de escritorio con inteligencia artificial que procesa tus documentos personales usando RAG (Retrieval-Augmented Generation). Toda la IA se ejecuta localmente en tu dispositivo - sin enviar datos a servicios externos.**Alfred** es un asistente de escritorio con inteligencia artificial que procesa tus documentos personales usando RAG (Retrieval-Augmented Generation). Toda la IA se ejecuta localmente en tu dispositivo - sin enviar datos a servicios externos.
 
-## 🌟 Características Principales
 
-### 🔒 **100% Local y Privado**
-- ✅ Todos los datos permanecen en tu dispositivo
-- ✅ Sin envío de información a servidores externos
-- ✅ Encriptación AES-256-GCM para datos sensibles
-- ✅ Control total sobre tus documentos personales
 
-### 🧠 **Inteligencia Artificial Avanzada**
-- ✅ RAG (Retrieval-Augmented Generation) con ChromaDB
-- ✅ Modelos LLM locales vía Ollama (gemma2:9b)
-- ✅ Embeddings semánticos (nomic-embed-text:v1.5)
-- ✅ Búsqueda inteligente en tus documentos
-- ✅ Historial con búsqueda optimizada
+![Version](https://img.shields.io/badge/version-0.0.1-blue)![Version](https://img.shields.io/badge/version-0.0.1-blue)
 
-### 🎨 **Interfaz Moderna y Elegante**
-- ✅ Aplicación de escritorio con Electron
-- ✅ Chat en tiempo real con efecto de escritura
-- ✅ Renderizado de Markdown con tablas
-- ✅ Temas visuales personalizables
-- ✅ Notificaciones visuales inteligentes
+![Electron](https://img.shields.io/badge/Electron-38.2.2-blue)![Electron](https://img.shields.io/badge/Electron-38.2.2-blue)
 
-### 🚀 **Instalacion Automatica Completa**
-- ✅ Deteccion y instalacion automatica de Python 3.10+
-- ✅ Descarga e instalacion de Ollama en primer arranque
-- ✅ Descarga automatica de modelos de IA (gemma2:9b + embeddings)
-- ✅ Configuracion de entorno virtual Python
-- ✅ Instalacion de dependencias desde requirements.txt
-- ✅ Funciona en VM limpia sin configuracion previa
-- ✅ Notificaciones de progreso en tiempo real
+![Python](https://img.shields.io/badge/Python-3.12+-green)![Python](https://img.shields.io/badge/Python-3.12+-green)
 
-### 🎮 **Aceleración por GPU**
-- ✅ Soporte NVIDIA CUDA
-- ✅ Soporte AMD ROCm
-- ✅ Soporte Apple Silicon (MPS)
-- ✅ Fallback automático a CPU
-- ✅ Detección y configuración automática
+![Node.js](https://img.shields.io/badge/Node.js-22.20.0+-green)![Node.js](https://img.shields.io/badge/Node.js-22.20.0+-green)
 
-### 🖥️ **Multiplataforma**
-- ✅ Windows 10/11
-- ✅ Linux (Ubuntu, Debian, Fedora, Arch)
-- ✅ macOS (Intel y Apple Silicon)
-- ✅ Compatible con máquinas virtuales
-- ✅ Compatible con WSL2
+![License](https://img.shields.io/badge/License-MIT-yellow)![License](https://img.shields.io/badge/License-MIT-yellow)
 
----
 
-## � Requisitos del Sistema
 
-### Software Obligatorio
+## Características## Características
 
-| Software | Versión Mínima | Descargar |
-|----------|----------------|-----------|
-| **Python** | 3.8+ | [python.org](https://www.python.org/downloads/) |
-| **Node.js** | 22.20.0+ | [nodejs.org](https://nodejs.org/) |
-| **Ollama** | Última | [ollama.ai](https://ollama.ai/) |
 
-### Hardware Recomendado
 
-| Componente | Mínimo | Recomendado |
-|------------|--------|-------------|
-| **RAM** | 8 GB | 16 GB+ |
-| **CPU** | 4 núcleos | 8 núcleos+ |
-| **Almacenamiento** | 50 GB libres | 100 GB+ SSD |
-| **GPU** | Ninguna (usa CPU) | NVIDIA/AMD/Apple Silicon |
+### Inteligencia Artificial Local### Inteligencia Artificial Local
 
-### Modelos de IA Requeridos
+- **RAG (Retrieval-Augmented Generation)** con ChromaDB para búsqueda vectorial- **RAG (Retrieval-Augmented Generation)** con ChromaDB para búsqueda vectorial
 
-```bash
-ollama pull gemma2:9b
-ollama pull nomic-embed-text:v1.5
-```
+- **LLM Local**: Ollama con `gemma3n:e4b` para generación de respuestas- **LLM Local**: Ollama con `gemma3n:e4b` para generación de respuestas
 
----
+- **Embeddings**: `nomic-embed-text:v1.5` para búsqueda semántica- **Embeddings**: `nomic-embed-text:v1.5` para búsqueda semántica
 
-## 🚀 Instalación Rápida (5 Minutos)
+- **Historial inteligente** con búsqueda por similitud y cache de respuestas- **Historial inteligente** con búsqueda por similitud y cache de respuestas
 
-### Método 1: Script Universal (Recomendado) ⭐
+- **Aceleración GPU**: Soporte automático para NVIDIA CUDA, AMD ROCm y Apple Silicon MPS- **Aceleración GPU**: Soporte automático para NVIDIA CUDA, AMD ROCm y Apple Silicon MPS
 
-El script `stP` (start Project) hace **todo automáticamente**:
 
-#### Windows
 
-```powershell
-# Clonar repositorio
-git clone https://github.com/Adalk033/AlfredElectron.git
-cd AlfredElectron
+### Privacidad y Seguridad### Privacidad y Seguridad
 
-# Ejecutar instalador universal
-.\stP.ps1
-```
+- **100% local**: Sin conexiones a APIs externas ni envío de datos- **100% local**: Sin conexiones a APIs externas ni envío de datos
 
-#### Linux/macOS
+- **Encriptación AES-256-GCM** para datos sensibles en base de datos SQLite- **Encriptación AES-256-GCM** para datos sensibles en base de datos SQLite
 
-```bash
-# Clonar repositorio
-git clone https://github.com/Adalk033/AlfredElectron.git
-cd AlfredElectron
+- **Gestión segura** de claves y datos personales- **Gestión segura** de claves y datos personales
 
-# Dar permisos y ejecutar
-chmod +x stP.sh
-./stP.sh
-```
 
-**El script automáticamente:**
-1. ✅ Verifica Python, Node.js y Ollama
-2. ✅ Crea entorno virtual de Python
-3. ✅ Instala todas las dependencias (Python + Node.js)
-4. ✅ Descarga modelos de IA si faltan
-5. ✅ Detecta tu GPU (NVIDIA/AMD/Apple Silicon)
-6. ✅ Configura archivo `.env` interactivamente
-7. ✅ Inicia el backend y frontend
 
-**¡Listo para usar en 5-10 minutos!** ☕
+### Interfaz de Usuario### Interfaz de Usuario
 
-### Método 2: Instalación Manual
+- **Electron Desktop App** con interfaz moderna y responsive- **Electron Desktop App** con interfaz moderna y responsive
 
-<details>
-<summary>Click para ver pasos detallados</summary>
+- **Chat con typewriter effect** y renderizado completo de Markdown- **Chat con typewriter effect** y renderizado completo de Markdown
 
-#### 1. Instalar Software Base
+- **Soporte para tablas** con estilos profesionales y formato automático- **Soporte para tablas** con estilos profesionales y formato automático
 
-```bash
-# Verificar Python
-python --version  # Debe ser 3.8+
+- **Sistema de notificaciones** visuales y estado en tiempo real- **Sistema de notificaciones** visuales y estado en tiempo real
 
-# Verificar Node.js
-node --version    # Debe ser 22.20.0+
+- **Gestión de conversaciones** con historial persistente- **Gestión de conversaciones** con historial persistente
 
-# Verificar Ollama
-ollama version
-```
 
-#### 2. Clonar y Configurar
 
-```bash
-git clone https://github.com/Adalk033/AlfredElectron.git
-cd AlfredElectron
+### Arquitectura### Arquitectura
 
-# Copiar plantilla de configuración
-cp .env.template .env
-```
+- **Backend FastAPI** (Python) con API REST documentada- **Backend FastAPI** (Python) con API REST documentada
 
-#### 3. Editar `.env`
+- **Frontend Electron** con gestión automática del ciclo de vida del backend- **Frontend Electron** con gestión automática del ciclo de vida del backend
 
-```env
-ALFRED_HOST=127.0.0.1
-ALFRED_PORT=8000
-ALFRED_DOCS_PATH=/ruta/a/tus/documentos  # ⬅️ REQUERIDO
-```
+- **Modo desarrollo**: Usa Python del sistema con venv- **Modo desarrollo**: Usa Python del sistema con venv
 
-#### 4. Crear Entorno Virtual Python
+- **Modo producción**: Python portable embebido en la aplicación empaquetada- **Modo producción**: Python portable embebido en la aplicación empaquetada
 
-```bash
-cd backend
-python -m venv venv
+- **Almacenamiento inteligente**: ChromaDB en AppData para evitar problemas de permisos- **Almacenamiento inteligente**: ChromaDB en AppData para evitar problemas de permisos
 
-# Activar entorno virtual
-# Windows:
-.\venv\Scripts\Activate.ps1
-# Linux/macOS:
-source venv/bin/activate
 
-# Instalar dependencias
-pip install -r requirements.txt
-```
 
-#### 5. Descargar Modelos de IA
+## Requisitos## Requisitos
 
-```bash
-ollama pull gemma2:9b
-ollama pull nomic-embed-text:v1.5
-```
 
-#### 6. Instalar Dependencias Node.js
 
-```bash
-cd ..
-npm install
-```
+### Software### Software
 
-#### 7. Iniciar Alfred
+- **Python**: 3.12+ (recomendado) o 3.8+- **Python**: 3.12+ (recomendado) o 3.8+
 
-```bash
-npm start
-```
+- **Node.js**: 22.20.0+ con npm/yarn- **Node.js**: 22.20.0+ con npm/yarn
 
-</details>
+- **Ollama**: Para ejecutar modelos LLM localmente ([ollama.ai](https://ollama.ai))- **Ollama**: Para ejecutar modelos LLM localmente ([ollama.ai](https://ollama.ai))
 
----
 
-## 📖 Documentación Completa
 
-### 📘 Guías de Inicio
+### Hardware### Hardware
 
-| Documento | Descripción | Para Quién |
-|-----------|-------------|------------|
-| **[QUICKSTART_V2.md](./QUICKSTART_V2.md)** | Guía de inicio rápido | Todos los usuarios |
-| **[CHECKLIST_INSTALACION.md](./CHECKLIST_INSTALACION.md)** | Lista de verificación completa | Solución de problemas |
-| **[GUIA_VM_WINDOWS.md](./GUIA_VM_WINDOWS.md)** | Instalación en máquinas virtuales | Usuarios de VMs |
-| **[INDICE_DOCUMENTACION.md](./INDICE_DOCUMENTACION.md)** | Índice maestro de docs | Referencia rápida |
+- **RAM**: 8 GB mínimo (16 GB recomendado para modelos grandes)- **RAM**: 8 GB mínimo (16 GB recomendado para modelos grandes)
 
-### 🔧 Documentación Técnica
+- **Almacenamiento**: 20 GB libres (modelos + documentos + ChromaDB)- **Almacenamiento**: 20 GB libres (modelos + documentos + ChromaDB)
 
-| Documento | Descripción |
-|-----------|-------------|
-| **[ESTRUCTURA_ESTANDARIZADA.md](./ESTRUCTURA_ESTANDARIZADA.md)** | Estructura del proyecto |
-| **[RESUMEN_CAMBIOS.md](./RESUMEN_CAMBIOS.md)** | Changelog v2.0 |
-| **[backend/docs/README.md](./backend/docs/README.md)** | API Backend |
-| **[backend/gpu/GPU_SETUP.md](./backend/gpu/GPU_SETUP.md)** | Configuración GPU |
+- **GPU** (opcional): NVIDIA/AMD/Apple Silicon para aceleración- **GPU** (opcional): NVIDIA/AMD/Apple Silicon para aceleración
 
----
 
-## 🎨 Interfaz de Usuario
 
-### Pantalla Principal
+### Modelos Ollama### Modelos Ollama
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ 🤖 Alfred              🟢 Conectado      🔄 ⚙️ 📊 📁 👤        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
+```bash```bash
+
+ollama pull gemma3n:e4bollama pull gemma3n:e4b
+
+ollama pull nomic-embed-text:v1.5ollama pull nomic-embed-text:v1.5
+
+``````
+
+
+
+## Inicio Rápido## Inicio Rápido
+
+
+
+### 1. Clonar e Instalar Dependencias### 1. Clonar e Instalar Dependencias
+
+
+
+```bash```bash
+
+# Clonar repositorio# Clonar repositorio
+
+git clone https://github.com/Adalk033/AlfredElectron.gitgit clone https://github.com/Adalk033/AlfredElectron.git
+
+cd AlfredElectroncd AlfredElectron
+
+
+
+# Instalar dependencias de Electron# Instalar dependencias de Electron
+
+npm installnpm install
+
+
+
+# Configurar backend Python# Configurar backend Python
+
+cd backendcd backend
+
+python -m venv venvpython -m venv venv
+
+
+
+# Activar entorno virtual# Activar entorno virtual
+
+# Windows PowerShell:# Windows PowerShell:
+
+.\venv\Scripts\Activate.ps1.\venv\Scripts\Activate.ps1
+
+# Linux/macOS:# Linux/macOS:
+
+source venv/bin/activatesource venv/bin/activate
+
+
+
+# Instalar dependencias Python# Instalar dependencias Python
+
+pip install -r requirements.txtpip install -r requirements.txt
+
+``````
+
+
+
+### 2. Descargar Modelos Ollama### 2. Descargar Modelos Ollama
+
+
+
+```bash```bash
+
+ollama pull gemma3n:e4bollama pull gemma3n:e4b
+
+ollama pull nomic-embed-text:v1.5ollama pull nomic-embed-text:v1.5
+
+``````
+
+
+
+### 3. Configurar Variables de Entorno (Opcional)### 3. Configurar Variables de Entorno (Opcional)
+
+
+
+El backend funciona sin configuración gracias a valores por defecto. Para personalizar:El backend funciona sin configuración gracias a valores por defecto. Para personalizar:
+
+
+
+```bash```bash
+
+# En el directorio backend/# En el directorio backend/
+
+cp .env.example .envcp .env.example .env
+
+# Editar .env si necesitas cambiar rutas o modelos# Editar .env si necesitas cambiar rutas o modelos
+
+``````
+
+
+
+### 4. Ejecutar la Aplicación### 4. Ejecutar la Aplicación
+
+
+
+```bash```bash
+
+# Desde la raíz del proyecto# Desde la raíz del proyecto
+
+npm startnpm start
+
+``````
+
+
+
+La aplicación iniciará automáticamente el backend Python y abrirá la ventana de Electron.La aplicación iniciará automáticamente el backend Python y abrirá la ventana de Electron.
+
+
+
+### Modo Desarrollo### Modo Desarrollo
+
+
+
+```bash```bash
+
+# Ejecutar con DevTools abierto# Ejecutar con DevTools abierto
+
+npm run devnpm run dev
+
+
+
+# Ejecutar solo el backend (para testing)# Ejecutar solo el backend (para testing)
+
+cd backendcd backend
+
+python core/alfred_backend.pypython core/alfred_backend.py
+
+# API disponible en http://127.0.0.1:8000/docs# API disponible en http://127.0.0.1:8000/docs
+
+``````
+
+
+
+## Tecnologías## Tecnologías
+
+
+
+### Backend### Backend
+
+- **FastAPI**: Framework Python para API REST con documentación automática- **FastAPI**: Framework Python para API REST con documentación automática
+
+- **LangChain**: Orquestación de LLMs y cadenas RAG- **LangChain**: Orquestación de LLMs y cadenas RAG
+
+- **ChromaDB**: Base de datos vectorial para embeddings- **ChromaDB**: Base de datos vectorial para embeddings
+
+- **Ollama**: Servidor de LLMs locales con soporte GPU- **Ollama**: Servidor de LLMs locales con soporte GPU
+
+- **SQLite + Cryptography**: Persistencia con encriptación AES-256-GCM- **SQLite + Cryptography**: Persistencia con encriptación AES-256-GCM
+
+- **Python-dotenv**: Gestión de configuración- **Python-dotenv**: Gestión de configuración
+
+
+
+### Frontend### Frontend
+
+- **Electron 38.2.2**: Framework multiplataforma para apps de escritorio- **Electron 38.2.2**: Framework multiplataforma para apps de escritorio
+
+- **Vanilla JavaScript**: Sin dependencias de frameworks pesados- **Vanilla JavaScript**: Sin dependencias de frameworks pesados
+
+- **CSS Modular**: Arquitectura escalable por componentes- **CSS Modular**: Arquitectura escalable por componentes
+
+
+
+### DevOps & Tooling### DevOps & Tooling
+
+- **electron-builder 26.0.12**: Empaquetado y distribución (NSIS, DMG, AppImage)- **electron-builder 26.0.12**: Empaquetado y distribución (NSIS, DMG, AppImage)
+
+- **Python venv**: Aislamiento de dependencias en desarrollo- **Python venv**: Aislamiento de dependencias en desarrollo
+
+- **python-portable**: Python embebido para distribución- **python-portable**: Python embebido para distribución
+
+
+
+## Estructura del Proyecto## Estructura del Proyecto
+
+
+
+``````
+
+AlfredElectron/AlfredElectron/
+
+├── main.js                    # Proceso principal Electron├── main.js                    # Proceso principal Electron
+
+├── preload.js                 # Preload script (IPC bridge)├── preload.js                 # Preload script (IPC bridge)
+
+├── package.json               # Dependencias Node.js y build config├── package.json               # Dependencias Node.js y build config
+
+││
+
+├── backend/                   # Backend FastAPI (Python)├── backend/                   # Backend FastAPI (Python)
+
+│   ├── core/                  # Módulos principales│   ├── core/                  # Módulos principales
+
+│   │   ├── alfred_backend.py  # API REST FastAPI│   │   ├── alfred_backend.py  # API REST FastAPI
+
+│   │   ├── alfred_core.py     # Lógica RAG principal│   │   ├── alfred_core.py     # Lógica RAG principal
+
+│   │   ├── vector_manager.py  # ChromaDB + embeddings│   │   ├── vector_manager.py  # ChromaDB + embeddings
+
+│   │   ├── document_loader.py # Carga de documentos│   │   ├── document_loader.py # Carga de documentos
+
+│   │   └── ...│   │   └── ...
+
+│   ├── utils/                 # Utilidades│   ├── utils/                 # Utilidades
+
+│   │   ├── paths.py          # Gestión de rutas con expandvars│   │   ├── paths.py          # Gestión de rutas con expandvars
+
+│   │   ├── security.py       # Encriptación AES-256-GCM│   │   ├── security.py       # Encriptación AES-256-GCM
+
+│   │   └── logger.py         # Sistema de logs│   │   └── logger.py         # Sistema de logs
+
+│   ├── gpu/                   # GPU management│   ├── gpu/                   # GPU management
+
+│   │   └── gpu_manager.py    # Auto-detección NVIDIA/AMD/Apple│   │   └── gpu_manager.py    # Auto-detección NVIDIA/AMD/Apple
+
+│   ├── python-portable/       # Python embebido (solo producción)│   ├── python-portable/       # Python embebido (solo producción)
+
+│   ├── venv/                  # Virtual env (solo desarrollo)│   ├── venv/                  # Virtual env (solo desarrollo)
+
+│   ├── .env                   # Configuración local (gitignored)│   ├── .env                   # Configuración local (gitignored)
+
+│   ├── .env.example           # Plantilla de configuración│   ├── .env.example           # Plantilla de configuración
+
+│   └── requirements.txt       # Dependencias Python│   └── requirements.txt       # Dependencias Python
+
+││
+
+├── renderer/                  # Frontend Electron├── renderer/                  # Frontend Electron
+
+│   ├── index.html            # UI principal│   ├── index.html            # UI principal
+
+│   ├── renderer.js           # Lógica principal de UI│   ├── renderer.js           # Lógica principal de UI
+
+│   ├── api/│   ├── api/
+
+│   │   └── api.js           # Cliente API REST│   │   └── api.js           # Cliente API REST
+
+│   ├── core/│   ├── core/
+
+│   │   ├── conversations.js  # Gestión de conversaciones│   │   ├── conversations.js  # Gestión de conversaciones
+
+│   │   ├── dialogs.js       # Modales y diálogos│   │   ├── dialogs.js       # Modales y diálogos
+
+│   │   └── utils.js         # Utilidades generales│   │   └── utils.js         # Utilidades generales
+
+│   ├── dom/│   ├── dom/
+
+│   │   ├── dom-utils.js     # Markdown parser con tablas│   │   ├── dom-utils.js     # Markdown parser con tablas
+
+│   │   └── events.js        # Event handlers│   │   └── events.js        # Event handlers
+
+│   └── styles/              # CSS modular│   └── styles/              # CSS modular
+
+││
+
+├── chroma_db/                 # ChromaDB (desarrollo, gitignored)├── chroma_db/                 # ChromaDB (desarrollo, gitignored)
+
+└── assets/                    # Iconos y recursos└── assets/                    # Iconos y recursos
+
+
+
+# Datos persistentes en producción:# Datos persistentes en producción:
+
+# Windows: C:\Users\<User>\AppData\Roaming\Alfred\# Windows: C:\Users\<User>\AppData\Roaming\Alfred\
+
+# Linux: ~/.alfred/# Linux: ~/.alfred/
+
+# macOS: ~/Library/Application Support/Alfred/# macOS: ~/Library/Application Support/Alfred/
+
+``````
+
+
+
+## Build y Distribución## Build y Distribución
+
+
+
+### Empaquetar para Producción### Empaquetar para Producción
+
+
+
+```bash```bash
+
+# Windows (NSIS installer)# Windows (NSIS installer)
+
+npm run build:winnpm run build:win
+
+
+
+# macOS (DMG)# macOS (DMG)
+
+npm run build:macnpm run build:mac
+
+
+
+# Linux (AppImage)# Linux (AppImage)
+
+npm run build:linuxnpm run build:linux
+
+``````
+
+
+
+Los instaladores se generan en `dist/`.Los instaladores se generan en `dist/`.
+
+
+
+### Diferencias Desarrollo vs Producción### Diferencias Desarrollo vs Producción
+
+
+
+| Aspecto | Desarrollo | Producción || Aspecto | Desarrollo | Producción |
+
+|---------|------------|------------||---------|------------|------------|
+
+| **Python** | Sistema + venv | python-portable embebido || **Python** | Sistema + venv | python-portable embebido |
+
+| **Backend** | Manual o npm start | Auto-spawn por Electron || **Backend** | Manual o npm start | Auto-spawn por Electron |
+
+| **ChromaDB** | `./chroma_db` | `%AppData%\Alfred\data\chroma_store` || **ChromaDB** | `./chroma_db` | `%AppData%\Alfred\data\chroma_store` |
+
+| **Datos** | Rutas relativas | AppData (evita Program Files) || **Datos** | Rutas relativas | AppData (evita Program Files) |
+
+| **Dependencias** | Instaladas en venv | Pre-instaladas en python-portable || **Dependencias** | Instaladas en venv | Pre-instaladas en python-portable |
+
+
+
+## Configuración---
+
+
+
+### Variables de Entorno (Opcional)## 🎨 Interfaz de Usuario
+
+
+
+El backend funciona con valores por defecto. Para personalizar, crea `backend/.env`:### Pantalla Principal
+
+
+
+```bash```
+
+# Backend┌─────────────────────────────────────────────────────────────────┐
+
+cd backend│ 🤖 Alfred              🟢 Conectado      🔄 ⚙️ 📊 📁 👤        │
+
+cp .env.example .env├─────────────────────────────────────────────────────────────────┤
+
+```│                                                                 │
+
 │                          🤖                                     │
-│                   ¡Hola! Soy Alfred                             │
+
+Principales configuraciones:│                   ¡Hola! Soy Alfred                             │
+
 │              Tu asistente personal inteligente                  │
-│                                                                 │
-│         Pregúntame sobre tus documentos personales              │
-│              o cualquier cosa que necesites                     │
-│                                                                 │
+
+```env│                                                                 │
+
+# Rutas de datos (se expanden automáticamente)│         Pregúntame sobre tus documentos personales              │
+
+ALFRED_DATA_PATH=%AppData%\Alfred\data         # Windows│              o cualquier cosa que necesites                     │
+
+ALFRED_DATA_PATH=$HOME/.alfred/data            # Linux/macOS│                                                                 │
+
 ├─────────────────────────────────────────────────────────────────┤
-│  👤  ¿Cuál es mi RFC y CURP?                                    │
-│                                                                 │
-│  🤖  Según tus documentos:                                      │
+
+# Modelos│  👤  ¿Cuál es mi RFC y CURP?                                    │
+
+ALFRED_MODEL=gemma3n:e4b│                                                                 │
+
+ALFRED_EMBEDDING_MODEL=nomic-embed-text:v1.5│  🤖  Según tus documentos:                                      │
+
 │      • RFC: XXXX999999XXX                                       │
-│      • CURP: XXXX999999XXXXXXXX                                 │
-│                                                                 │
-│      📚 Fuentes consultadas:                                    │
-│      • identificacion_oficial.pdf                               │
+
+# Servidor│      • CURP: XXXX999999XXXXXXXX                                 │
+
+ALFRED_HOST=127.0.0.1│                                                                 │
+
+ALFRED_PORT=8000│      📚 Fuentes consultadas:                                    │
+
+```│      • identificacion_oficial.pdf                               │
+
 │      • datos_personales.pdf                                     │
-│                                                                 │
+
+## Solución de Problemas│                                                                 │
+
 │      ⏱️ Hace 2 minutos                                          │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  📝 [Escribe tu mensaje aquí...]                          [▶]  │
-└─────────────────────────────────────────────────────────────────┘
-```
 
-### Características de la Interfaz
+### Backend no inicia│                                                                 │
 
-#### 💬 **Chat Inteligente**
-- Efecto de escritura letra por letra
-- Renderizado Markdown completo
-- Soporte para tablas con estilos profesionales
-- Resaltado de sintaxis para código
-- Emojis y formato enriquecido
+```bash├─────────────────────────────────────────────────────────────────┤
 
-#### 📊 **Información Contextual**
-- Badge "Del historial" cuando usa respuestas cacheadas
-- Contador de fragmentos de documentos analizados
-- Lista de archivos fuente utilizados
-- Extracción de datos personales (RFC, CURP, NSS)
+# Verificar Python y dependencias│  📝 [Escribe tu mensaje aquí...]                          [▶]  │
+
+python --version└─────────────────────────────────────────────────────────────────┘
+
+cd backend```
+
+pip install -r requirements.txt
+
+```### Características de la Interfaz
+
+
+
+### Ollama no responde#### 💬 **Chat Inteligente**
+
+```bash- Efecto de escritura letra por letra
+
+# Verificar servicio- Renderizado Markdown completo
+
+ollama version- Soporte para tablas con estilos profesionales
+
+ollama list- Resaltado de sintaxis para código
+
+```- Emojis y formato enriquecido
+
+
+
+### Puerto 8000 ocupado#### 📊 **Información Contextual**
+
+```bash- Badge "Del historial" cuando usa respuestas cacheadas
+
+# Windows- Contador de fragmentos de documentos analizados
+
+netstat -ano | findstr :8000- Lista de archivos fuente utilizados
+
+taskkill /PID <PID> /F- Extracción de datos personales (RFC, CURP, NSS)
+
 - Timestamps automáticos
 
-#### 🎯 **Panel de Navegación**
-- **🕐 Historial**: Últimas 50 conversaciones guardadas
-- **📊 Estadísticas**: Métricas del sistema en tiempo real
+# Linux/macOS
+
+lsof -i :8000#### 🎯 **Panel de Navegación**
+
+kill -9 <PID>- **🕐 Historial**: Últimas 50 conversaciones guardadas
+
+```- **📊 Estadísticas**: Métricas del sistema en tiempo real
+
 - **📁 Documentos**: Explorador de documentos indexados
-- **⚙️ Configuración**: Preferencias y ajustes
-- **👤 Perfil**: Información del usuario
 
-#### 🔔 **Sistema de Notificaciones**
-- Notificaciones visuales no intrusivas
-- Estados: Éxito, Error, Advertencia, Info
+### GPU no detectada- **⚙️ Configuración**: Preferencias y ajustes
+
+```bash- **👤 Perfil**: Información del usuario
+
+# Ejecutar diagnóstico
+
+python backend/gpu/gpu_check.py#### 🔔 **Sistema de Notificaciones**
+
+cat backend/gpu/gpu_info.json- Notificaciones visuales no intrusivas
+
+```- Estados: Éxito, Error, Advertencia, Info
+
 - Auto-desaparecen después de 5 segundos
-- Animaciones suaves
 
----
+## Documentación Adicional- Animaciones suaves
 
-## 🏗️ Arquitectura del Proyecto
 
-```
+
+- **[backend/README.md](backend/README.md)**: Documentación del backend---
+
+- **[backend/gpu/GPU_SETUP.md](backend/gpu/GPU_SETUP.md)**: Configuración GPU
+
+- **[backend/docs/QUICKSTART.md](backend/docs/QUICKSTART.md)**: Guía rápida del backend## 🏗️ Arquitectura del Proyecto
+
+
+
+## Licencia```
+
 AlfredElectron/                          # Raíz del proyecto
-│
+
+MIT License - Ver [backend/docs/LICENSE](backend/docs/LICENSE)│
+
 ├── 🔧 Configuración
-│   ├── .env                             # Tu configuración local
+
+## Autor│   ├── .env                             # Tu configuración local
+
 │   ├── .env.template                    # Plantilla de configuración
-│   ├── package.json                     # Dependencias Node.js
+
+**Adalk033** - [GitHub](https://github.com/Adalk033)│   ├── package.json                     # Dependencias Node.js
+
 │   └── .gitignore                       # Archivos ignorados
-│
+
+## Enlaces Útiles│
+
 ├── 🚀 Scripts de Arranque
-│   ├── stP.ps1                          # Script universal Windows
-│   ├── stP.sh                           # Script universal Linux/macOS
-│   └── start.ps1                        # Script legacy
-│
-├── 🎨 Frontend (Electron)
+
+- [Ollama](https://ollama.ai/) - Servidor LLM local│   ├── stP.ps1                          # Script universal Windows
+
+- [FastAPI](https://fastapi.tiangolo.com/) - Framework backend│   ├── stP.sh                           # Script universal Linux/macOS
+
+- [Electron](https://www.electronjs.org/) - Framework desktop│   └── start.ps1                        # Script legacy
+
+- [LangChain](https://python.langchain.com/) - Framework LLM│
+
+- [ChromaDB](https://www.trychroma.com/) - Base de datos vectorial├── 🎨 Frontend (Electron)
+
 │   ├── main.js                          # Proceso principal Electron
 │   ├── preload.js                       # Script de precarga
 │   │
