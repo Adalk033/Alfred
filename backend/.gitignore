@@ -2,9 +2,14 @@
 venv/
 .venv/
 env/
+venv_test_clone/
+# NOTA: venv_base NO esta ignorado - se incluye en distribuciones para instalacion rapida
+# Si no quieres versionarlo (700 MB), descomenta la siguiente linea:
+venv_base/
 __pycache__/
 *.pyc
 chroma_db/
+temp/
 
 # Variables de entorno
 *.env
@@ -27,3 +32,9 @@ db/
 # Claves de cifrado
 *.key
 secret.key
+
+# Directorio de runtime cuando está empaquetado
+%AppData%/
+
+# Archivo temporal de pip
+python-portable/get-pip.py

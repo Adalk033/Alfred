@@ -13,13 +13,13 @@ aiosignal==1.4.0
 annotated-types==0.7.0
 antlr4-python3-runtime==4.9.3
 anyio==4.11.0
-attrs==25.3.0
+attrs==24.2.0
 backoff==2.2.1
-bcrypt==5.0.0
+bcrypt==4.2.1
 beautifulsoup4==4.14.2
 build==1.3.0
 cachetools==6.2.0
-certifi==2025.10.5
+certifi==2024.8.30
 cffi==2.0.0
 charset-normalizer==3.4.3
 chromadb==1.1.1
@@ -36,7 +36,7 @@ durationpy==0.10
 
 # === Computer Vision & Detection ===
 effdet==0.4.1
-emoji==2.15.0
+emoji==2.14.0
 
 # === FastAPI & Web Framework ===
 fastapi==0.115.0
@@ -45,7 +45,7 @@ filetype==1.2.0
 flatbuffers==25.9.23
 fonttools==4.60.1
 frozenlist==1.7.0
-fsspec==2025.9.0
+fsspec==2024.10.0
 
 # === Google Cloud Services ===
 google-api-core==2.25.2
@@ -79,7 +79,7 @@ joblib==1.5.2
 jsonpatch==1.33
 jsonpointer==3.0.0
 jsonschema==4.25.1
-jsonschema-specifications==2025.9.1
+jsonschema-specifications==2024.10.1
 
 # === Math & Scientific ===
 kiwisolver==1.4.9
@@ -95,7 +95,7 @@ langchain-ollama==0.3.10
 langchain-text-splitters==0.3.11
 
 # === NLP & Language Detection ===
-langdetect==1.0.9
+langdetect==1.0.7
 langsmith==0.4.32
 lxml==6.0.2
 
@@ -107,7 +107,7 @@ marshmallow==3.26.1
 # === Plotting & Visualization ===
 matplotlib==3.10.6
 mdurl==0.1.2
-ml_dtypes==0.5.3
+ml_dtypes==0.4.1
 mmh3==5.2.0
 mpmath==1.3.0
 multidict==6.6.4
@@ -155,7 +155,7 @@ overrides==7.7.0
 packaging==25.0
 
 # === Data Processing ===
-pandas==2.3.3
+pandas==2.2.3
 
 # === PDF Processing ===
 pdf2image==1.17.0
@@ -176,7 +176,7 @@ proto-plus==1.26.1
 protobuf==6.31.1
 
 # === System Monitoring ===
-psutil==7.1.0
+psutil==6.1.0
 
 # === Authentication ===
 pyasn1==0.6.1
@@ -195,7 +195,7 @@ pydantic-settings==2.11.0
 pydantic_core==2.33.2
 
 # === Syntax Highlighting ===
-Pygments==2.19.2
+Pygments==2.18.0
 
 # === Parsing ===
 pyparsing==3.2.5
@@ -244,7 +244,7 @@ RapidFuzz==3.14.1
 referencing==0.36.2
 
 # === Regular Expressions ===
-regex==2025.9.18
+regex==2024.11.6
 
 # === HTTP Requests ===
 requests==2.32.5
@@ -252,7 +252,7 @@ requests-oauthlib==2.0.0
 requests-toolbelt==1.0.0
 
 # === Terminal UI ===
-rich==14.1.0
+rich==13.9.4
 
 # === Python Data Structures ===
 rpds-py==0.27.1
@@ -267,14 +267,14 @@ safetensors==0.6.2
 scipy==1.16.2
 
 # === Python Tools ===
-setuptools==80.9.0
+setuptools==75.6.0
 shellingham==1.5.4
 six==1.17.0
 sniffio==1.3.1
 soupsieve==2.8
 
 # === Database ORM ===
-SQLAlchemy==2.0.43
+SQLAlchemy==2.0.36
 
 # === Symbolic Math ===
 sympy==1.14.0
@@ -292,7 +292,7 @@ tokenizers==0.22.1
 tqdm==4.67.1
 
 # === Transformers (Hugging Face) ===
-transformers==4.57.0
+transformers==4.46.3
 
 # === CLI Framework ===
 typer==0.19.2
@@ -300,10 +300,10 @@ typer==0.19.2
 # === Type Inspection ===
 typing-inspect==0.9.0
 typing-inspection==0.4.2
-typing_extensions==4.15.0
+typing_extensions==4.12.2
 
 # === Time Zone Data ===
-tzdata==2025.2
+tzdata==2024.2
 
 # === Document Processing ===
 unstructured==0.18.15
@@ -312,7 +312,7 @@ unstructured-inference==1.0.5
 unstructured.pytesseract==0.3.15
 
 # === HTTP Client ===
-urllib3==2.3.0
+urllib3==2.2.3
 
 # === ASGI Server ===
 uvicorn==0.37.0
@@ -325,7 +325,7 @@ webencodings==0.5.1
 
 # === WebSocket ===
 websocket-client==1.8.0
-websockets==15.0.1
+websockets==14.1
 
 # === Decorators ===
 wrapt==1.17.3
@@ -334,10 +334,10 @@ wrapt==1.17.3
 yarl==1.21.0
 
 # === Import Tools ===
-zipp==3.23.0
+zipp==3.21.0
 
 # === Compression ===
-zstandard==0.25.0
+zstandard==0.23.0
 
 # ============================================
 # DOCUMENT FORMAT PROCESSORS

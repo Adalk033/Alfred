@@ -2,6 +2,12 @@
   "description": "Paquetes que frecuentemente causan WinError 32 en Windows durante pip install",
   "strategy": "Estos paquetes se instalan UNO POR UNO con delays largos DESPUÉS de los paquetes estables",
   "problematic_packages": [
+    "antlr4-python3-runtime",
+    "langchain",
+    "langchain-community",
+    "langchain-core",
+    "langchain-text-splitters",
+    "langchain-ollama",
     "greenlet",
     "grpcio",
     "numpy",
@@ -15,17 +21,23 @@
     "cffi",
     "sympy",
     "nltk",
+    "chromadb",
+    "unstructured",
+    "unstructured-inference",
+    "transformers",
+    "tokenizers",
     "spacy",
     "tensorflow",
     "scikit-learn",
     "opencv-python"
   ],
   "install_config": {
-    "delay_between_packages_ms": 2000,
+    "delay_between_packages_ms": 3000,
     "retries_per_package": 5,
     "timeout_per_package_seconds": 300
   },
   "notes": {
+    "antlr4-python3-runtime": "Parser runtime - puede tardar en compilar",
     "greenlet": "SQLAlchemy dependency - compila extensiones C",
     "grpcio": "gRPC library - compila bindings C++",
     "numpy": "Numerical computing - binarios grandes",
