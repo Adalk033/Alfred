@@ -42,6 +42,30 @@ if (fs.existsSync(PATH_BACKEND)) {
 }
 console.log('========================================================\n');
 
+// Funcion para obtener directorio temporal seguro (con permisos de escritura)
+function getSafeTempDir() {
+    // En produccion (empaquetada), usar AppData del usuario
+    // En desarrollo, usar carpeta temp en backend
+    if (isPackaged) {
+        const userDataPath = app.getPath('userData'); // C:\Users\<user>\AppData\Roaming\alfred-electron
+        const tempDir = path.join(userDataPath, 'temp');
+
+        // Crear si no existe
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        return tempDir;
+    } else {
+        // Modo desarrollo: usar temp en backend
+        const tempDir = path.join(PATH_BACKEND, 'temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+        return tempDir;
+    }
+}
+
 // Configuración del backend
 const BACKEND_CONFIG = {
     host: HOST,
@@ -1020,11 +1044,7 @@ async function detectGPUType() {
 // Instalar paquetes de GPU/CPU según hardware
 async function installGPUPackages(pythonCmd, backendPath, gpuConfig) {
     const gpuType = await detectGPUType();
-    const tempDir = path.join(backendPath, 'temp');
-
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-    }
+    const tempDir = getSafeTempDir();
 
     let packagesToInstall = [];
     let indexUrl = null;
@@ -1188,10 +1208,7 @@ function loadProblematicPackages(backendPath) {
 
 // Instalar paquetes problemáticos con estrategia especial
 async function installProblematicPackages(pythonCmd, backendPath, problematicPackages, installConfig) {
-    const tempDir = path.join(backendPath, 'temp');
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-    }
+    const tempDir = getSafeTempDir();
 
     // Leer requirements.txt para obtener las especificaciones completas de versión
     const requirementsPath = path.join(backendPath, 'requirements.txt');
@@ -1308,8 +1325,10 @@ async function installProblematicPackages(pythonCmd, backendPath, problematicPac
     }
 
     if (failed.length > 0) {
+        notifyInstallationProgress('deps-problematic-failed', 'Error en paquetes problematicos', 42);
         console.log(`\n-Paquetes problematicos que fallaron (${failed.length}): ${failed.join(', ')}`);
     } else {
+        notifyInstallationProgress('deps-problematic-done', 'Paquetes problematicos instalados', 42);
         console.log(`-Todos los paquetes problematicos instalados correctamente`);
     }
 
@@ -1318,10 +1337,7 @@ async function installProblematicPackages(pythonCmd, backendPath, problematicPac
 
 // Función para instalar paquetes en bloque (rápido pero puede fallar algunos)
 async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, packagesToInstall) {
-    const tempDir = path.join(backendPath, 'temp');
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-    }
+    const tempDir = getSafeTempDir();
 
     const failedPackages = [];
 
@@ -1460,10 +1476,7 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
 
 // Función para reintentar paquetes fallidos uno por uno
 async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
-    const tempDir = path.join(backendPath, 'temp');
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-    }
+    const tempDir = getSafeTempDir();
 
     // Leer requirements.txt para obtener las especificaciones completas de versión
     const requirementsPath = path.join(backendPath, 'requirements.txt');
@@ -1653,12 +1666,159 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
                     throw new Error(`Python portable no funciona: ${error.message}`);
                 }
 
-                // NO CREAR VENV - usar Python portable directamente
-                console.log('Saltando creacion de venv - usando Python portable con dependencias incluidas');
-                console.log(`Usando Python en: ${portablePythonPath}`);
-                notifyInstallationProgress('deps-ready', 'Entorno Python listo (portable)', 48);
+                // Verificar pip en Python portable
+                console.log('\n[PRODUCCION] Verificando pip...');
+                try {
+                    const pipVersion = execSync(`"${portablePythonPath}" -m pip --version`, {
+                        encoding: 'utf8',
+                        stdio: 'pipe'
+                    });
+                    console.log('pip version:', pipVersion.trim());
+                } catch (pipError) {
+                    console.warn('pip no encontrado, instalando...');
+                    execSync(`"${portablePythonPath}" -m ensurepip --upgrade`, {
+                        encoding: 'utf8',
+                        stdio: 'inherit'
+                    });
+                }
+
+                // Verificar dependencias instaladas en Python portable
+                console.log('\n[PRODUCCION] Verificando dependencias...');
+                notifyInstallationProgress('deps-check', 'Verificando dependencias de Python...', 35);
+
+                let installedPkgs = '';
+                try {
+                    installedPkgs = execSync(`"${portablePythonPath}" -m pip freeze`, {
+                        encoding: "utf8",
+                        stdio: 'pipe'
+                    }).toLowerCase();
+                }
+                catch (err) {
+                    notifyInstallationProgress('deps-error', `Error al listar dependencias, error: ${err.message}`, 20 + (retryCount + 1) * 5);
+                }
+
+                const reqs = fs.readFileSync(requirementsPath, "utf8")
+                    .split("\n")
+                    .filter(line => line.trim() && !line.trim().startsWith('#'))
+                    .map(line => line.trim());
+
+                // Extraer nombres de paquetes
+                const reqPkgNames = reqs.map(r => {
+                    const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
+                    return match ? match[1].toLowerCase() : null;
+                }).filter(Boolean);
+
+                // Verificar paquetes faltantes
+                const missing = reqPkgNames.filter(pkg => {
+                    const searchName = pkg.toLowerCase()
+                        .replace(/-/g, '[-_]')
+                        .replace(/\./g, '\\.');
+                    const pattern = new RegExp(`^${searchName}==`, 'm');
+                    const found = pattern.test(installedPkgs);
+                    if (!found) {
+                        notifyInstallationProgress('deps-missing-item', `Dependencia faltante: ${pkg}`, 33);
+                    }
+                    return !found;
+                });
+
+                notifyInstallationProgress('deps-missing', `Dependencias faltantes: ${missing.length}`, 34);
+                notifyInstallationProgress('deps-install-start', 'Iniciando instalacion de dependencias...', 35);
+
+                if (missing.length > 0) {
+                    notifyInstallationProgress('deps-install', `Instalando ${missing.length} dependencias...`, 36);
+
+                    // Separar paquetes estables de problematicos
+                    const problematicConfig = loadProblematicPackages(backendPath);
+                    const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
+
+                    const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
+                    const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
+
+                    // FASE 1: Instalar paquetes estables en bloque
+                    let failedStable = [];
+                    if (stablePackages.length > 0) {
+                        notifyInstallationProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
+                        try {
+                            failedStable = await installPackagesInBulk(portablePythonPath, backendPath, requirementsPath, stablePackages);
+                        }
+                        catch (bulkError) {
+                            notifyInstallationProgress('deps-error', `Error en instalacion en bloque: ${bulkError.message}`, 20 + (retryCount + 1) * 5);
+                            throw new Error(`Error en instalacion en bloque: ${bulkError.message}`);
+                        }
+                    }
+
+                    // FASE 2: Instalar paquetes problematicos uno por uno
+                    let failedProblematic = [];
+                    if (problematicPackages.length > 0) {
+                        notifyInstallationProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
+                        try {
+                            failedProblematic = await installProblematicPackages(
+                                portablePythonPath,
+                                backendPath,
+                                problematicPackages,
+                                problematicConfig.install_config
+                            );
+                        }
+                        catch (problematicError) {
+                            notifyInstallationProgress('deps-error', `Error en instalacion de paquetes problematicos: ${problematicError.message}`, 40);
+                        }
+                    }
+
+                    // FASE 3: Instalar PyTorch (GPU/CPU) segun hardware
+                    const gpuConfig = loadGPUPackages(backendPath);
+                    let failedGPU = [];
+                    try {
+                        failedGPU = await installGPUPackages(portablePythonPath, backendPath, gpuConfig);
+                    }
+                    catch (gpuError) {
+                        notifyInstallationProgress('deps-error', `Error en instalacion de paquetes GPU: ${gpuError.message}`, 42);
+                    }
+
+                    // FASE 4: Reintentar fallidos
+                    const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
+                    try {
+                        if (allFailed.length > 0) {
+                            notifyInstallationProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
+                            await retryFailedPackages(portablePythonPath, backendPath, allFailed);
+                        }
+                    }
+                    catch (killError) {
+                        notifyInstallationProgress('deps-error', `Error al reintentar paquetes fallidos: ${killError.message}`, 48);
+                    }
+                    notifyInstallationProgress('deps-complete', 'Instalacion de dependencias completada', 48);
+                }
+                else {
+                    console.log(`\n========================================================`);
+                    console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
+                    console.log(`========================================================`);
+                    notifyInstallationProgress('deps-ready', 'Todas las dependencias ya estaban instaladas', 48);
+
+                    // Verificar PyTorch aunque las demas esten instaladas
+                    console.log('Verificando instalacion de PyTorch...');
+                    const installedPackages = installedPkgs.split('\n')
+                        .map(line => {
+                            const match = line.match(/^([a-zA-Z0-9\-_.]+)==/);
+                            return match ? match[1].toLowerCase() : null;
+                        })
+                        .filter(Boolean);
+
+                    const hasTorch = installedPackages.some(pkg => pkg === 'torch');
+                    try {
+                        if (!hasTorch) {
+                            console.log('PyTorch no detectado, instalando...');
+                            const gpuConfig = loadGPUPackages(backendPath);
+                            await installGPUPackages(portablePythonPath, backendPath, gpuConfig);
+                        }
+                    }
+                    catch (error) {
+                        console.error('Error al verificar/instalar PyTorch:', error.message);
+                        notifyInstallationProgress('deps-error', `Error al verificar/instalar PyTorch: ${error.message}`, 50);
+                    }
+                }
+                notifyInstallationProgress('deps-ready', 'Entorno Python listo (portable) todo listo', 49);
                 return portablePythonPath;
-            } else {
+            }
+            else {
                 // Fallback: Si no hay Python portable en produccion, error critico
                 console.error('\n========================================================');
                 console.error('  ERROR: Python portable no encontrado');
@@ -1918,7 +2078,7 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar que pip libere archivos
 
             try {
-                const tempDir = path.join(backendPath, 'temp');
+                const tempDir = getSafeTempDir();
                 if (fs.existsSync(tempDir)) {
                     fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
                     console.log('Directorio temporal limpiado');
@@ -2115,31 +2275,43 @@ async function isBackendRunning() {
 // Esperar a que el backend esté disponible
 async function waitForBackend(timeout = BACKEND_CONFIG.startupTimeout) {
     const startTime = Date.now();
+    console.log(`[WAIT-BACKEND] Iniciando espera, timeout: ${timeout}ms (${Math.round(timeout / 1000 / 60)} minutos)`);
     notifyInstallationProgress('backend-init', 'Iniciando servidor Alfred...', 85);
 
+    let attemptCount = 0;
     while (Date.now() - startTime < timeout) {
+        attemptCount++;
+        const elapsed = Date.now() - startTime;
+
         // Verificar si el proceso del backend sigue vivo
         if (!backendProcess || backendProcess.exitCode !== null) {
-            console.error('El proceso del backend ha terminado inesperadamente');
+            console.error(`[WAIT-BACKEND] El proceso del backend ha terminado inesperadamente`);
+            console.error(`[WAIT-BACKEND] Exit code: ${backendProcess?.exitCode}`);
             notifyBackendStatus(false);
             return false;
         }
 
         if (await isBackendRunning()) {
-            console.log('Backend esta disponible');
+            console.log(`[WAIT-BACKEND] ✓ Backend esta disponible despues de ${attemptCount} intentos (${Math.round(elapsed / 1000)}s)`);
             notifyBackendStatus(true);  // Notificar que esta conectado
             notifyInstallationProgress('backend-ready', 'Alfred iniciado correctamente', 100);
             return true;
         }
+
+        // Log cada 10 intentos para no spamear
+        if (attemptCount % 10 === 0) {
+            console.log(`[WAIT-BACKEND] Intento ${attemptCount}, tiempo transcurrido: ${Math.round(elapsed / 1000)}s`);
+        }
+
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Actualizar progreso mientras espera
-        const elapsed = Date.now() - startTime;
         const progress = 85 + Math.min(10, (elapsed / timeout) * 10);
-        console.log('Esperando al backend...');
         notifyInstallationProgress('backend-starting', 'Cargando sistema de IA...', progress);
     }
 
+    console.error(`[WAIT-BACKEND] TIMEOUT: Backend no respondio en ${Math.round(timeout / 1000)}s`);
+    console.error(`[WAIT-BACKEND] Total de intentos: ${attemptCount}`);
     notifyBackendStatus(false);  // Notificar que fallo la conexion
     return false;
 }
@@ -2203,102 +2375,218 @@ async function startBackend() {
     // PROTECCIÓN ADICIONAL: No iniciar durante la inicialización
     if (isInitializing) {
         console.log('[BACKEND] ABORTADO: isInitializing=true, no se puede iniciar backend ahora');
+        notifyInstallationProgress('backend-error', 'Error: Inicializacion en progreso, no se puede iniciar backend', 0);
         return false;
     }
 
     if (backendProcess) {
         console.log('[BACKEND] El backend ya esta iniciado');
+        notifyInstallationProgress('backend-already', 'El backend ya esta iniciado', 100);
         return true;
     }
-
-    console.log('[BACKEND] === INICIANDO BACKEND DE ALFRED ===');
-    console.log('[BACKEND] IMPORTANTE: Ollama debe estar corriendo ANTES de este paso');
     notifyInstallationProgress('backend-start', 'Preparando servidor de Alfred...', 80);
 
     // Verificar que el directorio y script existan antes de lanzar el proceso
     if (!fs.existsSync(BACKEND_CONFIG.path)) {
-        console.error('No se encontro el directorio del backend:', BACKEND_CONFIG.path);
+        console.error('[BACKEND] ERROR: No se encontro el directorio del backend:', BACKEND_CONFIG.path);
+        notifyInstallationProgress('backend-error', 'Error: Directorio del backend no encontrado', 0);
         return false;
     }
 
     const scriptPath = path.join(BACKEND_CONFIG.path, 'core', BACKEND_CONFIG.script);
     if (!fs.existsSync(scriptPath)) {
-        console.error('No se encontro el script del backend:', scriptPath);
+        console.error('[BACKEND] ERROR: No se encontro el script del backend:', scriptPath);
+        notifyInstallationProgress('backend-error', 'Error: Script del backend no encontrado', 0);
         return false;
     }
 
     try {
         // Preparar entorno Python
+        console.log('[BACKEND] Paso 1/3: Preparando entorno Python...');
+        notifyInstallationProgress('backend-python', 'Configurando Python...', 81);
         const pythonPath = await ensurePythonEnv(BACKEND_CONFIG.path);
+        console.log('[BACKEND] Python configurado:', pythonPath);
 
         // Pequena pausa para asegurar que pip libere recursos
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        console.log('Iniciando servidor FastAPI...');
+        console.log('[BACKEND] Paso 2/3: Iniciando servidor FastAPI...');
         notifyInstallationProgress('backend-launch', 'Lanzando servidor FastAPI...', 82);
 
+        // Crear archivo de log para el backend
+        const logDir = path.join(app.getPath('userData'), 'logs');
+        if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir, { recursive: true });
+            notifyInstallationProgress('backend-logdir', 'Creando directorio de logs...', 83);
+        }
+        const backendLogPath = path.join(logDir, 'backend.log');
+        console.log('[BACKEND] Los logs del backend se guardaran en:', backendLogPath);
+
+        // Verificar que el script Python existe y es accesible
+        try {
+            const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+            console.log('[BACKEND] Script Python leido correctamente, tamano:', scriptContent.length, 'bytes');
+            notifyInstallationProgress('backend-script', 'Verificando script del backend...', 84);
+
+            // Verificar que tiene contenido Python valido
+            if (!scriptContent.includes('fastapi') && !scriptContent.includes('FastAPI')) {
+                console.warn('[BACKEND] ADVERTENCIA: El script no parece contener codigo FastAPI');
+            }
+        } catch (readError) {
+            console.error('[BACKEND] ERROR: No se puede leer el script Python:', readError);
+            notifyInstallationProgress('backend-error', 'Error: No se puede leer el script del backend', 0);
+            throw new Error(`No se puede leer ${scriptPath}: ${readError.message}`);
+        }
+
         // Ejecutar backend en modo sin buffer (-u)
-        backendProcess = spawn(pythonPath, ['-u', scriptPath], {
-            cwd: BACKEND_CONFIG.path,
-            env: {
-                ...process.env,
-                PYTHONIOENCODING: 'utf-8',  // Forzar UTF-8
-                PYTHONUNBUFFERED: '1'  // Sin buffer
-            },
-            stdio: ['ignore', 'pipe', 'pipe']
-        });
+        try {
+            console.log('[BACKEND] Ejecutando comando:', pythonPath, ['-u', scriptPath]);
+            console.log('[BACKEND] Working directory:', BACKEND_CONFIG.path);
+            notifyInstallationProgress('backend-spawn', 'Iniciando proceso del backend...', 84);
+            backendProcess = spawn(pythonPath, ['-u', scriptPath], {
+                cwd: BACKEND_CONFIG.path,
+                env: {
+                    ...process.env,
+                    PYTHONIOENCODING: 'utf-8',  // Forzar UTF-8
+                    PYTHONUNBUFFERED: '1'  // Sin buffer
+                },
+                stdio: ['ignore', 'pipe', 'pipe']
+            });
+            notifyInstallationProgress('backend-spawned', 'Proceso del backend iniciado', 85);
 
-        // Captura de salida estándar
-        backendProcess.stdout.on('data', (data) => {
-            const output = data.toString('utf8').trim();
-            if (output) console.log(`[Backend] ${output}`);
-        });
+            console.log('[BACKEND] Proceso spawn creado, PID:', backendProcess.pid);
 
-        // Captura de errores - DETECTAR ERRORES CRÍTICOS
-        let hasModuleError = false;
-        backendProcess.stderr.on('data', (data) => {
-            const error = data.toString('utf8').trim();
-            if (error) console.error(`[Backend Error] ${error}`);
+            // Crear stream para escribir logs a archivo
+            const logStream = fs.createWriteStream(backendLogPath, { flags: 'a' });
+            logStream.write(`\n\n=== INICIO DEL BACKEND ${new Date().toISOString()} ===\n`);
+            logStream.write(`Python: ${pythonPath}\n`);
+            logStream.write(`Script: ${scriptPath}\n`);
+            logStream.write(`CWD: ${BACKEND_CONFIG.path}\n\n`);
 
-            // Detectar errores de módulo faltante
-            if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
-                hasModuleError = true;
-                console.error('ERROR CRITICO: Faltan dependencias de Python');
-            }
-        });
+            // Captura de salida estándar
+            let stdoutBuffer = '';
+            backendProcess.stdout.on('data', (data) => {
+                const output = data.toString('utf8');
+                stdoutBuffer += output;
+                logStream.write(`[STDOUT] ${output}`);
 
-        backendProcess.on('close', (code) => {
-            console.log(`[Backend] Proceso finalizado con codigo ${code}`);
+                // Mostrar en consola linea por linea
+                const lines = output.split('\n');
+                lines.forEach(line => {
+                    if (line.trim()) {
+                        console.log(`[Backend] ${line.trim()}`);
+                    }
+                });
+            });
 
-            if (code !== 0 && hasModuleError) {
-                console.error('Backend cerrado por dependencias faltantes');
-            }
+            // Captura de errores - DETECTAR ERRORES CRÍTICOS
+            let hasModuleError = false;
+            let stderrBuffer = '';
+            backendProcess.stderr.on('data', (data) => {
+                const error = data.toString('utf8');
+                stderrBuffer += error;
+                logStream.write(`[STDERR] ${error}`);
 
+                // Mostrar en consola linea por linea
+                const lines = error.split('\n');
+                lines.forEach(line => {
+                    if (line.trim()) {
+                        console.error(`[Backend Error] ${line.trim()}`);
+                    }
+                });
+
+                // Detectar errores de módulo faltante
+                if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
+                    hasModuleError = true;
+                    console.error('[BACKEND] ERROR CRITICO: Faltan dependencias de Python');
+                    notifyInstallationProgress('backend-error', 'Error: Faltan dependencias de Python', 0);
+                }
+
+                // Detectar otros errores criticos
+                if (error.includes('Traceback') || error.includes('Error:') || error.includes('Exception')) {
+                    console.error('[BACKEND] ERROR DETECTADO en stderr');
+                }
+            });
+
+            // Timeout de inicio: Si no hay output en 30 segundos, mostrar warning
+            let hasOutput = false;
+            const outputTimeout = setTimeout(() => {
+                if (!hasOutput && backendProcess && backendProcess.exitCode === null) {
+                    console.warn('[BACKEND] ADVERTENCIA: No hay output del backend despues de 30 segundos');
+                    console.warn('[BACKEND] El proceso sigue corriendo pero no muestra logs');
+                    console.warn('[BACKEND] STDOUT buffer:', stdoutBuffer || '(vacio)');
+                    console.warn('[BACKEND] STDERR buffer:', stderrBuffer || '(vacio)');
+                    notifyInstallationProgress('backend-warning', 'Backend iniciado pero sin output (esto es normal)', 83);
+                }
+            }, 30000);
+
+            // Marcar que hubo output
+            backendProcess.stdout.on('data', () => { hasOutput = true; });
+            backendProcess.stderr.on('data', () => { hasOutput = true; });
+
+            backendProcess.on('close', (code) => {
+                clearTimeout(outputTimeout);
+                logStream.write(`\n=== PROCESO FINALIZADO codigo: ${code} ===\n`);
+                logStream.end();
+
+                console.log(`[BACKEND] Proceso finalizado con codigo ${code}`);
+
+                if (code !== 0) {
+                    console.error('[BACKEND] El backend termino con error');
+                    console.error('[BACKEND] Ultimos logs STDOUT:', stdoutBuffer.split('\n').slice(-10).join('\n'));
+                    console.error('[BACKEND] Ultimos logs STDERR:', stderrBuffer.split('\n').slice(-10).join('\n'));
+                    console.error('[BACKEND] Logs completos en:', backendLogPath);
+                }
+
+                if (code !== 0 && hasModuleError) {
+                    console.error('[BACKEND] Backend cerrado por dependencias faltantes');
+                }
+
+                backendProcess = null;
+                isBackendStartedByElectron = false;
+            });
+
+            backendProcess.on('error', (err) => {
+                clearTimeout(outputTimeout);
+                logStream.write(`\n=== ERROR DEL PROCESO: ${err.message} ===\n`);
+                logStream.end();
+
+                console.error(`[BACKEND] Error del proceso: ${err.message}`);
+                console.error(`[BACKEND] Error completo:`, err);
+                backendProcess = null;
+                isBackendStartedByElectron = false;
+            });
+
+            console.log('[BACKEND] Paso 3/3: Esperando respuesta del backend...');
+        }
+        catch (spawnError) {
+            console.error(`[Backend Error] ${spawnError.message}`);
             backendProcess = null;
             isBackendStartedByElectron = false;
-        });
+            notifyInstallationProgress('backend-error', `Error al iniciar el backend: ${spawnError.message}`, 0);
+            return false;
+        }
 
-        backendProcess.on('error', (err) => {
-            console.error(`[Backend Error] ${err.message}`);
-            backendProcess = null;
-            isBackendStartedByElectron = false;
-        });
 
         // Marcar que nosotros iniciamos el backend
         isBackendStartedByElectron = true;
 
+        console.log('[BACKEND] Esperando que el backend responda en http://127.0.0.1:8000/health...');
         // Esperar a que el backend esté disponible antes de continuar
         const ready = await waitForBackend();
         if (!ready) {
-            console.error('El backend no respondio a tiempo.');
+            console.error('[BACKEND] ERROR: El backend no respondio a tiempo.');
+            console.error('[BACKEND] Timeout:', BACKEND_CONFIG.startupTimeout, 'ms');
             stopBackend();
             return false;
         }
 
-        console.log('Backend iniciado correctamente.');
+        console.log('[BACKEND] ✓ Backend iniciado correctamente y respondiendo.');
         return true;
     } catch (error) {
-        console.error('Error al iniciar el backend:', error);
+        console.error('[BACKEND] ERROR durante inicio:', error);
+        console.error('[BACKEND] Stack:', error.stack);
+        notifyInstallationProgress('backend-error', `Error: ${error.message}`, 0);
         stopBackend();
         return false;
     }

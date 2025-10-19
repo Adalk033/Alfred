@@ -54,28 +54,28 @@ class VectorManager:
             use_optimized_storage: Usar almacenamiento optimizado DuckDB+Parquet
         """
         # Configurar ruta optimizada si no se especifica
-        # if chroma_db_path is None:
-        #     if use_optimized_storage:
-        #         # Usar ruta en %AppData%\Alfred\data\chroma_store
-        #         data_path = get_data_path()
-        #         self.chroma_db_path = str(data_path / "chroma_store")
-        #         logger.info(f"Usando almacenamiento optimizado: {self.chroma_db_path}")
-        #     else:
-        #         self.chroma_db_path = "./chroma_db"
-        # else:
-        #     self.chroma_db_path = chroma_db_path
-
-        # CORRECCION: La ChromaDB esta en AlfredElectron/chroma_db (fuera de backend/)
-        # Calcular ruta absoluta desde la ubicacion de este archivo
         if chroma_db_path is None:
-            # Este archivo esta en: AlfredElectron/backend/core/vector_manager.py
-            # ChromaDB esta en:     AlfredElectron/chroma_db/
-            # Subir 2 niveles: core -> backend -> AlfredElectron
-            project_root = Path(__file__).parent.parent.parent
-            self.chroma_db_path = str(project_root / "chroma_db")
-            logger.info(f"Usando ruta calculada de ChromaDB: {self.chroma_db_path}")
+            # Detectar si estamos en desarrollo o produccion
+            # En desarrollo: existe ./chroma_db y estamos en el directorio del proyecto
+            dev_chroma_path = Path("./chroma_db")
+            is_development = dev_chroma_path.exists() or Path("../chroma_db").exists()
+            
+            if is_development:
+                # DESARROLLO: Usar ruta relativa existente
+                self.chroma_db_path = "./chroma_db"
+                logger.info(f"[DESARROLLO] Usando ChromaDB local: {Path(self.chroma_db_path).absolute()}")
+            elif use_optimized_storage:
+                # PRODUCCION: Usar ruta en AppData para evitar permisos
+                data_path = get_data_path()
+                self.chroma_db_path = str(data_path / "chroma_store")
+                logger.info(f"[PRODUCCION] Usando ChromaDB en AppData: {self.chroma_db_path}")
+            else:
+                # Fallback
+                self.chroma_db_path = "./chroma_db"
+                logger.info(f"Usando ruta relativa por defecto: {self.chroma_db_path}")
         else:
             self.chroma_db_path = chroma_db_path
+            logger.info(f"Usando ruta especificada: {self.chroma_db_path}")
         
         # Crear directorio si no existe
         Path(self.chroma_db_path).mkdir(parents=True, exist_ok=True)
