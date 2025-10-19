@@ -1636,7 +1636,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
     const venvPath = path.join(backendPath, "venv");
     const requirementsPath = path.join(backendPath, "requirements.txt");
     const portablePythonPath = path.join(backendPath, "python-portable", "python.exe");
-    const packagesInstalledMarker = path.join(backendPath, "python-portable", ".packages_installed");
     const MAX_RETRIES = 2;
 
     // Detectar modo: Si app esta empaquetada -> PRODUCCION (usa python-portable)
@@ -1985,9 +1984,6 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
                 stdio: 'pipe'
             }).toLowerCase();
 
-            console.log(`[DEBUG] pip freeze output (primeras lineas):`);
-            console.log(installedPkgs.split('\n').slice(0, 5).join('\n'));
-
             const reqs = fs.readFileSync(requirementsPath, "utf8")
                 .split("\n")
                 .filter(line => line.trim() && !line.trim().startsWith('#'))
@@ -2020,6 +2016,8 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
                 return !found;
             });
+
+            console.log(`Dependencias faltantes: ${missing.length}`);
 
             if (missing.length > 0) {
                 console.log(`\n========================================================`);
