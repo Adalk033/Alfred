@@ -15,8 +15,32 @@ let isInitializing = false; // Flag para prevenir inicio del backend durante ini
 
 const BACKEND_PORT = 8000;
 const HOST = '127.0.0.1';
-const PATH_BACKEND = path.join(__dirname, '.', 'backend'); // Ruta al proyecto Alfred
+const isPackaged = app.isPackaged;
+
+// Determinar la ruta correcta del backend segun el modo
+// En desarrollo: __dirname/backend
+// En produccion (empaquetado): process.resourcesPath/backend
+const PATH_BACKEND = isPackaged
+    ? path.join(process.resourcesPath, 'backend')
+    : path.join(__dirname, 'backend');
+
 const SCRIPT_BACKEND = 'alfred_backend.py';
+
+// Log de diagnostico de rutas
+console.log('========================================================');
+console.log('  CONFIGURACION DE RUTAS - ALFRED');
+console.log('========================================================');
+console.log(`App empaquetada: ${isPackaged}`);
+console.log(`__dirname: ${__dirname}`);
+console.log(`process.resourcesPath: ${process.resourcesPath}`);
+console.log(`PATH_BACKEND: ${PATH_BACKEND}`);
+console.log(`Backend existe: ${fs.existsSync(PATH_BACKEND)}`);
+if (fs.existsSync(PATH_BACKEND)) {
+    const pythonPortablePath = path.join(PATH_BACKEND, 'python-portable', 'python.exe');
+    console.log(`Python portable path: ${pythonPortablePath}`);
+    console.log(`Python portable existe: ${fs.existsSync(pythonPortablePath)}`);
+}
+console.log('========================================================\n');
 
 // Configuración del backend
 const BACKEND_CONFIG = {
@@ -59,7 +83,6 @@ function createWindow() {
     // Mostrar cuando esté listo
     mainWindow.once('ready-to-show', async () => {
         mainWindow.show();
-        // El loader se mostrara y esperara a que initializeAppWithProgress termine
         // Marcar que estamos en proceso de inicialización
         isInitializing = true;
         console.log('[INIT] Flag isInitializing = true - Bloqueando inicio automático del backend');
@@ -77,19 +100,11 @@ function createWindow() {
 
     // Manejar recarga de la página (Ctrl+R)
     mainWindow.webContents.on('did-finish-load', () => {
-        console.log('Pagina cargada/recargada');
-
-        // CRÍTICO: No iniciar backend durante la inicialización inicial
-        if (isInitializing) {
-            console.log('[DID-FINISH-LOAD] Inicializacion en progreso, IGNORANDO checkAndStartBackend');
-            return;
-        }
+        //No iniciar backend durante la inicialización inicial
+        if (isInitializing) { return; }
 
         // Solo verificar conexión si ya pasó el ready-to-show inicial
-        if (mainWindow.isVisible()) {
-            console.log('[DID-FINISH-LOAD] Ventana visible y fuera de inicializacion, ejecutando checkAndStartBackend');
-            setTimeout(() => { checkAndStartBackend(); }, 500);
-        }
+        if (mainWindow.isVisible()) { setTimeout(() => { checkAndStartBackend(); }, 500); }
     });
 
     // Abrir DevTools en desarrollo
@@ -197,7 +212,12 @@ async function initializeAppWithProgress() {
 
         // 4. Configurar entorno Python y dependencias
         notifyInstallationProgress('python-env', 'Configurando Python...', 70);
-        await ensurePythonEnv(BACKEND_CONFIG.path);
+        try {
+            await ensurePythonEnv(BACKEND_CONFIG.path);
+        }
+        catch (error) {
+            notifyInstallationProgress('python-env-error', `Error configurando Python, ${error.message}`, 0);
+        }
 
         // 5. Iniciar backend y ESPERAR a que responda (solo despues de que todo este listo)
         notifyInstallationProgress('backend-start', 'Iniciando backend...', 80);
@@ -877,33 +897,30 @@ async function ensureOllamaModels() {
 
 // Encontrar la ruta completa de Python instalado
 function findPythonExecutable(backendPath = null, isDevelopment = false) {
-    // MODO DESARROLLO: SOLO usar Python del sistema (portable no tiene venv)
-    if (isDevelopment) {
-        try {
-            execSync('python --version', { stdio: 'pipe' });
-            console.log('Python del SISTEMA encontrado para desarrollo');
-            return 'python';
-        } catch {
-            throw new Error('Python del sistema no encontrado. En modo desarrollo se requiere Python instalado con venv.');
+    console.log(`[findPythonExecutable] Buscando Python en modo: ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'}`);
+
+    // MODO PRODUCCION (app empaquetada): Usar python-portable incluido
+    if (!isDevelopment) {
+        if (backendPath) {
+            const portablePython = path.join(backendPath, 'python-portable', 'python.exe');
+            if (fs.existsSync(portablePython)) {
+                console.log('[PRODUCCION] Python portable encontrado:', portablePython);
+                return portablePython;
+            } else {
+                throw new Error('Python portable no encontrado en app empaquetada. Build incompleto.');
+            }
         }
+        throw new Error('No se proporciono backendPath en modo produccion');
     }
 
-    // MODO PRODUCCION: Python portable incluido con la app
-    if (backendPath) {
-        const portablePython = path.join(backendPath, 'python-portable', 'python.exe');
-        if (fs.existsSync(portablePython)) {
-            console.log('Python portable encontrado en:', portablePython);
-            return portablePython;
-        }
-    }
-
-    // Fallback: Python del sistema
+    // MODO DESARROLLO (app NO empaquetada): Usar Python del sistema
+    console.log('[DESARROLLO] Buscando Python del sistema...');
     try {
         execSync('python --version', { stdio: 'pipe' });
-        console.log('Python encontrado en PATH del sistema');
+        console.log('[DESARROLLO] Python del sistema encontrado en PATH');
         return 'python';
     } catch {
-        throw new Error('No se pudo encontrar Python instalado');
+        throw new Error('Python del sistema no encontrado. En modo desarrollo se requiere Python instalado (con soporte para venv).');
     }
 }
 
@@ -1198,7 +1215,7 @@ async function installProblematicPackages(pythonCmd, backendPath, problematicPac
     const total = problematicPackages.length;
     const delay = installConfig.delay_between_packages_ms || 2000;
 
-    console.log(`⚠️  Instalando ${total} paquetes problematicos con delays de ${delay}ms...`);
+    console.log(`Instalando ${total} paquetes problematicos con delays de ${delay}ms...`);
 
     for (const pkgName of problematicPackages) {
         installed++;
@@ -1262,10 +1279,10 @@ async function installProblematicPackages(pythonCmd, backendPath, problematicPac
 
                 proc.on('close', (code) => {
                     if (code === 0) {
-                        console.log(`  ✓ ${pkgName} instalado correctamente`);
+                        console.log(`-${pkgName} instalado correctamente`);
                         resolve(true);
                     } else {
-                        console.error(`  ✗ ${pkgName} fallo: ${errorOut.substring(0, 150)}`);
+                        console.error(`-${pkgName} fallo: ${errorOut.substring(0, 150)}`);
                         resolve(false);
                     }
                 });
@@ -1285,15 +1302,15 @@ async function installProblematicPackages(pythonCmd, backendPath, problematicPac
             await new Promise(resolve => setTimeout(resolve, delay));
 
         } catch (error) {
-            console.error(`  ✗ Error al instalar ${pkgName}:`, error.message);
+            console.error(`-Error al instalar ${pkgName}:`, error.message);
             failed.push(pkgName);
         }
     }
 
     if (failed.length > 0) {
-        console.log(`\n⚠️  Paquetes problematicos que fallaron (${failed.length}): ${failed.join(', ')}`);
+        console.log(`\n-Paquetes problematicos que fallaron (${failed.length}): ${failed.join(', ')}`);
     } else {
-        console.log(`✓ Todos los paquetes problematicos instalados correctamente`);
+        console.log(`-Todos los paquetes problematicos instalados correctamente`);
     }
 
     return failed;
@@ -1416,15 +1433,15 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
 
         proc.on("close", (code) => {
             if (code === 0) {
-                console.log("✓ Instalacion en bloque completada correctamente");
-                console.log("✓ Instalacion en bloque completada correctamente");
+                console.log("Instalacion en bloque completada correctamente");
+                console.log("Instalacion en bloque completada correctamente");
                 resolve([]);
             } else {
-                console.log(`⚠️  Instalacion en bloque termino con errores (code ${code})`);
+                console.log(`Instalacion en bloque termino con errores (code ${code})`);
 
                 // Si no detectamos paquetes específicos, devolver los que intentamos instalar
                 if (failedPackages.length === 0) {
-                    console.log('⚠️  No se detectaron paquetes especificos con errores.');
+                    console.log('No se detectaron paquetes especificos con errores.');
                     console.log('Por seguridad, se marcaran como fallidos para retry...');
                     resolve(packagesToInstall.slice());
                 } else {
@@ -1519,10 +1536,10 @@ async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
 
                 proc.on('close', (code) => {
                     if (code === 0) {
-                        console.log(`✓ ${pkgName} instalado correctamente en retry`);
+                        console.log(`${pkgName} instalado correctamente en retry`);
                         resolve(true);
                     } else {
-                        console.error(`✗ ${pkgName} sigue fallando: ${errorOut.substring(0, 150)}`);
+                        console.error(`${pkgName} sigue fallando: ${errorOut.substring(0, 150)}`);
                         resolve(false);
                     }
                 });
@@ -1549,7 +1566,7 @@ async function retryFailedPackages(pythonCmd, backendPath, failedPackages) {
         console.log(`\nPaquetes que aun fallan (${stillFailed.length}):`);
         stillFailed.forEach(pkg => console.log(`   - ${pkg}`));
     } else {
-        console.log(`✓ Todos los paquetes fallidos fueron instalados correctamente`);
+        console.log(`Todos los paquetes fallidos fueron instalados correctamente`);
     }
 
     notifyInstallationProgress('deps-ready', 'Dependencias instaladas', 45);
@@ -1602,31 +1619,24 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
     const packagesInstalledMarker = path.join(backendPath, "python-portable", ".packages_installed");
     const MAX_RETRIES = 2;
 
-    // Detectar modo desarrollo: app NO empaquetada O existe carpeta node_modules en raiz
-    const isDevelopment = !app.isPackaged || fs.existsSync(path.join(__dirname, 'node_modules'));
-
-    console.log('╔════════════════════════════════════════════════════════╗');
-    console.log('║  DETECCION DE MODO PYTHON                              ║');
-    console.log('╚════════════════════════════════════════════════════════╝');
-    console.log(`Modo: ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'}`);
-    console.log(`App empaquetada: ${app.isPackaged}`);
-    console.log(`node_modules existe: ${fs.existsSync(path.join(__dirname, 'node_modules'))}`);
-    console.log(`__dirname: ${__dirname}`);
-    console.log(`Python portable path: ${portablePythonPath}`);
-    console.log(`Python portable existe: ${fs.existsSync(portablePythonPath)}`);
-    console.log(`Marker existe: ${fs.existsSync(packagesInstalledMarker)}`);
+    // Detectar modo: Si app esta empaquetada -> PRODUCCION (usa python-portable)
+    //                Si NO esta empaquetada -> DESARROLLO (usa Python del sistema)
+    const isDevelopment = !isPackaged;
+    notifyInstallationProgress('[env-start]', `MODO ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'} detectado`, 20 + retryCount * 5);
+    console.log('========================================================');
+    console.log(`  DETECCION DE MODO PYTHON - ${isDevelopment ? 'DESARROLLO (venv)' : 'PRODUCCION (portable)'} `);
+    console.log('========================================================');
 
     try {
         // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
         if (!isDevelopment) {
-            // Si existe python-portable/ con marker .packages_installed, usar directamente
-            if (fs.existsSync(portablePythonPath) && fs.existsSync(packagesInstalledMarker)) {
-                console.log('╔════════════════════════════════════════════════════════╗');
-                console.log('║  Python portable detectado con paquetes pre-instalados ║');
-                console.log('╚════════════════════════════════════════════════════════╝');
+            console.log('\n[PRODUCCION] Verificando Python portable...');
 
-                const markerContent = fs.readFileSync(packagesInstalledMarker, 'utf8');
-                console.log('Marker:', markerContent);
+            // Si existe python-portable/, usar directamente
+            if (fs.existsSync(portablePythonPath)) {
+                console.log('========================================================');
+                console.log('  Python portable detectado');
+                console.log('========================================================');
 
                 notifyInstallationProgress('portable-ready', 'Usando Python portable optimizado...', 45);
 
@@ -1637,26 +1647,46 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
                         stdio: 'pipe'
                     });
                     console.log('Python portable version:', version.trim());
+                    notifyInstallationProgress('deps-ready', 'Entorno Python listo (portable)', 48);
                 } catch (error) {
+                    notifyInstallationProgress('portable-error', 'Error con Python portable, reintentando...', 20 + (retryCount + 1) * 5);
                     throw new Error(`Python portable no funciona: ${error.message}`);
                 }
 
                 // NO CREAR VENV - usar Python portable directamente
                 console.log('Saltando creacion de venv - usando Python portable con dependencias incluidas');
                 console.log(`Usando Python en: ${portablePythonPath}`);
-
                 notifyInstallationProgress('deps-ready', 'Entorno Python listo (portable)', 48);
                 return portablePythonPath;
             } else {
                 // Fallback: Si no hay Python portable en produccion, error critico
-                throw new Error('Python portable no encontrado en modo produccion. Build incompleto.');
+                console.error('\n========================================================');
+                console.error('  ERROR: Python portable no encontrado');
+                console.error('========================================================');
+                console.error(`Ruta esperada: ${portablePythonPath}`);
+                console.error(`Backend path: ${backendPath}`);
+                console.error(`Backend existe: ${fs.existsSync(backendPath)}`);
+
+                // Listar contenido del backend para diagnostico
+                if (fs.existsSync(backendPath)) {
+                    console.error('\nContenido del directorio backend:');
+                    try {
+                        const files = fs.readdirSync(backendPath);
+                        files.forEach(file => console.error(`  - ${file}`));
+                    } catch (e) {
+                        console.error('  (No se pudo listar el contenido)');
+                    }
+                }
+                console.error('========================================================\n');
+
+                throw new Error(`Python portable no encontrado en modo produccion.\nRuta esperada: ${portablePythonPath}\nBackend path: ${backendPath}\nVerifique que el build incluyo la carpeta python-portable.`);
             }
         }
 
         // --- MODO DESARROLLO: Crear venv tradicional ---
-        console.log('╔══════════════════════════════════════════════════════════╗');
-        console.log('║  MODO DESARROLLO: Usando venv tradicional                ║');
-        console.log('╚══════════════════════════════════════════════════════════╝');
+        console.log('========================================================');
+        console.log('  MODO DESARROLLO: Usando venv tradicional');
+        console.log('========================================================');
 
         // Detectar rutas del binario Python para venv
         const pythonCmd = process.platform === "win32"
@@ -1826,9 +1856,9 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
         });
 
         if (missing.length > 0) {
-            console.log(`\n╔══════════════════════════════════════════════════════════╗`);
-            console.log(`║  INSTALANDO ${missing.length} DEPENDENCIAS FALTANTES`);
-            console.log(`╚══════════════════════════════════════════════════════════╝`);
+            console.log(`\n========================================================`);
+            console.log(`  INSTALANDO ${missing.length} DEPENDENCIAS FALTANTES`);
+            console.log(`========================================================`);
             console.log(`Paquetes a instalar: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`);
             notifyInstallationProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
 
@@ -1899,9 +1929,9 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
 
         }
         else {
-            console.log(`\n╔══════════════════════════════════════════════════════════╗`);
-            console.log(`║  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
-            console.log(`╚══════════════════════════════════════════════════════════╝`);
+            console.log(`\n========================================================`);
+            console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
+            console.log(`========================================================`);
             // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
             console.log('Verificando instalacion de PyTorch...');
             // Convertir installedPkgs (string) a array de nombres de paquetes
@@ -1991,9 +2021,10 @@ async function ensurePythonEnv(backendPath, retryCount = 0) {
             throw verifyError;
         }
 
-        console.log(`✅ Entorno Python listo en: ${pythonCmd}`);
+        console.log(`Entorno Python listo en: ${pythonCmd}`);
         return pythonCmd;
-    } catch (err) {
+    }
+    catch (err) {
         console.error("Error en ensurePythonEnv:", err);
 
         // Si el error es por archivos bloqueados y no hemos alcanzado el límite de reintentos
