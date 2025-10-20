@@ -17,7 +17,7 @@ from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain_core.documents import Document
 
 from utils.logger import get_logger
-from utils.paths import get_data_path
+from utils.paths import get_data_path, get_chroma_path
 from document_loader import DocumentLoader, DocumentMetadata
 from embedding_manager import get_embedding_manager
 from chunking_manager import get_chunking_manager
@@ -55,24 +55,9 @@ class VectorManager:
         """
         # Configurar ruta optimizada si no se especifica
         if chroma_db_path is None:
-            # Detectar si estamos en desarrollo o produccion
-            # En desarrollo: existe ./chroma_db y estamos en el directorio del proyecto
-            dev_chroma_path = Path("./chroma_db")
-            is_development = dev_chroma_path.exists() or Path("../chroma_db").exists()
-            
-            if is_development:
-                # DESARROLLO: Usar ruta relativa existente
-                self.chroma_db_path = "./chroma_db"
-                logger.info(f"[DESARROLLO] Usando ChromaDB local: {Path(self.chroma_db_path).absolute()}")
-            elif use_optimized_storage:
-                # PRODUCCION: Usar ruta en AppData para evitar permisos
-                data_path = get_data_path()
-                self.chroma_db_path = str(data_path / "chroma_store")
-                logger.info(f"[PRODUCCION] Usando ChromaDB en AppData: {self.chroma_db_path}")
-            else:
-                # Fallback
-                self.chroma_db_path = "./chroma_db"
-                logger.info(f"Usando ruta relativa por defecto: {self.chroma_db_path}")
+            # Usar la funcion get_chroma_path() que detecta modo desarrollo/produccion
+            self.chroma_db_path = get_chroma_path()
+            logger.info(f"Usando ChromaDB: {self.chroma_db_path}")
         else:
             self.chroma_db_path = chroma_db_path
             logger.info(f"Usando ruta especificada: {self.chroma_db_path}")

@@ -108,18 +108,6 @@
                         <p>Protege tus conversaciones y datos personales con cifrado AES-256. Si pierdes la clave, no podras recuperar tu informacion.</p>
                     </div>
                 </div>
-
-                <div class="info-card">
-                    <div class="info-card-icon warning">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h3>Sin cifrado</h3>
-                        <p>Tus datos se guardaran en texto plano. Mas rapido pero menos seguro. Puedes cambiar esto despues en Configuracion.</p>
-                    </div>
-                </div>
             </div>
 
             <div class="first-time-actions">
@@ -128,10 +116,7 @@
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                     </svg>
-                    Habilitar cifrado (Recomendado)
-                </button>
-                <button class="button secondary large" id="firstTimeDisableEncryption">
-                    Continuar sin cifrado
+                    Continuar
                 </button>
             </div>
 
@@ -141,7 +126,7 @@
                     <line x1="12" y1="16" x2="12" y2="12"></line>
                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
-                Podras cambiar esta configuracion en cualquier momento desde Configuracion → Seguridad
+                Tu seguridad y privacidad estan protegidas. Todos los datos se cifran localmente en tu dispositivo.
             </p>
         </div>
     </div>
@@ -816,8 +801,8 @@
                                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                 </svg>
                                 <div>
-                                    <h4>Primera configuracion de seguridad</h4>
-                                    <p>Alfred puede cifrar tus conversaciones y datos personales para mayor seguridad. Te recomendamos habilitar el cifrado.</p>
+                                    <h4>Configuracion de seguridad</h4>
+                                    <p>Alfred cifrara tus conversaciones y datos personales para mayor seguridad. Guarda tu clave de cifrado en un lugar seguro.</p>
                                 </div>
                             </div>
                             <div class="first-setup-options">
@@ -826,10 +811,7 @@
                                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                     </svg>
-                                    Habilitar cifrado (Recomendado)
-                                </button>
-                                <button class="button secondary" id="disableEncryptionBtn">
-                                    Continuar sin cifrado
+                                    Continuar
                                 </button>
                             </div>
                         </div>
@@ -885,12 +867,9 @@
                                 </div>
                             </div>
 
-                            <!-- Toggle de cifrado -->
+                            <!-- Informacion de cifrado -->
                             <div class="setting-group">
-                                <label>
-                                    <input type="checkbox" id="encryptionToggle" disabled>
-                                    Cifrar nuevos datos
-                                </label>
+                                <p><strong>Datos cifrados automaticamente</strong></p>
                                 <small>Los datos existentes no se vuelven a cifrar. Solo afecta datos nuevos.</small>
                             </div>
                         </div>

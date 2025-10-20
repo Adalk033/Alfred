@@ -3,6 +3,13 @@ const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const { app } = require('electron');
+
+// NOTAS sobre ALFRED_DEV_MODE:
+// - DESARROLLO (npm run dev o durante tests): ALFRED_DEV_MODE=1
+//   Datos se guardan en ./data, ./db, ./logs, ./chroma_db (carpetas del proyecto)
+// - PRODUCCION (app.isPackaged): ALFRED_DEV_MODE=0
+//   Datos se guardan en %AppData%\Alfred\ (AppData del usuario)
 
 // ============================================================================
 // VERIFICACION DE BACKEND
@@ -255,13 +262,17 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
         console.log('[BACKEND] Ejecutando comando:', pythonPath, ['-u', scriptPath]);
         console.log('[BACKEND] Working directory:', config.path);
 
+        // Determinar modo: DESARROLLO = 1 (siempre en Electron), PRODUCCION = 0 (cuando está empaquetada)
+        const devMode = app && app.isPackaged ? '0' : '1';
+        console.log(`[BACKEND] Modo: ${devMode === '1' ? 'DESARROLLO' : 'PRODUCCION'}`);
+
         processState.process = spawn(pythonPath, ['-u', scriptPath], {
             cwd: config.path,
             env: {
                 ...process.env,
                 PYTHONIOENCODING: 'utf-8',
                 PYTHONUNBUFFERED: '1',
-                ALFRED_DEV_MODE: '1'
+                ALFRED_DEV_MODE: devMode
             },
             stdio: ['ignore', 'pipe', 'pipe']
         });

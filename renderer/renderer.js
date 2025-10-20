@@ -400,8 +400,6 @@ function setupEventListeners() {
     const copyEncryptionKeyBtn = document.getElementById('copyEncryptionKeyBtn');
     const reloadEncryptionKeyBtn = document.getElementById('reloadEncryptionKeyBtn');
     const enableEncryptionBtn = document.getElementById('enableEncryptionBtn');
-    const disableEncryptionBtn = document.getElementById('disableEncryptionBtn');
-    const encryptionToggle = document.getElementById('encryptionToggle');
 
     if (toggleEncryptionKeyBtn) {
         toggleEncryptionKeyBtn.addEventListener('click', toggleEncryptionKey);
@@ -421,16 +419,6 @@ function setupEventListeners() {
 
     if (enableEncryptionBtn) {
         enableEncryptionBtn.addEventListener('click', enableEncryption);
-    }
-
-    if (disableEncryptionBtn) {
-        disableEncryptionBtn.addEventListener('click', disableEncryption);
-    }
-
-    if (encryptionToggle) {
-        encryptionToggle.addEventListener('change', (e) => {
-            toggleEncryptionStatus(e.target.checked);
-        });
     }
 }
 
@@ -1425,28 +1413,13 @@ async function checkAndShowFirstTimeEncryptionModal() {
             if (modal) {
                 modal.style.display = 'flex';
 
-                // Configurar event listeners para los botones del modal
+                // Configurar event listener para el boton del modal
                 const enableBtn = document.getElementById('firstTimeEnableEncryption');
-                const disableBtn = document.getElementById('firstTimeDisableEncryption');
 
                 if (enableBtn) {
                     enableBtn.onclick = async () => {
                         await setupEncryptionFirstTime(true);
                         modal.style.display = 'none';
-                    };
-                }
-
-                if (disableBtn) {
-                    disableBtn.onclick = async () => {
-                        const confirmed = await showConfirm(
-                            'Tus datos se guardaran en texto plano y seran menos seguros.\nSiempre puedes habilitar el cifrado despues en Configuracion.',
-                            'Continuar sin cifrado?',
-                            { type: 'warning', confirmText: 'Continuar', cancelText: 'Cancelar' }
-                        );
-                        if (confirmed) {
-                            await setupEncryptionFirstTime(false);
-                            modal.style.display = 'none';
-                        }
                     };
                 }
             }
@@ -1522,14 +1495,12 @@ async function loadEncryptionStatus() {
                 // Actualizar badge de estado
                 const statusBadge = document.getElementById('encryptionStatusBadge');
                 const statusText = document.getElementById('encryptionStatusText');
-                const encryptionToggle = document.getElementById('encryptionToggle');
                 const keyGroup = document.getElementById('encryptionKeyGroup');
 
                 if (data.encryption_enabled) {
                     statusBadge.classList.add('status-enabled');
                     statusBadge.classList.remove('status-disabled');
                     statusText.textContent = 'Cifrado habilitado';
-                    encryptionToggle.checked = true;
                     keyGroup.style.display = 'block';
 
                     // Cargar la clave
@@ -1538,12 +1509,8 @@ async function loadEncryptionStatus() {
                     statusBadge.classList.add('status-disabled');
                     statusBadge.classList.remove('status-enabled');
                     statusText.textContent = 'Cifrado deshabilitado';
-                    encryptionToggle.checked = false;
                     keyGroup.style.display = 'none';
                 }
-
-                // Habilitar el toggle
-                encryptionToggle.disabled = false;
             }
         }
     } catch (error) {
@@ -1689,37 +1656,6 @@ async function enableEncryption() {
     }
 }
 
-// Deshabilitar cifrado (primera vez)
-async function disableEncryption() {
-    const confirmed = await showConfirm(
-        'Tus datos se guardaran en texto plano sin cifrado.',
-        'Estas seguro?',
-        { type: 'warning', confirmText: 'Si, deshabilitar', cancelText: 'Cancelar' }
-    );
-
-    if (!confirmed) return;
-
-    try {
-        const response = await fetch('http://localhost:8000/settings/encryption/setup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enable_encryption: false })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            showNotification('warning', 'Cifrado deshabilitado - datos en texto plano');
-            await loadEncryptionStatus();
-        } else {
-            showNotification('error', data.message || 'Error al deshabilitar cifrado');
-        }
-    } catch (error) {
-        console.error('Error al deshabilitar cifrado:', error);
-        showNotification('error', 'Error al deshabilitar cifrado');
-    }
-}
-
 // Toggle cifrado (despues de primera configuracion)
 async function toggleEncryptionStatus(enabled) {
     const message = enabled
@@ -1735,8 +1671,6 @@ async function toggleEncryptionStatus(enabled) {
     );
 
     if (!confirmed) {
-        // Revertir el toggle
-        document.getElementById('encryptionToggle').checked = !enabled;
         return;
     }
 
@@ -1755,14 +1689,10 @@ async function toggleEncryptionStatus(enabled) {
             await loadEncryptionStatus();
         } else {
             showNotification('error', data.message || 'Error al cambiar estado de cifrado');
-            // Revertir el toggle
-            document.getElementById('encryptionToggle').checked = !enabled;
         }
     } catch (error) {
         console.error('Error al cambiar estado de cifrado:', error);
         showNotification('error', 'Error al cambiar estado de cifrado');
-        // Revertir el toggle
-        document.getElementById('encryptionToggle').checked = !enabled;
     }
 }
 
