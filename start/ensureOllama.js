@@ -66,7 +66,7 @@ function isOllamaInstalled() {
  */
 async function startOllamaService() {
     console.log('[OLLAMA] Intentando iniciar servicio...');
-    
+
     try {
         if (process.platform === 'win32') {
             // En Windows, iniciar Ollama en background
@@ -217,7 +217,7 @@ async function downloadAndInstallOllamaWindows(notifyProgress) {
             console.log(`[OLLAMA] Intento ${i + 1}/12 de verificacion...`);
 
             if (await checkOllama()) {
-                console.log('[OLLAMA] ✓ Ollama instalado e iniciado correctamente');
+                console.log('[OLLAMA] Ollama instalado e iniciado correctamente');
                 notifyProgress('ollama-ready', 'Ollama listo', 60);
                 return true;
             }
@@ -229,7 +229,7 @@ async function downloadAndInstallOllamaWindows(notifyProgress) {
 
         // Intentar iniciar manualmente
         if (await startOllamaService()) {
-            console.log('[OLLAMA] ✓ Ollama iniciado manualmente con exito');
+            console.log('[OLLAMA] Ollama iniciado manualmente con exito');
             notifyProgress('ollama-ready', 'Ollama listo', 60);
             return true;
         }
@@ -291,11 +291,11 @@ async function ensureOllamaModels(requiredModels = DEFAULT_REQUIRED_MODELS, noti
                     throw pullError;
                 }
             } else {
-                console.log(`[OLLAMA-MODELS] ✓ Modelo ${model} ya instalado`);
+                console.log(`[OLLAMA-MODELS] Modelo ${model} ya instalado`);
             }
         }
 
-        console.log('[OLLAMA-MODELS] ✓ Todos los modelos estan listos');
+        console.log('[OLLAMA-MODELS] Todos los modelos estan listos');
         return true;
 
     } catch (error) {
@@ -354,7 +354,7 @@ async function downloadOllamaModel(model, modelIndex, totalModels, baseProgress,
                 console.log(`[OLLAMA-MODELS] Verificando integridad...`);
                 notifyProgress('models-verify', `Verificando ${model}...`, baseProgress + 25);
             } else if (output.includes('success')) {
-                console.log(`[OLLAMA-MODELS] ✓ Modelo descargado exitosamente`);
+                console.log(`[OLLAMA-MODELS] Modelo descargado exitosamente`);
             }
 
             // Solo mostrar lineas significativas
@@ -370,7 +370,7 @@ async function downloadOllamaModel(model, modelIndex, totalModels, baseProgress,
 
         pullProcess.on('close', (code) => {
             if (code === 0) {
-                console.log(`[OLLAMA-MODELS] ✓ Modelo ${model} descargado correctamente`);
+                console.log(`[OLLAMA-MODELS] Modelo ${model} descargado correctamente`);
                 resolve();
             } else {
                 reject(new Error(`ollama pull termino con codigo ${code}`));

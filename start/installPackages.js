@@ -48,7 +48,7 @@ function loadGPUPackages(backendPath) {
         const configPath = path.join(backendPath, 'gpu-packages.json');
         if (fs.existsSync(configPath)) {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            console.log('[GPU-PACKAGES] ✓ Configuracion cargada');
+            console.log('[GPU-PACKAGES] Configuracion cargada');
             return config;
         }
     } catch (error) {
@@ -89,7 +89,7 @@ async function detectGPUType() {
     try {
         if (process.platform === 'win32') {
             execSync('nvidia-smi', { stdio: 'pipe' });
-            console.log('[GPU] ✓ GPU NVIDIA detectada');
+            console.log('[GPU] GPU NVIDIA detectada');
             return 'nvidia_cuda';
         }
     } catch {
@@ -101,7 +101,7 @@ async function detectGPUType() {
         if (process.platform === 'darwin') {
             const arch = execSync('uname -m', { encoding: 'utf8' }).trim();
             if (arch === 'arm64') {
-                console.log('[GPU] ✓ Apple Silicon detectado (M1/M2/M3)');
+                console.log('[GPU] Apple Silicon detectado (M1/M2/M3)');
                 return 'apple_mps';
             }
         }
@@ -198,7 +198,7 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, no
     if (failed.length > 0) {
         console.log(`\n[GPU-INSTALL] Paquetes que fallaron (${failed.length}): ${failed.join(', ')}`);
     } else {
-        console.log(`[GPU-INSTALL] ✓ PyTorch instalado correctamente para ${label}`);
+        console.log(`[GPU-INSTALL] PyTorch instalado correctamente para ${label}`);
     }
 
     notifyProgress('gpu-ready', 'PyTorch instalado', 45);
@@ -276,7 +276,7 @@ async function installProblematicPackages(pythonCmd, backendPath, problematicPac
         console.log(`\n[PROBLEMATIC] Paquetes fallidos (${failed.length}): ${failed.join(', ')}`);
     } else {
         notifyProgress('deps-problematic-done', 'Paquetes problematicos instalados', 42);
-        console.log(`[PROBLEMATIC] ✓ Todos instalados correctamente`);
+        console.log(`[PROBLEMATIC] Todos instalados correctamente`);
     }
 
     return failed;
@@ -356,7 +356,7 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
         proc.on('close', (code) => {
             if (code !== 0) {
                 console.error(`[BULK-INSTALL] Instalacion en bloque fallo con codigo ${code}`);
-                
+
                 // Detectar paquetes fallidos del output
                 const failedMatches = errorOutput.match(/ERROR:.*?([\w-]+)/g);
                 if (failedMatches) {
@@ -371,7 +371,7 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
                     failedPackages.push(...packagesToInstall);
                 }
             } else {
-                console.log(`[BULK-INSTALL] ✓ Instalacion en bloque exitosa`);
+                console.log(`[BULK-INSTALL] Instalacion en bloque exitosa`);
             }
 
             resolve(failedPackages);
@@ -448,7 +448,7 @@ async function retryFailedPackages(pythonCmd, backendPath, failedPackages, tempD
         console.log(`\n[RETRY] Paquetes que aun fallan (${stillFailed.length}):`);
         stillFailed.forEach(pkg => console.log(`   - ${pkg}`));
     } else {
-        console.log(`[RETRY] ✓ Todos los paquetes fallidos fueron instalados`);
+        console.log(`[RETRY] Todos los paquetes fallidos fueron instalados`);
     }
 
     notifyProgress('deps-ready', 'Dependencias instaladas', 45);
@@ -510,10 +510,10 @@ function installSinglePackage(pythonCmd, packageSpec, backendPath, tempDir, inde
 
         proc.on('close', (code) => {
             if (code === 0) {
-                console.log(`  ✓ ${packageSpec} instalado`);
+                console.log(`${packageSpec} instalado`);
                 resolve(true);
             } else {
-                console.error(`  ✗ ${packageSpec} fallo: ${errorOut.substring(0, 150)}`);
+                console.error(`${packageSpec} fallo: ${errorOut.substring(0, 150)}`);
                 resolve(false);
             }
         });
@@ -530,12 +530,12 @@ function installSinglePackage(pythonCmd, packageSpec, backendPath, tempDir, inde
  */
 async function killPythonProcesses() {
     if (process.platform !== 'win32') return;
-    
+
     try {
         console.log('[KILL-PYTHON] Cerrando procesos de Python bloqueantes...');
         execSync('taskkill /F /IM python.exe /T', { stdio: 'ignore' });
         await new Promise(resolve => setTimeout(resolve, 2000));
-        console.log('[KILL-PYTHON] ✓ Procesos cerrados');
+        console.log('[KILL-PYTHON] Procesos cerrados');
     } catch (error) {
         console.log('[KILL-PYTHON] No habia procesos Python para cerrar');
     }

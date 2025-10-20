@@ -1,4 +1,3 @@
-// ensurePython.js - Modulo para manejo de Python
 const { app, dialog } = require('electron');
 const { execSync, spawn } = require('child_process');
 const path = require('path');
@@ -30,9 +29,7 @@ async function checkPython() {
             encoding: 'utf8',
             stdio: 'pipe'
         }).trim();
-        console.log('[PYTHON] Python detectado:', version);
 
-        // Verificar version >= 3.12
         const match = version.match(/Python (\d+)\.(\d+)/);
         if (match) {
             const major = parseInt(match[1]);
@@ -59,26 +56,16 @@ async function checkPython() {
  * @returns {string} Comando de Python a usar
  */
 function findPythonExecutable(backendPath = null, isDevelopment = false) {
-    console.log(`[PYTHON] Buscando Python en modo: ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'}`);
-
     // MODO PRODUCCION: Usar python-portable incluido
     if (!isDevelopment && backendPath) {
         const pythonPortablePath = path.join(backendPath, 'python-portable', 'python.exe');
-        console.log('[PRODUCCION] Verificando Python portable en:', pythonPortablePath);
-
-        if (fs.existsSync(pythonPortablePath)) {
-            console.log('[PRODUCCION] Python portable encontrado');
-            return pythonPortablePath;
-        } else {
-            throw new Error('Python portable no encontrado en produccion');
-        }
+        if (fs.existsSync(pythonPortablePath)) { return pythonPortablePath; }
+        else { throw new Error('Python portable no encontrado en produccion'); }
     }
 
     // MODO DESARROLLO: Usar Python del sistema
-    console.log('[DESARROLLO] Buscando Python del sistema...');
     try {
         execSync('python --version', { stdio: 'pipe' });
-        console.log('[DESARROLLO] Python del sistema encontrado');
         return 'python';
     } catch {
         throw new Error('Python no encontrado en el sistema');
@@ -96,7 +83,6 @@ function findPythonExecutable(backendPath = null, isDevelopment = false) {
  * @returns {Promise<boolean>} true si Python esta listo
  */
 async function ensurePython(mainWindow, notifyProgress) {
-    console.log('[PYTHON] === INICIANDO VERIFICACION DE PYTHON ===');
     notifyProgress('python-check', 'Verificando Python...', 0);
 
     // Verificar si existe marca de instalacion previa
@@ -104,33 +90,19 @@ async function ensurePython(mainWindow, notifyProgress) {
 
     // Si existe la marca, Python se instalo en sesion anterior
     if (fs.existsSync(pythonInstalledMarker)) {
-        console.log('[PYTHON] Detectada marca de instalacion previa');
         notifyProgress('python-verify', 'Verificando Python instalado...', 2);
 
         try {
             findPythonExecutable(null, true); // Buscar en PATH sistema
-            
             // Python encontrado, eliminar marca
-            try {
-                fs.unlinkSync(pythonInstalledMarker);
-                console.log('[PYTHON] Marca eliminada, Python disponible');
-            } catch (err) {
-                console.error('[PYTHON] Error al eliminar marca:', err);
-            }
-
+            fs.unlinkSync(pythonInstalledMarker);
             notifyProgress('python-ready', 'Python listo', 20);
             return true;
-
         } catch (findError) {
             // Python aun no disponible, requiere reinicio
             console.log('[PYTHON] Python aun no disponible. Requiere reinicio.');
-
             // Limpiar marca
-            try {
-                fs.unlinkSync(pythonInstalledMarker);
-            } catch (err) {
-                console.error('[PYTHON] Error al eliminar marca:', err);
-            }
+            fs.unlinkSync(pythonInstalledMarker);
 
             // Mostrar dialogo de reinicio
             if (mainWindow && !mainWindow.isDestroyed()) {
@@ -165,10 +137,12 @@ async function ensurePython(mainWindow, notifyProgress) {
     try {
         if (process.platform === 'win32') {
             return await downloadAndInstallPythonWindows(mainWindow, notifyProgress);
-        } else if (process.platform === 'darwin') {
+        }
+        else if (process.platform === 'darwin') { // macOS
             console.error('[PYTHON] Instalacion automatica no soportada en macOS');
             return false;
-        } else {
+        }
+        else {// Linux u otras plataformas
             console.error('[PYTHON] Instalacion automatica no soportada en esta plataforma');
             return false;
         }
@@ -325,18 +299,13 @@ function getSafeTempDir(backendPath, isPackaged) {
         const tempDir = path.join(userDataPath, 'temp');
 
         // Crear si no existe
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
-
+        if (!fs.existsSync(tempDir)) { fs.mkdirSync(tempDir, { recursive: true }); }
         return tempDir;
-    } else {
+    }
+    else {
         // Modo desarrollo: usar temp en backend
         const tempDir = path.join(backendPath, 'temp');
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
-
+        if (!fs.existsSync(tempDir)) { fs.mkdirSync(tempDir, { recursive: true }); }
         return tempDir;
     }
 }
@@ -363,10 +332,6 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
     //                Si NO esta empaquetada -> DESARROLLO (usa Python del sistema)
     const isDevelopment = !isPackaged;
     notifyProgress('[env-start]', `MODO ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'} detectado`, 20 + retryCount * 5);
-    console.log('========================================================');
-    console.log(`  DETECCION DE MODO PYTHON - ${isDevelopment ? 'DESARROLLO (venv)' : 'PRODUCCION (portable)'} `);
-    console.log('========================================================');
-
     try {
         // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
         if (!isDevelopment) {
@@ -374,19 +339,13 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
 
             // Si existe python-portable/, usar directamente
             if (fs.existsSync(portablePythonPath)) {
-                console.log('========================================================');
-                console.log('  Python portable detectado');
-                console.log('========================================================');
-
                 notifyProgress('portable-ready', 'Usando Python portable optimizado...', 45);
-
                 // Verificar que funciona
                 try {
-                    const version = execSync(`"${portablePythonPath}" --version`, {
+                    execSync(`"${portablePythonPath}" --version`, {
                         encoding: 'utf8',
                         stdio: 'pipe'
                     });
-                    console.log('Python portable version:', version.trim());
                     notifyProgress('deps-ready', 'Entorno Python listo (portable)', 48);
                 } catch (error) {
                     notifyProgress('portable-error', 'Error con Python portable, reintentando...', 20 + (retryCount + 1) * 5);
@@ -394,15 +353,12 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 }
 
                 // Verificar pip en Python portable
-                console.log('\n[PRODUCCION] Verificando pip...');
                 try {
-                    const pipVersion = execSync(`"${portablePythonPath}" -m pip --version`, {
+                    execSync(`"${portablePythonPath}" -m pip --version`, {
                         encoding: 'utf8',
                         stdio: 'pipe'
                     });
-                    console.log('pip version:', pipVersion.trim());
                 } catch (pipError) {
-                    console.warn('pip no encontrado, instalando...');
                     execSync(`"${portablePythonPath}" -m ensurepip --upgrade`, {
                         encoding: 'utf8',
                         stdio: 'inherit'
@@ -410,7 +366,6 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 }
 
                 // Verificar dependencias instaladas en Python portable
-                console.log('\n[PRODUCCION] Verificando dependencias...');
                 notifyProgress('deps-check', 'Verificando dependencias de Python...', 35);
 
                 let installedPkgs = '';
@@ -422,6 +377,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 }
                 catch (err) {
                     notifyProgress('deps-error', `Error al listar dependencias, error: ${err.message}`, 20 + (retryCount + 1) * 5);
+                    throw new Error(`Error al listar dependencias: ${err.message}`);
                 }
 
                 const reqs = fs.readFileSync(requirementsPath, "utf8")
@@ -429,24 +385,22 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     .filter(line => line.trim() && !line.trim().startsWith('#'))
                     .map(line => line.trim());
 
-                // Extraer nombres de paquetes
+                // Extraer nombres de paquetes y normalizarlos (convertir guiones a guiones bajos)
                 const reqPkgNames = reqs.map(r => {
                     const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
-                    return match ? match[1].toLowerCase() : null;
+                    return match ? match[1].toLowerCase().replace(/-/g, '_') : null;
                 }).filter(Boolean);
 
-                // Verificar paquetes faltantes
-                const missing = reqPkgNames.filter(pkg => {
-                    const searchName = pkg.toLowerCase()
-                        .replace(/-/g, '[-_]')
-                        .replace(/\./g, '\\.');
-                    const pattern = new RegExp(`^${searchName}==`, 'm');
-                    const found = pattern.test(installedPkgs);
-                    if (!found) {
-                        notifyProgress('deps-missing-item', `Dependencia faltante: ${pkg}`, 33);
-                    }
-                    return !found;
-                });
+            // Verificar si hay paquetes faltantes
+            // Normalizar installedPkgs: convertir guiones a guiones bajos para comparación consistente
+            const normalizedInstalledPkgs = installedPkgs.replace(/^([a-z0-9._-]+)-/gm, '$1_');
+            const missing = reqPkgNames.filter(pkg => {
+                const searchName = pkg.replace(/\./g, '\\.');
+                const pattern = new RegExp(`^${searchName}==`, 'm');
+                const found = pattern.test(normalizedInstalledPkgs);
+                if (!found) { notifyProgress('deps-missing-item', `Dependencia faltante: ${pkg}`, 33); }
+                return !found;
+            });
 
                 notifyProgress('deps-missing', `Dependencias faltantes: ${missing.length}`, 34);
                 notifyProgress('deps-install-start', 'Iniciando instalacion de dependencias...', 35);
@@ -649,8 +603,6 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 console.log("Entorno virtual creado correctamente");
             }
 
-            console.log(`Usando Python en: ${pythonCmd}`);
-
             // Verificar y actualizar pip
             try {
                 const pipVersion = execSync(`"${pythonCmd}" -m pip --version`, {
@@ -712,40 +664,38 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 stdio: 'pipe'
             }).toLowerCase();
 
+            console.log('\n[DEPENDENCIAS] Verificando dependencias requeridas...');
             const reqs = fs.readFileSync(requirementsPath, "utf8")
                 .split("\n")
                 .filter(line => line.trim() && !line.trim().startsWith('#'))
                 .map(line => line.trim());
 
-            // Extraer nombres de paquetes (antes de ==, >=, etc.)
-            // Importante: incluir puntos en el nombre (ej: pdfminer.six, unstructured.pytesseract)
+            reqs.forEach(req => {
+                console.log(`[DEPENDENCIAS] Requerido: ${req}`);
+            });
+
+            // Extraer nombres de paquetes (antes de ==, >=, etc.) y normalizarlos (convertir guiones a guiones bajos)
             const reqPkgNames = reqs.map(r => {
                 const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
-                return match ? match[1].toLowerCase() : null;
+                return match ? match[1].toLowerCase().replace(/-/g, '_') : null;
             }).filter(Boolean);
 
             console.log(`Dependencias requeridas: ${reqPkgNames.length} paquetes`);
             console.log(`Dependencias instaladas: ${installedPkgs.split('\n').filter(l => l.trim()).length} paquetes`);
 
             // Verificar si hay paquetes faltantes
+            // Normalizar installedPkgs: convertir guiones a guiones bajos para comparación consistente
+            const normalizedInstalledPkgs = installedPkgs.replace(/^([a-z0-9._-]+)-/gm, '$1_');
             const missing = reqPkgNames.filter(pkg => {
-                // Normalizar el nombre: guiones pueden ser guiones bajos en pip freeze
-                // Los puntos se mantienen como puntos
-                const searchName = pkg.toLowerCase()
-                    .replace(/-/g, '[-_]')  // Guion puede ser guion o guion bajo
-                    .replace(/\./g, '\\.');  // Escapar puntos para regex
-
+                const searchName = pkg.replace(/\./g, '\\.');
                 const pattern = new RegExp(`^${searchName}==`, 'm');
-                const found = pattern.test(installedPkgs);
-
-                if (!found) {
-                    console.log(`[deps-check] Falta: ${pkg}`);
-                }
-
+                const found = pattern.test(normalizedInstalledPkgs);
+                if (!found) { console.log(`[deps-check] Falta: ${pkg}`); }
                 return !found;
             });
-
-            console.log(`Dependencias faltantes: ${missing.length}`);
+            console.log('\n[DEPENDENCIAS] Verificacion completada.');
+            console.log(`Dependencias faltantes: ${missing.length} y esas son:`)
+            missing.forEach(pkg => console.log(`  - ${pkg}`));
 
             if (missing.length > 0) {
                 console.log(`\n========================================================`);
@@ -869,16 +819,16 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                             stdio: 'pipe',
                             cwd: backendPath
                         });
-                        console.log(`✓ ${check.package} OK`);
+                        console.log(`${check.package} OK`);
                     } catch (importError) {
-                        console.error(`✗ ERROR: ${check.package} no se puede importar como '${check.module}'`);
+                        console.error(`ERROR: ${check.package} no se puede importar como '${check.module}'`);
                         failedChecks.push(check);
                     }
                 }
 
                 // Si hay paquetes que fallan, intentar reinstalarlos
                 if (failedChecks.length > 0) {
-                    console.log(`\n⚠️  Detectadas ${failedChecks.length} instalaciones corruptas. Reparando...`);
+                    console.log(`\nDetectadas ${failedChecks.length} instalaciones corruptas. Reparando...`);
                     notifyProgress('deps-repair', `Reparando ${failedChecks.length} paquetes corruptos...`, 49);
 
                     for (const check of failedChecks) {
@@ -896,9 +846,9 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                                 cwd: backendPath,
                                 timeout: 120000 // 2 minutos
                             });
-                            console.log(`✓ ${check.package} reparado exitosamente`);
+                            console.log(`${check.package} reparado exitosamente`);
                         } catch (repairError) {
-                            console.error(`✗ Error al reparar ${check.package}:`, repairError.message);
+                            console.error(`Error al reparar ${check.package}:`, repairError.message);
                             throw new Error(`No se pudo reparar ${check.package}`);
                         }
                     }
