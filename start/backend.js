@@ -4,10 +4,6 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 
-// Variables compartidas (se pasan como parametros para evitar estado global)
-let backendProcess = null;
-let isBackendStartedByElectron = false;
-
 // ============================================================================
 // VERIFICACION DE BACKEND
 // ============================================================================
@@ -54,6 +50,9 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
     notifyProgress('backend-init', 'Iniciando servidor Alfred...', 85);
 
     let attemptCount = 0;
+    let lastProgressNotification = 0;  // Control para no spamear notificaciones
+    const PROGRESS_UPDATE_INTERVAL = 5000;  // Notificar solo cada 5 segundos
+
     while (Date.now() - startTime < config.startupTimeout) {
         attemptCount++;
         const elapsed = Date.now() - startTime;
@@ -68,9 +67,9 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
         }
 
         if (await isBackendRunning(config.host, config.port)) {
-            console.log(`[WAIT-BACKEND] ✓ Backend esta disponible despues de ${attemptCount} intentos (${Math.round(elapsed / 1000)}s)`);
+            console.log(`[WAIT-BACKEND] Backend esta disponible despues de ${attemptCount} intentos (${Math.round(elapsed / 1000)}s)`);
             notifyStatus(true);
-            notifyProgress('backend-ready', 'Alfred iniciado correctamente', 100);
+            // No actualizar aqui, dejar que main.js maneje el 100% final
             return true;
         }
 
@@ -81,9 +80,16 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
 
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Actualizar progreso mientras espera
-        const progress = 85 + Math.min(10, (elapsed / config.startupTimeout) * 10);
-        notifyProgress('backend-starting', 'Cargando sistema de IA...', progress);
+        // Solo actualizar progreso cada 5 segundos, NO decimales
+        if (elapsed - lastProgressNotification >= PROGRESS_UPDATE_INTERVAL) {
+            lastProgressNotification = elapsed;
+            // Usar valores enteros, solo 3 niveles: 85 -> 87 -> 89 -> 90
+            let progress = 85;
+            if (elapsed > 30000) progress = 87;
+            if (elapsed > 60000) progress = 89;
+            if (elapsed > 120000) progress = 90;
+            notifyProgress('backend-starting', 'Cargando sistema de IA...', progress);
+        }
     }
 
     console.error(`[WAIT-BACKEND] TIMEOUT: Backend no respondio en ${Math.round(config.startupTimeout / 1000)}s`);
@@ -108,40 +114,40 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
 async function startBackend(config, pythonPath, userDataPath, notifyProgress, processState) {
     if (processState.process) {
         console.log('[BACKEND] El backend ya esta iniciado');
-        notifyProgress('backend-already', 'El backend ya esta iniciado', 100);
+        // No notificar aqui, dejar que main.js maneje el progreso
         return true;
     }
 
-    notifyProgress('backend-start', 'Preparando servidor de Alfred...', 80);
+    // No notificar aqui tampoco, main.js ya notifico en 80%
+    // Solo log para debugging
+    console.log('[BACKEND] Iniciando backend...');
 
     // Verificar directorios y script
     if (!fs.existsSync(config.path)) {
         console.error('[BACKEND] ERROR: No se encontro el directorio del backend:', config.path);
-        notifyProgress('backend-error', 'Error: Directorio del backend no encontrado', 0);
+        // No notificar aqui, dejara que main.js maneje el error
         return false;
     }
 
     const scriptPath = path.join(config.path, 'core', config.script);
     if (!fs.existsSync(scriptPath)) {
         console.error('[BACKEND] ERROR: No se encontro el script del backend:', scriptPath);
-        notifyProgress('backend-error', 'Error: Script del backend no encontrado', 0);
+        // No notificar aqui
         return false;
     }
 
     try {
         console.log('[BACKEND] Paso 1/3: Python configurado:', pythonPath);
-        
+
         // Pequena pausa para asegurar que pip libere recursos
         await new Promise(resolve => setTimeout(resolve, 500));
 
         console.log('[BACKEND] Paso 2/3: Iniciando servidor FastAPI...');
-        notifyProgress('backend-launch', 'Lanzando servidor FastAPI...', 82);
 
         // Crear directorio de logs
         const logDir = path.join(userDataPath, 'logs');
         if (!fs.existsSync(logDir)) {
             fs.mkdirSync(logDir, { recursive: true });
-            notifyProgress('backend-logdir', 'Creando directorio de logs...', 83);
         }
         const backendLogPath = path.join(logDir, 'backend.log');
         console.log('[BACKEND] Los logs del backend se guardaran en:', backendLogPath);
@@ -150,21 +156,19 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
         try {
             const scriptContent = fs.readFileSync(scriptPath, 'utf8');
             console.log('[BACKEND] Script Python leido correctamente, tamano:', scriptContent.length, 'bytes');
-            notifyProgress('backend-script', 'Verificando script del backend...', 84);
 
             if (!scriptContent.includes('fastapi') && !scriptContent.includes('FastAPI')) {
                 console.warn('[BACKEND] ADVERTENCIA: El script no parece contener codigo FastAPI');
             }
         } catch (readError) {
             console.error('[BACKEND] ERROR: No se puede leer el script Python:', readError);
-            notifyProgress('backend-error', 'Error: No se puede leer el script del backend', 0);
+            // No notificar aqui
             throw new Error(`No se puede leer ${scriptPath}: ${readError.message}`);
         }
 
         // Ejecutar backend
         console.log('[BACKEND] Ejecutando comando:', pythonPath, ['-u', scriptPath]);
         console.log('[BACKEND] Working directory:', config.path);
-        notifyProgress('backend-spawn', 'Iniciando proceso del backend...', 84);
 
         processState.process = spawn(pythonPath, ['-u', scriptPath], {
             cwd: config.path,
@@ -175,8 +179,7 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
             },
             stdio: ['ignore', 'pipe', 'pipe']
         });
-        
-        notifyProgress('backend-spawned', 'Proceso del backend iniciado', 85);
+
         console.log('[BACKEND] Proceso spawn creado, PID:', processState.process.pid);
 
         // Configurar logging
@@ -191,7 +194,7 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
     } catch (error) {
         console.error('[BACKEND] ERROR durante inicio:', error);
         console.error('[BACKEND] Stack:', error.stack);
-        notifyProgress('backend-error', `Error: ${error.message}`, 0);
+        // No notificar aqui, dejara que el wrapper maneje el error
         stopBackend(processState);
         return false;
     }
@@ -251,7 +254,6 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
         if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
             hasModuleError = true;
             console.error('[BACKEND] ERROR CRITICO: Faltan dependencias de Python');
-            notifyProgress('backend-error', 'Error: Faltan dependencias de Python', 0);
         }
 
         if (error.includes('Traceback') || error.includes('Error:') || error.includes('Exception')) {
@@ -264,7 +266,6 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
         if (!hasOutput && process && process.exitCode === null) {
             console.warn('[BACKEND] ADVERTENCIA: No hay output del backend despues de 30 segundos');
             console.warn('[BACKEND] El proceso sigue corriendo pero no muestra logs');
-            notifyProgress('backend-warning', 'Backend iniciado pero sin output (esto es normal)', 83);
         }
     }, 30000);
 
@@ -311,7 +312,7 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
  */
 async function startBackendAndWait(config, pythonPath, userDataPath, notifyProgress, notifyStatus, processState, getBackendProcess) {
     const started = await startBackend(config, pythonPath, userDataPath, notifyProgress, processState);
-    
+
     if (!started) {
         console.error('[BACKEND] No se pudo iniciar el backend');
         return false;
@@ -319,7 +320,7 @@ async function startBackendAndWait(config, pythonPath, userDataPath, notifyProgr
 
     console.log('[BACKEND] Esperando que el backend responda en http://127.0.0.1:8000/health...');
     const ready = await waitForBackend(config, notifyProgress, notifyStatus, getBackendProcess);
-    
+
     if (!ready) {
         console.error('[BACKEND] ERROR: El backend no respondio a tiempo.');
         console.error('[BACKEND] Timeout:', config.startupTimeout, 'ms');
@@ -327,7 +328,7 @@ async function startBackendAndWait(config, pythonPath, userDataPath, notifyProgr
         return false;
     }
 
-    console.log('[BACKEND] ✓ Backend iniciado correctamente y respondiendo.');
+    console.log('[BACKEND] Backend iniciado correctamente y respondiendo.');
     return true;
 }
 

@@ -170,15 +170,29 @@ app.on('before-quit', () => {
 
 // Wrapper para notifyProgress que fuerza progresion ordenada sin conflictos
 function createProgressNotifier() {
-    let lastPercent = 0;
-    const minPercentPerStep = 5; // Minimo incremento de porcentaje
+    let lastNotifiedPercent = 0;
+    const minNotificationGap = 8;  // Minimo incremento para notificar
     
     return (eventId, message, percent) => {
-        // Asegurar que el porcentaje nunca baje y tiene minimo incremento
-        if (percent <= lastPercent && percent !== 0) {
-            percent = Math.min(lastPercent + minPercentPerStep, 99);
+        // Si es error (0%), notificar siempre
+        if (percent === 0) {
+            lastNotifiedPercent = 0;
+            notifyInstallationProgress(eventId, message, percent);
+            return;
         }
-        lastPercent = percent;
+        
+        // Si baja, silenciar (no notificar)
+        if (percent <= lastNotifiedPercent) {
+            return;
+        }
+        
+        // Si el incremento es pequeño (<8%), silenciar
+        if (percent - lastNotifiedPercent < minNotificationGap) {
+            return;
+        }
+        
+        // Notificar solo cuando hay incremento significativo
+        lastNotifiedPercent = percent;
         notifyInstallationProgress(eventId, message, percent);
     };
 }
