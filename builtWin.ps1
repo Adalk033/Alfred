@@ -42,7 +42,6 @@ Write-Host "╚═════════════════════�
 
 # Paths importantes
 $node_modulesPath = Join-Path $PSScriptRoot "node_modules"
-$chroma_dbPath = Join-Path $PSScriptRoot "backend\chroma_db"
 $venvPath = Join-Path $PSScriptRoot "backend\venv"
 $venvTestPath = Join-Path $PSScriptRoot "backend\venv_test_clone"
 $buildPath = Join-Path $PSScriptRoot "dist"
@@ -108,7 +107,6 @@ if (Test-Path $envPath) {
 
 # 7. Limpiar directorios de datos del usuario
 $pathsToClean = @(
-    @{Path = $chroma_dbPath; Name = "chroma_db"},
     @{Path = $appDataPath; Name = "%AppData% runtime"},
     @{Path = $tempPath; Name = "temp"},
     @{Path = $buildPath; Name = "dist (build anterior)"}
