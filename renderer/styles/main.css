@@ -1,7 +1,7 @@
 /* Importacion de estilos - DEBE IR PRIMERO */
 @import './themes/base.css';
 @import './themes/dark.css';
-@import './themes/light.css';
+/* @import './themes/light.css'; */
 @import './components/support.css';
 @import './components/bottom.css';
 @import './components/messages.css';

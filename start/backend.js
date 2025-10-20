@@ -10,15 +10,28 @@ const fs = require('fs');
 
 /**
  * Verificar si el backend esta corriendo
- * @param {string} host - Host del backend
- * @param {number} port - Puerto del backend
+ * @param {string|Object} hostOrConfig - Host del backend o objeto config
+ * @param {number} [port] - Puerto del backend (opcional si se pasa config)
  * @returns {Promise<boolean>} true si el backend responde
  */
-async function isBackendRunning(host, port) {
+async function isBackendRunning(hostOrConfig, port) {
+    // Manejar ambos casos: llamada con (host, port) o (config)
+    let host, backendPort;
+
+    if (typeof hostOrConfig === 'object' && hostOrConfig !== null) {
+        // Se paso un objeto config
+        host = hostOrConfig.host || '127.0.0.1';
+        backendPort = hostOrConfig.port || 8000;
+    } else {
+        // Se pasaron parametros individuales
+        host = hostOrConfig || '127.0.0.1';
+        backendPort = port || 8000;
+    }
+
     return new Promise((resolve) => {
         const req = http.request({
             hostname: host,
-            port: port,
+            port: backendPort,
             path: '/health',
             method: 'GET',
             timeout: 3000
@@ -175,7 +188,8 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
             env: {
                 ...process.env,
                 PYTHONIOENCODING: 'utf-8',
-                PYTHONUNBUFFERED: '1'
+                PYTHONUNBUFFERED: '1',
+                ALFRED_DEV_MODE: '1'
             },
             stdio: ['ignore', 'pipe', 'pipe']
         });

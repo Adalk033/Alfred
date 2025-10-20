@@ -1,5 +1,5 @@
 {
-  "name": "alfred-electron",
+  "name": "alfred",
   "version": "0.0.11",
   "description": "Alfred - Asistente Personal Inteligente con interfaz gráfica",
   "main": "main.js",
