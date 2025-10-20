@@ -198,7 +198,7 @@ class AlfredCore:
         if self._vector_manager is None:
             logger.info("Inicializando Vector Manager...")
             # Pasar None para chroma_db_path para que VectorManager use su lógica automática
-            # que calcula la ruta correcta: AlfredElectron/chroma_db
+            # que calcula la ruta correcta: Alfred/chroma_db
             self._vector_manager = VectorManager(
                 chroma_db_path=None,  # CORREGIDO: Usar lógica automática de VectorManager
                 embedding_model=self.embedding_model

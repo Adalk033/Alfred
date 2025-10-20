@@ -2972,7 +2972,7 @@ async def clear_index_endpoint():
             
             # Calcular ruta de ChromaDB
             backend_dir = Path(__file__).parent.parent  # backend/
-            project_root = backend_dir.parent  # AlfredElectron/
+            project_root = backend_dir.parent  # Alfred/
             chroma_db_path = str(project_root / 'chroma_db')
             
             backend_logger.info(f"Conectando a ChromaDB en: {chroma_db_path}")

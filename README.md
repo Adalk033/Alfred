@@ -66,8 +66,8 @@ ollama pull nomic-embed-text:v1.5
 
 ```bash
 # Clonar repositorio
-git clone https://github.com/Adalk033/AlfredElectron.git
-cd AlfredElectron
+git clone https://github.com/Adalk033/Alfred.git
+cd Alfred
 
 # Instalar dependencias de Electron
 npm install
@@ -151,7 +151,7 @@ python core/alfred_backend.py
 ## Estructura del Proyecto
 
 ```
-AlfredElectron/
+Alfred/
 ├── main.js                    # Proceso principal Electron
 ├── preload.js                 # Preload script (IPC bridge)
 ├── package.json               # Dependencias Node.js y build config

@@ -47,7 +47,7 @@ ALFRED_FORCE_RELOAD=false
 
 4. Ejecuta la aplicacion Electron:
 ```powershell
-cd AlfredElectron
+cd Alfred
 .\start.ps1
 ```
 

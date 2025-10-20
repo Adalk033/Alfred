@@ -10,7 +10,7 @@
 
 Alfred is a **local-first AI assistant** with dual frontend architectures:
 - **Backend (`Alfred/`)**: FastAPI REST server with RAG (Retrieval-Augmented Generation) using ChromaDB + Ollama LLMs
-- **Frontend (`AlfredElectron/`)**: Electron desktop app that auto-manages the backend lifecycle
+- **Frontend (`Alfred/`)**: Electron desktop app that auto-manages the backend lifecycle
 
 **Core Philosophy**: 100% local execution for privacy - all documents, embeddings, and LLM inference run on-device with optional GPU acceleration.
 
@@ -35,7 +35,7 @@ ChromaDB       Ollama (gemma2:9b)    gpu_manager.py
 - `db_manager.py`: SQLite database manager for persistent storage (conversations, Q&A history, encrypted data)
 - `gpu_manager.py`: Auto-detects NVIDIA/AMD/Apple Silicon GPUs and configures Ollama accordingly
 
-### Frontend (`AlfredElectron/`)
+### Frontend (`Alfred/`)
 Electron app with **automatic backend management**:
 - `main.js`: Spawns `python alfred_backend.py` as child process on startup
 - `js/rendering/renderer.js`: IPC communication, chat UI, and typewriter effects
@@ -51,7 +51,7 @@ Copy-Item .env.example .env  # Configure ALFRED_DOCS_PATH first
 python alfred_backend.py
 
 # Full desktop app (recommended)
-cd AlfredElectron
+cd Alfred
 .\start.ps1  # Auto-installs deps, starts backend, launches Electron
 ```
 
@@ -133,7 +133,7 @@ Tables are rendered with professional styling (gradient headers, hover effects, 
 See `TABLA_MARKDOWN_EJEMPLOS.md` for full examples and usage patterns.
 
 ### 5. Electron-Backend Lifecycle
-`AlfredElectron/main.js` manages backend as child process:
+`Alfred/main.js` manages backend as child process:
 ```javascript
 backendProcess = spawn('python', ['alfred_backend.py'], {cwd: BACKEND_CONFIG.path});
 // On app quit
@@ -211,7 +211,7 @@ Frontend shows visual notifications via `window.alfredAPI.onBackendNotification(
 - **API Reference**: `Alfred/README_BACKEND.md` - Full endpoint documentation
 - **GPU Setup**: `Alfred/GPU_SETUP.md` - NVIDIA/AMD/Apple Silicon configuration
 - **Deployment**: `Alfred/DEPLOYMENT.md` - Production setup
-- **Electron Guide**: `AlfredElectron/README.md` - Frontend features
+- **Electron Guide**: `Alfred/README.md` - Frontend features
 - **Project Structure**: `Alfred/PROJECT_STRUCTURE.md` - Component overview
 
 ## Development Notes
