@@ -17,6 +17,12 @@ const {
 } = packagesModule;
 
 // ============================================================================
+// CACHÉ DE VERIFICACION (evita reinicializar multiples veces en la misma sesion)
+// ============================================================================
+
+let envCached = null; // Almacena el resultado de ensurePythonEnv para esta sesion
+
+// ============================================================================
 // VERIFICACION DE PYTHON
 // ============================================================================
 
@@ -483,6 +489,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
 
 /**
  * Asegurar que el entorno Python este listo (venv en desarrollo, portable en produccion)
+ * NOTA: Esta funcion usa caché interna para evitar reinicializaciones multiples en la misma sesion
  * @param {string} backendPath - Ruta al directorio backend
  * @param {boolean} isPackaged - Si la app esta empaquetada
  * @param {Function} notifyProgress - Callback para notificar progreso
@@ -490,6 +497,12 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
  * @returns {Promise<string>} Comando de Python a usar
  */
 async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCount = 0) {
+    // Si ya se verificó el entorno en esta sesion, devolver el resultado en cache
+    if (envCached !== null && retryCount === 0) {
+        console.log('[ENV-CACHE] Reutilizando entorno Python verificado previamente:', envCached);
+        return envCached;
+    }
+
     const venvPath = path.join(backendPath, "venv");
     const requirementsPath = path.join(backendPath, "requirements.txt");
     const portablePythonPath = path.join(backendPath, "python-portable", "python.exe");
@@ -561,6 +574,8 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 await installOrVerifyDependencies(portablePythonPath, backendPath, requirementsPath, missing, isPackaged, notifyProgress);
 
                 notifyProgress('deps-ready', 'Entorno Python listo (portable) todo listo', 49);
+                // Guardar en caché antes de devolver
+                envCached = portablePythonPath;
                 return portablePythonPath;
             }
             else {
@@ -782,6 +797,8 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
             }
 
             console.log(`Entorno Python listo en: ${pythonCmd}`);
+            // Guardar en caché antes de devolver
+            envCached = pythonCmd;
             return pythonCmd;
         } // Fin del bloque else (MODO DESARROLLO)
     }

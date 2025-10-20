@@ -105,28 +105,28 @@ async function ensureOllama(notifyProgress) {
 
     // Paso 1: Verificar si Ollama esta corriendo
     if (await checkOllama()) {
-        console.log('[OLLAMA] ✓ Ollama ya esta corriendo en puerto 11434');
+        console.log('[OLLAMA] Ollama ya esta corriendo en puerto 11434');
         notifyProgress('ollama-ready', 'Ollama listo', 50);
         return true;
     }
 
-    console.log('[OLLAMA] ✗ Ollama no responde en puerto 11434');
+    console.log('[OLLAMA] Ollama no responde en puerto 11434');
 
     // Paso 2: Verificar si Ollama esta instalado pero no corriendo
     console.log('[OLLAMA] Verificando si Ollama esta instalado...');
     if (isOllamaInstalled()) {
-        console.log('[OLLAMA] ✓ Ollama instalado, intentando iniciar...');
+        console.log('[OLLAMA] Ollama instalado, intentando iniciar...');
         notifyProgress('ollama-start', 'Iniciando Ollama...', 45);
 
         if (await startOllamaService()) {
-            console.log('[OLLAMA] ✓ Ollama iniciado correctamente');
+            console.log('[OLLAMA] Ollama iniciado correctamente');
             notifyProgress('ollama-ready', 'Ollama iniciado', 50);
             return true;
         }
 
-        console.error('[OLLAMA] ✗ No se pudo iniciar Ollama');
+        console.error('[OLLAMA] No se pudo iniciar Ollama');
     } else {
-        console.log('[OLLAMA] ✗ Ollama NO esta instalado');
+        console.log('[OLLAMA] Ollama NO esta instalado');
     }
 
     // Paso 3: Instalar Ollama
@@ -144,7 +144,7 @@ async function ensureOllama(notifyProgress) {
             return false;
         }
     } catch (installError) {
-        console.error('[OLLAMA] ✗ Error al instalar Ollama:', installError);
+        console.error('[OLLAMA] Error al instalar Ollama:', installError);
         return false;
     }
 }
