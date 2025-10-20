@@ -4,6 +4,18 @@ const { execSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+// Importar modulo de instalacion de paquetes
+const packagesModule = require('./installPackages');
+const {
+    installPackagesInBulk,
+    installProblematicPackages,
+    installGPUPackages,
+    retryFailedPackages,
+    killPythonProcesses,
+    loadProblematicPackages,
+    loadGPUPackages
+} = packagesModule;
+
 // ============================================================================
 // VERIFICACION DE PYTHON
 // ============================================================================
@@ -296,6 +308,687 @@ async function downloadAndInstallPythonWindows(mainWindow, notifyProgress) {
 }
 
 // ============================================================================
+// UTILIDADES
+// ============================================================================
+
+/**
+ * Obtener directorio temporal seguro segun modo (produccion/desarrollo)
+ * @param {string} backendPath - Ruta al directorio backend
+ * @param {boolean} isPackaged - Si la app esta empaquetada
+ * @returns {string} Ruta al directorio temporal
+ */
+function getSafeTempDir(backendPath, isPackaged) {
+    // En produccion (empaquetada), usar AppData del usuario
+    // En desarrollo, usar carpeta temp en backend
+    if (isPackaged) {
+        const userDataPath = app.getPath('userData');
+        const tempDir = path.join(userDataPath, 'temp');
+
+        // Crear si no existe
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        return tempDir;
+    } else {
+        // Modo desarrollo: usar temp en backend
+        const tempDir = path.join(backendPath, 'temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        return tempDir;
+    }
+}
+
+// ============================================================================
+// ENTORNO PYTHON (VENV O PORTABLE)
+// ============================================================================
+
+/**
+ * Asegurar que el entorno Python este listo (venv en desarrollo, portable en produccion)
+ * @param {string} backendPath - Ruta al directorio backend
+ * @param {boolean} isPackaged - Si la app esta empaquetada
+ * @param {Function} notifyProgress - Callback para notificar progreso
+ * @param {number} retryCount - Numero de reintentos (usado internamente)
+ * @returns {Promise<string>} Comando de Python a usar
+ */
+async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCount = 0) {
+    const venvPath = path.join(backendPath, "venv");
+    const requirementsPath = path.join(backendPath, "requirements.txt");
+    const portablePythonPath = path.join(backendPath, "python-portable", "python.exe");
+    const MAX_RETRIES = 2;
+
+    // Detectar modo: Si app esta empaquetada -> PRODUCCION (usa python-portable)
+    //                Si NO esta empaquetada -> DESARROLLO (usa Python del sistema)
+    const isDevelopment = !isPackaged;
+    notifyProgress('[env-start]', `MODO ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'} detectado`, 20 + retryCount * 5);
+    console.log('========================================================');
+    console.log(`  DETECCION DE MODO PYTHON - ${isDevelopment ? 'DESARROLLO (venv)' : 'PRODUCCION (portable)'} `);
+    console.log('========================================================');
+
+    try {
+        // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
+        if (!isDevelopment) {
+            console.log('\n[PRODUCCION] Verificando Python portable...');
+
+            // Si existe python-portable/, usar directamente
+            if (fs.existsSync(portablePythonPath)) {
+                console.log('========================================================');
+                console.log('  Python portable detectado');
+                console.log('========================================================');
+
+                notifyProgress('portable-ready', 'Usando Python portable optimizado...', 45);
+
+                // Verificar que funciona
+                try {
+                    const version = execSync(`"${portablePythonPath}" --version`, {
+                        encoding: 'utf8',
+                        stdio: 'pipe'
+                    });
+                    console.log('Python portable version:', version.trim());
+                    notifyProgress('deps-ready', 'Entorno Python listo (portable)', 48);
+                } catch (error) {
+                    notifyProgress('portable-error', 'Error con Python portable, reintentando...', 20 + (retryCount + 1) * 5);
+                    throw new Error(`Python portable no funciona: ${error.message}`);
+                }
+
+                // Verificar pip en Python portable
+                console.log('\n[PRODUCCION] Verificando pip...');
+                try {
+                    const pipVersion = execSync(`"${portablePythonPath}" -m pip --version`, {
+                        encoding: 'utf8',
+                        stdio: 'pipe'
+                    });
+                    console.log('pip version:', pipVersion.trim());
+                } catch (pipError) {
+                    console.warn('pip no encontrado, instalando...');
+                    execSync(`"${portablePythonPath}" -m ensurepip --upgrade`, {
+                        encoding: 'utf8',
+                        stdio: 'inherit'
+                    });
+                }
+
+                // Verificar dependencias instaladas en Python portable
+                console.log('\n[PRODUCCION] Verificando dependencias...');
+                notifyProgress('deps-check', 'Verificando dependencias de Python...', 35);
+
+                let installedPkgs = '';
+                try {
+                    installedPkgs = execSync(`"${portablePythonPath}" -m pip freeze`, {
+                        encoding: "utf8",
+                        stdio: 'pipe'
+                    }).toLowerCase();
+                }
+                catch (err) {
+                    notifyProgress('deps-error', `Error al listar dependencias, error: ${err.message}`, 20 + (retryCount + 1) * 5);
+                }
+
+                const reqs = fs.readFileSync(requirementsPath, "utf8")
+                    .split("\n")
+                    .filter(line => line.trim() && !line.trim().startsWith('#'))
+                    .map(line => line.trim());
+
+                // Extraer nombres de paquetes
+                const reqPkgNames = reqs.map(r => {
+                    const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
+                    return match ? match[1].toLowerCase() : null;
+                }).filter(Boolean);
+
+                // Verificar paquetes faltantes
+                const missing = reqPkgNames.filter(pkg => {
+                    const searchName = pkg.toLowerCase()
+                        .replace(/-/g, '[-_]')
+                        .replace(/\./g, '\\.');
+                    const pattern = new RegExp(`^${searchName}==`, 'm');
+                    const found = pattern.test(installedPkgs);
+                    if (!found) {
+                        notifyProgress('deps-missing-item', `Dependencia faltante: ${pkg}`, 33);
+                    }
+                    return !found;
+                });
+
+                notifyProgress('deps-missing', `Dependencias faltantes: ${missing.length}`, 34);
+                notifyProgress('deps-install-start', 'Iniciando instalacion de dependencias...', 35);
+
+                if (missing.length > 0) {
+                    notifyProgress('deps-install', `Instalando ${missing.length} dependencias...`, 36);
+
+                    // Separar paquetes estables de problematicos
+                    const problematicConfig = loadProblematicPackages(backendPath);
+                    const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
+
+                    const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
+                    const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
+
+                    // FASE 1: Instalar paquetes estables en bloque
+                    let failedStable = [];
+                    if (stablePackages.length > 0) {
+                        notifyProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
+                        try {
+                            const tempDir = getSafeTempDir(backendPath, isPackaged);
+                            failedStable = await installPackagesInBulk(portablePythonPath, backendPath, requirementsPath, stablePackages, tempDir);
+                        }
+                        catch (bulkError) {
+                            notifyProgress('deps-error', `Error en instalacion en bloque: ${bulkError.message}`, 20 + (retryCount + 1) * 5);
+                            throw new Error(`Error en instalacion en bloque: ${bulkError.message}`);
+                        }
+                    }
+
+                    // FASE 2: Instalar paquetes problematicos uno por uno
+                    let failedProblematic = [];
+                    if (problematicPackages.length > 0) {
+                        notifyProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
+                        try {
+                            const tempDir = getSafeTempDir(backendPath, isPackaged);
+                            failedProblematic = await installProblematicPackages(
+                                portablePythonPath,
+                                backendPath,
+                                problematicPackages,
+                                problematicConfig.install_config,
+                                tempDir,
+                                notifyProgress
+                            );
+                        }
+                        catch (problematicError) {
+                            notifyProgress('deps-error', `Error en instalacion de paquetes problematicos: ${problematicError.message}`, 40);
+                        }
+                    }
+
+                    // FASE 3: Instalar PyTorch (GPU/CPU) segun hardware
+                    const gpuConfig = loadGPUPackages(backendPath);
+                    let failedGPU = [];
+                    try {
+                        const tempDir = getSafeTempDir(backendPath, isPackaged);
+                        failedGPU = await installGPUPackages(portablePythonPath, backendPath, gpuConfig, tempDir, notifyProgress);
+                    }
+                    catch (gpuError) {
+                        notifyProgress('deps-error', `Error en instalacion de paquetes GPU: ${gpuError.message}`, 42);
+                    }
+
+                    // FASE 4: Reintentar fallidos
+                    const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
+                    try {
+                        if (allFailed.length > 0) {
+                            notifyProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
+                            const tempDir = getSafeTempDir(backendPath, isPackaged);
+                            await retryFailedPackages(portablePythonPath, backendPath, allFailed, tempDir, notifyProgress);
+                        }
+                    }
+                    catch (killError) {
+                        notifyProgress('deps-error', `Error al reintentar paquetes fallidos: ${killError.message}`, 48);
+                    }
+                    notifyProgress('deps-complete', 'Instalacion de dependencias completada', 48);
+                }
+                else {
+                    console.log(`\n========================================================`);
+                    console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
+                    console.log(`========================================================`);
+                    notifyProgress('deps-ready', 'Todas las dependencias ya estaban instaladas', 48);
+
+                    // Verificar PyTorch aunque las demas esten instaladas
+                    console.log('Verificando instalacion de PyTorch...');
+                    const installedPackages = installedPkgs.split('\n')
+                        .map(line => {
+                            const match = line.match(/^([a-zA-Z0-9\-_.]+)==/);
+                            return match ? match[1].toLowerCase() : null;
+                        })
+                        .filter(Boolean);
+
+                    const hasTorch = installedPackages.some(pkg => pkg === 'torch');
+                    try {
+                        if (!hasTorch) {
+                            console.log('PyTorch no detectado, instalando...');
+                            const gpuConfig = loadGPUPackages(backendPath);
+                            const tempDir = getSafeTempDir(backendPath, isPackaged);
+                            await installGPUPackages(portablePythonPath, backendPath, gpuConfig, tempDir, notifyProgress);
+                        }
+                    }
+                    catch (error) {
+                        console.error('Error al verificar/instalar PyTorch:', error.message);
+                        notifyProgress('deps-error', `Error al verificar/instalar PyTorch: ${error.message}`, 50);
+                    }
+                }
+                notifyProgress('deps-ready', 'Entorno Python listo (portable) todo listo', 49);
+                return portablePythonPath;
+            }
+            else {
+                // Fallback: Si no hay Python portable en produccion, error critico
+                console.error('\n========================================================');
+                console.error('  ERROR: Python portable no encontrado');
+                console.error('========================================================');
+                console.error(`Ruta esperada: ${portablePythonPath}`);
+                console.error(`Backend path: ${backendPath}`);
+                console.error(`Backend existe: ${fs.existsSync(backendPath)}`);
+
+                // Listar contenido del backend para diagnostico
+                if (fs.existsSync(backendPath)) {
+                    console.error('\nContenido del directorio backend:');
+                    try {
+                        const files = fs.readdirSync(backendPath);
+                        files.forEach(file => console.error(`  - ${file}`));
+                    } catch (e) {
+                        console.error('  (No se pudo listar el contenido)');
+                    }
+                }
+                console.error('========================================================\n');
+
+                throw new Error(`Python portable no encontrado en modo produccion.\nRuta esperada: ${portablePythonPath}\nBackend path: ${backendPath}\nVerifique que el build incluyo la carpeta python-portable.`);
+            }
+        } else {
+            // --- MODO DESARROLLO: Crear venv tradicional ---
+            console.log('========================================================');
+            console.log('  MODO DESARROLLO: Usando venv tradicional');
+            console.log('========================================================');
+
+            // Detectar rutas del binario Python para venv
+            const pythonCmd = process.platform === "win32"
+                ? path.join(venvPath, "Scripts", "python.exe")
+                : path.join(venvPath, "bin", "python");
+
+            // Encontrar Python base instalado DEL SISTEMA (portable no tiene venv)
+            const basePython = findPythonExecutable(backendPath, isDevelopment);
+            notifyProgress('venv-check', 'Configurando entorno de desarrollo...', 25);
+
+            // Verificar si el venv existe y está corrupto
+            if (fs.existsSync(venvPath)) {
+                notifyProgress('venv-verify', 'Verificando entorno virtual...', 27);
+
+                // Intentar ejecutar python del venv para verificar si funciona
+                try {
+                    execSync(`"${basePython}" --version`, {
+                        encoding: 'utf8',
+                        stdio: 'pipe',
+                        timeout: 5000
+                    });
+                    console.log("Entorno virtual existente funciona correctamente");
+                } catch (venvError) {
+                    console.log("Entorno virtual corrupto detectado. Eliminando...");
+                    notifyProgress('venv-cleanup', 'Reparando entorno virtual...', 28);
+                    // Eliminar venv corrupto recursivamente
+                    try {
+                        if (process.platform === 'win32') {
+                            execSync(`rmdir /s /q "${venvPath}"`, {
+                                encoding: 'utf8',
+                                stdio: 'pipe'
+                            });
+                        } else {
+                            execSync(`rm -rf "${venvPath}"`, {
+                                encoding: 'utf8',
+                                stdio: 'pipe'
+                            });
+                        }
+                        console.log("Entorno virtual corrupto eliminado");
+                    } catch (deleteError) {
+                        console.error("Error al eliminar venv corrupto:", deleteError);
+                        // Intentar con fs.rmSync si el comando falla
+                        try {
+                            fs.rmSync(venvPath, { recursive: true, force: true });
+                            console.log("Entorno virtual eliminado con fs.rmSync");
+                        } catch (fsError) {
+                            throw new Error(`No se pudo eliminar el entorno virtual corrupto: ${fsError.message}`);
+                        }
+                    }
+                }
+            }
+
+            // Crear el entorno virtual si no existe
+            if (!fs.existsSync(venvPath)) {
+                console.log("Creando entorno virtual...");
+                notifyProgress('venv-create', 'Creando entorno virtual...', 30);
+
+                // Usar la ruta completa de Python para crear el venv
+                const createVenvCmd = `"${basePython}" -m venv venv`;
+                console.log('Ejecutando:', createVenvCmd);
+
+                execSync(createVenvCmd, {
+                    cwd: backendPath,
+                    encoding: 'utf8',
+                    stdio: 'pipe'
+                });
+                console.log("Entorno virtual creado correctamente");
+            }
+
+            console.log(`Usando Python en: ${pythonCmd}`);
+
+            // Verificar y actualizar pip
+            try {
+                const pipVersion = execSync(`"${pythonCmd}" -m pip --version`, {
+                    encoding: 'utf8',
+                    stdio: 'pipe'
+                });
+                console.log('pip actual:', pipVersion.trim());
+                // Validar si pip es version 23.2.1 o superior
+                const versionMatch = pipVersion.match(/pip (\d+)\.(\d+)\.(\d+)/);
+                if (versionMatch) {
+                    const major = parseInt(versionMatch[1], 10);
+                    const minor = parseInt(versionMatch[2], 10);
+                    const patch = parseInt(versionMatch[3], 10);
+                    if (major < 23 || (major === 23 && minor < 2) || (major === 23 && minor === 2 && patch < 1)) {
+                        console.log("pip es muy antiguo, se actualizara");
+                        notifyProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 32);
+                        execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
+                            cwd: backendPath,
+                            encoding: 'utf8',
+                            stdio: 'pipe',
+                            timeout: 80000  // 80 segundos timeout
+                        });
+                    }
+                    else { console.log("pip está actualizado"); }
+                }
+            } catch (pipError) {
+                console.log("Error al verificar/actualizar pip:", pipError.message);
+                console.log("Instalando pip...");
+                notifyProgress('pip-install', 'Instalando pip...', 32);
+                try {
+                    execSync(`"${pythonCmd}" -m ensurepip --upgrade`, {
+                        cwd: backendPath,
+                        encoding: 'utf8',
+                        stdio: 'pipe'
+                    });
+                } catch (ensurePipError) {
+                    console.error("Error al instalar pip:", ensurePipError.message);
+                    throw new Error("No se pudo instalar pip");
+                }
+            }
+
+            // Verificar que el venv funciona correctamente
+            try {
+                const venvCheck = execSync(`"${pythonCmd}" -m pip --version`, {
+                    cwd: backendPath,
+                    encoding: 'utf8',
+                    stdio: 'pipe'
+                });
+                console.log("Entorno virtual verificado:", venvCheck.trim());
+            } catch (error) {
+                console.error("Error al verificar el entorno virtual:", error.message);
+                throw new Error("No se pudo verificar el entorno virtual");
+            }
+
+            // Verificar dependencias instaladas
+            notifyProgress('deps-check', 'Verificando dependencias de Python...', 35);
+            const installedPkgs = execSync(`"${pythonCmd}" -m pip freeze`, {
+                encoding: "utf8",
+                stdio: 'pipe'
+            }).toLowerCase();
+
+            const reqs = fs.readFileSync(requirementsPath, "utf8")
+                .split("\n")
+                .filter(line => line.trim() && !line.trim().startsWith('#'))
+                .map(line => line.trim());
+
+            // Extraer nombres de paquetes (antes de ==, >=, etc.)
+            // Importante: incluir puntos en el nombre (ej: pdfminer.six, unstructured.pytesseract)
+            const reqPkgNames = reqs.map(r => {
+                const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
+                return match ? match[1].toLowerCase() : null;
+            }).filter(Boolean);
+
+            console.log(`Dependencias requeridas: ${reqPkgNames.length} paquetes`);
+            console.log(`Dependencias instaladas: ${installedPkgs.split('\n').filter(l => l.trim()).length} paquetes`);
+
+            // Verificar si hay paquetes faltantes
+            const missing = reqPkgNames.filter(pkg => {
+                // Normalizar el nombre: guiones pueden ser guiones bajos en pip freeze
+                // Los puntos se mantienen como puntos
+                const searchName = pkg.toLowerCase()
+                    .replace(/-/g, '[-_]')  // Guion puede ser guion o guion bajo
+                    .replace(/\./g, '\\.');  // Escapar puntos para regex
+
+                const pattern = new RegExp(`^${searchName}==`, 'm');
+                const found = pattern.test(installedPkgs);
+
+                if (!found) {
+                    console.log(`[deps-check] Falta: ${pkg}`);
+                }
+
+                return !found;
+            });
+
+            console.log(`Dependencias faltantes: ${missing.length}`);
+
+            if (missing.length > 0) {
+                console.log(`\n========================================================`);
+                console.log(`  INSTALANDO ${missing.length} DEPENDENCIAS FALTANTES`);
+                console.log(`========================================================`);
+                console.log(`Paquetes a instalar: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`);
+                notifyProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
+
+                // Cerrar cualquier proceso de Python que pueda estar bloqueando archivos
+                await killPythonProcesses(venvPath);
+
+                // Pequeña pausa para asegurar que no hay procesos bloqueantes
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                //Separar paquetes estables de problemáticos
+                const problematicConfig = loadProblematicPackages(backendPath);
+                const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
+
+                //Separar paquetes
+                const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
+                const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
+
+                // FASE 1: Instalar paquetes estables en bloque (rápido)
+                let failedStable = [];
+                if (stablePackages.length > 0) {
+                    console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
+                    notifyProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
+                    const tempDir = getSafeTempDir(backendPath, isPackaged);
+                    failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages, tempDir);
+                }
+
+                // FASE 2: Instalar paquetes problematicos UNO POR UNO con delays largos
+                let failedProblematic = [];
+                if (problematicPackages.length > 0) {
+                    console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
+                    notifyProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
+                    const tempDir = getSafeTempDir(backendPath, isPackaged);
+                    failedProblematic = await installProblematicPackages(
+                        pythonCmd,
+                        backendPath,
+                        problematicPackages,
+                        problematicConfig.install_config,
+                        tempDir,
+                        notifyProgress
+                    );
+                }
+
+                // FASE 3: Instalar paquetes GPU/CPU según hardware
+                console.log('\n=== FASE 3: Instalando PyTorch (GPU/CPU) ===');
+                const gpuConfig = loadGPUPackages(backendPath);
+                const tempDir = getSafeTempDir(backendPath, isPackaged);
+                const failedGPU = await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
+
+                // FASE 4: Reintentar todos los fallidos
+                const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
+                if (allFailed.length > 0) {
+                    console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
+                    notifyProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
+                    const tempDir = getSafeTempDir(backendPath, isPackaged);
+                    await retryFailedPackages(pythonCmd, backendPath, allFailed, tempDir, notifyProgress);
+                } else {
+                    notifyProgress('deps-ready', 'Dependencias instaladas', 48);
+                }
+
+                // Limpiar directorio temporal DESPUÉS de todos los reintentos
+                console.log('Limpiando directorio temporal...');
+                await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar que pip libere archivos
+
+                try {
+                    const tempDir = getSafeTempDir(backendPath, isPackaged);
+                    if (fs.existsSync(tempDir)) {
+                        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
+                        console.log('Directorio temporal limpiado');
+                    }
+                } catch (cleanupErr) {
+                    console.log('No se pudo limpiar directorio temporal (no es critico):', cleanupErr.message);
+                }
+
+            }
+            else {
+                console.log(`\n========================================================`);
+                console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
+                console.log(`========================================================`);
+                // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
+                console.log('Verificando instalacion de PyTorch...');
+                // Convertir installedPkgs (string) a array de nombres de paquetes
+                const installedPackages = installedPkgs.split('\n')
+                    .map(line => {
+                        const match = line.match(/^([a-zA-Z0-9\-_.]+)==/);
+                        return match ? match[1].toLowerCase() : null;
+                    })
+                    .filter(Boolean);
+                const hasTorch = installedPackages.some(pkg => pkg === 'torch');
+                if (!hasTorch) {
+                    console.log('PyTorch no detectado, instalando...');
+                    const gpuConfig = loadGPUPackages(backendPath);
+                    const tempDir = getSafeTempDir(backendPath, isPackaged);
+                    await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
+                }
+                notifyProgress('deps-ready', 'Dependencias verificadas', 48);
+            }
+
+            // Verificacion final: Asegurar que dependencias criticas estan instaladas
+            console.log('\n=== Verificacion Final ===');
+            try {
+                // Verificar multiples paquetes criticos (con sus imports reales)
+                const checks = [
+                    { module: 'dotenv', package: 'python-dotenv' },
+                    { module: 'fastapi', package: 'fastapi' },
+                    { module: 'langchain', package: 'langchain' },
+                    { module: 'chromadb', package: 'chromadb' },
+                    { module: 'numpy', package: 'numpy' },
+                    { module: 'dateutil', package: 'python-dateutil' }
+                ];
+
+                const failedChecks = [];
+                for (const check of checks) {
+                    try {
+                        execSync(`"${pythonCmd}" -c "import ${check.module}"`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe',
+                            cwd: backendPath
+                        });
+                        console.log(`✓ ${check.package} OK`);
+                    } catch (importError) {
+                        console.error(`✗ ERROR: ${check.package} no se puede importar como '${check.module}'`);
+                        failedChecks.push(check);
+                    }
+                }
+
+                // Si hay paquetes que fallan, intentar reinstalarlos
+                if (failedChecks.length > 0) {
+                    console.log(`\n⚠️  Detectadas ${failedChecks.length} instalaciones corruptas. Reparando...`);
+                    notifyProgress('deps-repair', `Reparando ${failedChecks.length} paquetes corruptos...`, 49);
+
+                    for (const check of failedChecks) {
+                        console.log(`Reinstalando ${check.package}...`);
+                        try {
+                            // Desinstalar y reinstalar
+                            execSync(`"${pythonCmd}" -m pip uninstall -y ${check.package}`, {
+                                encoding: 'utf8',
+                                stdio: 'pipe',
+                                cwd: backendPath
+                            });
+                            execSync(`"${pythonCmd}" -m pip install ${check.package}`, {
+                                encoding: 'utf8',
+                                stdio: 'inherit', // Mostrar progreso
+                                cwd: backendPath,
+                                timeout: 120000 // 2 minutos
+                            });
+                            console.log(`✓ ${check.package} reparado exitosamente`);
+                        } catch (repairError) {
+                            console.error(`✗ Error al reparar ${check.package}:`, repairError.message);
+                            throw new Error(`No se pudo reparar ${check.package}`);
+                        }
+                    }
+
+                    // Verificar nuevamente despues de reparar
+                    console.log('\nVerificando reparaciones...');
+                    for (const check of failedChecks) {
+                        execSync(`"${pythonCmd}" -c "import ${check.module}"`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe',
+                            cwd: backendPath
+                        });
+                        console.log(`✓ ${check.package} verificado OK`);
+                    }
+                }
+            } catch (verifyError) {
+                console.error('ERROR CRITICO: Dependencias no instaladas correctamente');
+                throw verifyError;
+            }
+
+            console.log(`Entorno Python listo en: ${pythonCmd}`);
+            return pythonCmd;
+        } // Fin del bloque else (MODO DESARROLLO)
+    }
+    catch (err) {
+        console.error("Error en ensurePythonEnv:", err);
+
+        // Si el error es por archivos bloqueados y no hemos alcanzado el límite de reintentos
+        if (err.message === 'VENV_LOCKED' && retryCount < MAX_RETRIES) {
+            console.log(`Intento ${retryCount + 1}/${MAX_RETRIES}: Limpiando entorno virtual bloqueado...`);
+            notifyProgress('venv-cleanup', 'Limpiando entorno virtual bloqueado...', 20);
+
+            // Cerrar procesos de Python que puedan estar bloqueando archivos
+            await killPythonProcesses(venvPath);
+
+            // Esperar un momento adicional para que los procesos liberen archivos
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Forzar eliminación del venv
+            try {
+                console.log('Eliminando entorno virtual bloqueado...');
+                if (fs.existsSync(venvPath)) {
+                    // Intentar eliminar con PowerShell (más robusto en Windows)
+                    if (process.platform === 'win32') {
+                        try {
+                            execSync(`powershell -Command "Remove-Item -Path '${venvPath}' -Recurse -Force -ErrorAction SilentlyContinue"`, {
+                                encoding: 'utf8',
+                                stdio: 'pipe',
+                                timeout: 30000
+                            });
+                            console.log('Entorno virtual eliminado con PowerShell');
+                        } catch (psError) {
+                            console.log('PowerShell fallo, intentando con rmdir...');
+                            try {
+                                execSync(`rmdir /s /q "${venvPath}"`, {
+                                    encoding: 'utf8',
+                                    stdio: 'pipe',
+                                    timeout: 30000
+                                });
+                            } catch (rmdirError) {
+                                // Último recurso: fs.rmSync
+                                fs.rmSync(venvPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
+                            }
+                        }
+                    } else {
+                        execSync(`rm -rf "${venvPath}"`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe'
+                        });
+                    }
+                    console.log('Entorno virtual eliminado exitosamente');
+                }
+
+                // Esperar otro momento antes de reintentar
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Reintentar la instalación
+                return await ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCount + 1);
+
+            } catch (cleanupError) {
+                console.error('Error al limpiar entorno virtual:', cleanupError);
+                throw new Error(`No se pudo limpiar el entorno virtual: ${cleanupError.message}`);
+            }
+        }
+
+        throw err;
+    }
+}
+
+// ============================================================================
 // EXPORTACIONES
 // ============================================================================
 
@@ -303,5 +996,7 @@ module.exports = {
     checkPython,
     ensurePython,
     findPythonExecutable,
-    downloadAndInstallPythonWindows
+    downloadAndInstallPythonWindows,
+    getSafeTempDir,
+    ensurePythonEnv
 };
