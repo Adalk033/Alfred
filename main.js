@@ -1,39 +1,23 @@
 // main.js - Proceso principal de Electron
-const { app, BrowserWindow, ipcMain, dialog, screen } = require('electron');
+const { app, BrowserWindow, screen } = require('electron');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-const { execSync, spawn } = require('child_process');
-const fs = require('fs');
 
 // Importar modulos de startup
 const pythonModule = require('./start/ensurePython');
 const ollamaModule = require('./start/ensureOllama');
-const { downloadFile } = require('./start/downloadUtils');
 const backendModule = require('./start/backend');
-const packagesModule = require('./start/installPackages');
 const { registerIPCHandlers } = require('./start/ipcMain');
 
-const { checkPython, ensurePython, findPythonExecutable, getSafeTempDir, ensurePythonEnv } = pythonModule;
+const { ensurePython, ensurePythonEnv } = pythonModule;
 const { checkOllama, ensureOllama, ensureOllamaModels, DEFAULT_REQUIRED_MODELS } = ollamaModule;
 const {
     isBackendRunning,
-    waitForBackend,
     startBackend,
     stopBackend,
-    checkAndStartBackend,
     startBackendAndWait
 } = backendModule;
-const {
-    loadProblematicPackages,
-    loadGPUPackages,
-    detectGPUType,
-    installGPUPackages,
-    installProblematicPackages,
-    installPackagesInBulk,
-    retryFailedPackages,
-    killPythonProcesses
-} = packagesModule;
 
 let mainWindow;
 let backendProcess = null;
@@ -46,29 +30,11 @@ const HOST = '127.0.0.1';
 const isPackaged = app.isPackaged;
 
 // Determinar la ruta correcta del backend segun el modo
-// En desarrollo: __dirname/backend
-// En produccion (empaquetado): process.resourcesPath/backend
 const PATH_BACKEND = isPackaged
     ? path.join(process.resourcesPath, 'backend')
     : path.join(__dirname, 'backend');
 
 const SCRIPT_BACKEND = 'alfred_backend.py';
-
-// Log de diagnostico de rutas
-console.log('========================================================');
-console.log('  CONFIGURACION DE RUTAS - ALFRED');
-console.log('========================================================');
-console.log(`App empaquetada: ${isPackaged}`);
-console.log(`__dirname: ${__dirname}`);
-console.log(`process.resourcesPath: ${process.resourcesPath}`);
-console.log(`PATH_BACKEND: ${PATH_BACKEND}`);
-console.log(`Backend existe: ${fs.existsSync(PATH_BACKEND)}`);
-if (fs.existsSync(PATH_BACKEND)) {
-    const pythonPortablePath = path.join(PATH_BACKEND, 'python-portable', 'python.exe');
-    console.log(`Python portable path: ${pythonPortablePath}`);
-    console.log(`Python portable existe: ${fs.existsSync(pythonPortablePath)}`);
-}
-console.log('========================================================\n');
 
 // Configuración del backend
 const BACKEND_CONFIG = {
@@ -151,7 +117,8 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
     console.log('[APP] Ya hay una instancia de Alfred corriendo. Cerrando esta instancia...');
     app.quit();
-} else {
+}
+else {
     app.on('second-instance', (event, commandLine, workingDirectory) => {
         // Si alguien intenta abrir otra instancia, enfocar la ventana existente
         if (mainWindow) {
@@ -429,12 +396,6 @@ async function checkAndStartBackend_wrapper() {
         isCheckingBackend = false;
     }
 }
-
-// ===============================================================================
-// NOTA: Las funciones de gestion del backend han sido movidas a:
-// - start/backend.js (isBackendRunning, waitForBackend, startBackend, 
-//   stopBackend, checkAndStartBackend, setupBackendLogging, etc.)
-// ===============================================================================
 
 // Notificar progreso de instalación
 function notifyInstallationProgress(stage, message, progress) {
