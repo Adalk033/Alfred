@@ -273,7 +273,7 @@ if ($LASTEXITCODE -ne 0) {
 # FASE 6: VERIFICACION DEL BUILD
 # ============================================
 Write-Host "`n╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║  FASE 6: Verificacion del Build                     ║" -ForegroundColor Green
+Write-Host "║  FASE 6: Verificacion del Build                      ║" -ForegroundColor Green
 Write-Host "╚══════════════════════════════════════════════════════╝`n" -ForegroundColor Green
 
 $distPath = Join-Path $PSScriptRoot "dist"
