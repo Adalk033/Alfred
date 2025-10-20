@@ -79,7 +79,7 @@ function createWindow() {
         mainWindow.show();
         // Marcar que estamos en proceso de inicialización
         isInitializing = true;
-        console.log('[INIT] Flag isInitializing = true - Bloqueando inicio automático del backend');
+        console.log('[INIT] Flag isInitializing = true - Bloqueando inicio automatico del backend');
 
         try {
             await initializeAppWithProgress();
