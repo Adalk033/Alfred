@@ -479,14 +479,15 @@ async function waitForBackendReady() {
             if (response.ok) {
                 const data = await response.json();
 
-                // Verificar que alfred_core este inicializado y vectorstore cargado
+                // Verificar que alfred_core este inicializado, vectorstore cargado Y lifespan ready
                 // Aceptar tanto "healthy" como "degraded" (degraded = componentes opcionales fallan)
                 const isReady = (data.status === 'healthy' || data.status === 'degraded')
                     && data.alfred_core_initialized
-                    && data.vectorstore_loaded;
+                    && data.vectorstore_loaded
+                    && data.is_fully_initialized === true;  // NUEVA: Verificar que initialize_async() completo
 
                 if (isReady) {
-                    // Backend esta listo!
+                    // Backend esta completamente listo!
                     if (progressBar) {
                         progressBar.style.width = '100%';
                     }
@@ -505,8 +506,10 @@ async function waitForBackendReady() {
 
                 // Backend responde pero no esta completamente listo
                 if (statusText) {
-                    if (!data.alfred_core_initialized) {
-                        statusText.textContent = 'Inicializando sistema...';
+                    if (!data.is_fully_initialized) {
+                        statusText.textContent = 'Inicializando sistema de IA...';
+                    } else if (!data.alfred_core_initialized) {
+                        statusText.textContent = 'Configurando Alfred Core...';
                     } else if (!data.vectorstore_loaded) {
                         statusText.textContent = 'Cargando documentos...';
                     } else {

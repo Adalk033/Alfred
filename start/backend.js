@@ -9,6 +9,57 @@ const fs = require('fs');
 // ============================================================================
 
 /**
+ * Verificar si el backend esta completamente inicializado (lifespan ready)
+ * @param {string|Object} hostOrConfig - Host del backend o objeto config
+ * @param {number} [port] - Puerto del backend (opcional si se pasa config)
+ * @returns {Promise<boolean>} true si el backend esta completamente listo
+ */
+async function isBackendFullyInitialized(hostOrConfig, port) {
+    // Manejar ambos casos: llamada con (host, port) o (config)
+    let host, backendPort;
+
+    if (typeof hostOrConfig === 'object' && hostOrConfig !== null) {
+        // Se paso un objeto config
+        host = hostOrConfig.host || '127.0.0.1';
+        backendPort = hostOrConfig.port || 8000;
+    } else {
+        // Se pasaron parametros individuales
+        host = hostOrConfig || '127.0.0.1';
+        backendPort = port || 8000;
+    }
+
+    return new Promise((resolve) => {
+        const req = http.request({
+            hostname: host,
+            port: backendPort,
+            path: '/health',
+            method: 'GET',
+            timeout: 3000
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const health = JSON.parse(data);
+                    // Retornar true SOLO si el backend esta completamente listo
+                    resolve(health.is_fully_initialized === true);
+                } catch (e) {
+                    resolve(false);
+                }
+            });
+        });
+
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => {
+            req.destroy();
+            resolve(false);
+        });
+
+        req.end();
+    });
+}
+
+/**
  * Verificar si el backend esta corriendo
  * @param {string|Object} hostOrConfig - Host del backend o objeto config
  * @param {number} [port] - Puerto del backend (opcional si se pasa config)
@@ -65,6 +116,8 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
     let attemptCount = 0;
     let lastProgressNotification = 0;  // Control para no spamear notificaciones
     const PROGRESS_UPDATE_INTERVAL = 5000;  // Notificar solo cada 5 segundos
+    
+    let httpReachable = false;  // Flag para saber si HTTP esta accesible
 
     while (Date.now() - startTime < config.startupTimeout) {
         attemptCount++;
@@ -79,16 +132,32 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
             return false;
         }
 
-        if (await isBackendRunning(config.host, config.port)) {
-            console.log(`[WAIT-BACKEND] Backend esta disponible despues de ${attemptCount} intentos (${Math.round(elapsed / 1000)}s)`);
-            notifyStatus(true);
-            // No actualizar aqui, dejar que main.js maneje el 100% final
-            return true;
+        // FASE 1: Esperar que HTTP este accesible
+        if (!httpReachable) {
+            if (await isBackendRunning(config.host, config.port)) {
+                console.log(`[WAIT-BACKEND] FASE 1 OK: Backend HTTP accesible (intento ${attemptCount}, ${Math.round(elapsed / 1000)}s)`);
+                httpReachable = true;
+            }
         }
-
-        // Log cada 10 intentos para no spamear
-        if (attemptCount % 10 === 0) {
-            console.log(`[WAIT-BACKEND] Intento ${attemptCount}, tiempo transcurrido: ${Math.round(elapsed / 1000)}s`);
+        
+        // FASE 2: Esperar que initialize_async() este completo (is_fully_initialized = true)
+        if (httpReachable) {
+            if (await isBackendFullyInitialized(config.host, config.port)) {
+                console.log(`[WAIT-BACKEND] FASE 2 OK: Backend completamente inicializado (intento ${attemptCount}, ${Math.round(elapsed / 1000)}s)`);
+                console.log(`[WAIT-BACKEND] Backend esta listo para procesar consultas`);
+                notifyStatus(true);
+                // No actualizar aqui, dejar que main.js maneje el 100% final
+                return true;
+            } else {
+                if (attemptCount % 10 === 0) {
+                    console.log(`[WAIT-BACKEND] Esperando inicializacion completa... (intento ${attemptCount}, ${Math.round(elapsed / 1000)}s)`);
+                }
+            }
+        } else {
+            // Log cada 10 intentos mientras esperamos HTTP
+            if (attemptCount % 10 === 0) {
+                console.log(`[WAIT-BACKEND] Esperando que HTTP este accesible (intento ${attemptCount}, ${Math.round(elapsed / 1000)}s)`);
+            }
         }
 
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -101,12 +170,15 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
             if (elapsed > 30000) progress = 87;
             if (elapsed > 60000) progress = 89;
             if (elapsed > 120000) progress = 90;
-            notifyProgress('backend-starting', 'Cargando sistema de IA...', progress);
+            
+            const phase = httpReachable ? 'Inicializando sistema' : 'Cargando servidor';
+            notifyProgress('backend-starting', `${phase}...`, progress);
         }
     }
 
     console.error(`[WAIT-BACKEND] TIMEOUT: Backend no respondio en ${Math.round(config.startupTimeout / 1000)}s`);
     console.error(`[WAIT-BACKEND] Total de intentos: ${attemptCount}`);
+    console.error(`[WAIT-BACKEND] Estado: HTTP accesible=${httpReachable}`);
     notifyStatus(false);
     return false;
 }
@@ -426,6 +498,7 @@ async function checkAndStartBackend(config, pythonPath, userDataPath, notifyProg
 
 module.exports = {
     isBackendRunning,
+    isBackendFullyInitialized,
     waitForBackend,
     startBackend,
     startBackendAndWait,

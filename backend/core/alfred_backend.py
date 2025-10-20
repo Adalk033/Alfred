@@ -414,6 +414,7 @@ class HealthResponse(BaseModel):
     alfred_core_initialized: bool = Field(..., description="Si Alfred Core esta inicializado")
     vectorstore_loaded: bool = Field(..., description="Si la base vectorial esta cargada")
     gpu_status: Optional[GPUStatus] = Field(None, description="Estado detallado de GPU")
+    is_fully_initialized: bool = Field(..., description="Si la inicializacion asincrona ha completado completamente (lifespan ready)")
 
 # --- Modelos de Conversaciones ---
 
@@ -522,11 +523,13 @@ class ModeResponse(BaseModel):
 
 # --- Inicialización del núcleo de Alfred ---
 alfred_core: Optional[AlfredCore] = None
+_initialization_complete: bool = False  # Flag para indicar cuando initialize_async() ha terminado
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manejo del ciclo de vida de la aplicación"""
     global alfred_core
+    global _initialization_complete
     
     # IMPORTANTE: Usar sys.stdout.flush() para forzar salida inmediata en Windows
     import sys
@@ -535,6 +538,8 @@ async def lifespan(app: FastAPI):
     print("Iniciando Alfred Backend API...", flush=True)
     print("="*60, flush=True)
     sys.stdout.flush()
+    
+    _initialization_complete = False  # Marcar como no listo
     
     try:
         # Inicializar el núcleo de Alfred con version refactorizada (async + optimizaciones)
@@ -551,12 +556,19 @@ async def lifespan(app: FastAPI):
         print(f"  - Optimizations: Incremental indexing + LRU cache + Adaptive chunking", flush=True)
         print("="*60 + "\n", flush=True)
         sys.stdout.flush()
+        
+        # MARCAR COMO COMPLETAMENTE LISTO SOLO DESPUES DE initialize_async()
+        _initialization_complete = True
+        print("INITIALIZATION COMPLETE: Backend completamente listo para procesar consultas", flush=True)
+        sys.stdout.flush()
+        
         yield
     except Exception as e:
         print(f"\nError al inicializar Alfred Core: {e}", flush=True)
         import traceback
         traceback.print_exc()
         sys.stdout.flush()
+        _initialization_complete = False  # Marcar como fallido
         raise
     finally:
         print("\n" + "="*60, flush=True)
@@ -733,7 +745,8 @@ async def health_check():
         components=components,
         alfred_core_initialized=alfred_core is not None and alfred_core.is_initialized(),
         vectorstore_loaded=alfred_core.is_initialized() if alfred_core else False,
-        gpu_status=gpu_status_data
+        gpu_status=gpu_status_data,
+        is_fully_initialized=_initialization_complete
     )
 
 @app.post("/query", response_model=QueryResponse, tags=["Consultas"])
