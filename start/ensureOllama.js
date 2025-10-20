@@ -101,12 +101,11 @@ async function startOllamaService() {
 async function ensureOllama(notifyProgress) {
     console.log('[OLLAMA] === INICIANDO VERIFICACION DE OLLAMA ===');
     console.log('[OLLAMA] Flag isDownloadingOllama:', isDownloadingOllama);
-    notifyProgress('ollama-check', 'Verificando Ollama...', 40);
 
     // Paso 1: Verificar si Ollama esta corriendo
     if (await checkOllama()) {
         console.log('[OLLAMA] Ollama ya esta corriendo en puerto 11434');
-        notifyProgress('ollama-ready', 'Ollama listo', 50);
+        // No actualizar progreso aqui, lo maneja main.js
         return true;
     }
 
@@ -116,11 +115,11 @@ async function ensureOllama(notifyProgress) {
     console.log('[OLLAMA] Verificando si Ollama esta instalado...');
     if (isOllamaInstalled()) {
         console.log('[OLLAMA] Ollama instalado, intentando iniciar...');
-        notifyProgress('ollama-start', 'Iniciando Ollama...', 45);
+        notifyProgress('ollama-start', 'Iniciando Ollama...', 25);
 
         if (await startOllamaService()) {
             console.log('[OLLAMA] Ollama iniciado correctamente');
-            notifyProgress('ollama-ready', 'Ollama iniciado', 50);
+            // No actualizar progreso aqui, lo maneja main.js
             return true;
         }
 
@@ -131,7 +130,7 @@ async function ensureOllama(notifyProgress) {
 
     // Paso 3: Instalar Ollama
     console.log('[OLLAMA] Descargando e instalando Ollama...');
-    notifyProgress('ollama-download', 'Descargando Ollama...', 42);
+    notifyProgress('ollama-download', 'Descargando Ollama...', 28);
 
     try {
         if (process.platform === 'win32') {
@@ -166,15 +165,14 @@ async function downloadAndInstallOllamaWindows(notifyProgress) {
     const downloadUrl = 'https://ollama.ai/download/OllamaSetup.exe';
 
     console.log('[OLLAMA] Iniciando descarga desde:', downloadUrl);
-    notifyProgress('ollama-download', 'Descargando Ollama...', 42);
 
     try {
-        // Descargar el instalador
+        // Descargar el instalador (28-32%)
         const { downloadFile } = require('./downloadUtils');
-        await downloadFile(downloadUrl, installerPath, notifyProgress, 'ollama-download', 42, 50);
+        await downloadFile(downloadUrl, installerPath, notifyProgress, 'ollama-download', 28, 32);
 
         console.log('[OLLAMA] Descarga completada, iniciando instalacion...');
-        notifyProgress('ollama-install', 'Instalando Ollama...', 50);
+        notifyProgress('ollama-install', 'Instalando Ollama...', 33);
 
         // Ejecutar el instalador
         await new Promise((resolve, reject) => {
@@ -259,7 +257,7 @@ async function downloadAndInstallOllamaWindows(notifyProgress) {
 async function ensureOllamaModels(requiredModels = DEFAULT_REQUIRED_MODELS, notifyProgress) {
     console.log('[OLLAMA-MODELS] === VERIFICANDO MODELOS ===');
     console.log('[OLLAMA-MODELS] Modelos requeridos:', requiredModels);
-    notifyProgress('models-check', 'Verificando modelos de IA...', 55);
+    notifyProgress('models-check', 'Verificando modelos de IA...', 52);
 
     try {
         // Obtener lista de modelos instalados
@@ -276,7 +274,7 @@ async function ensureOllamaModels(requiredModels = DEFAULT_REQUIRED_MODELS, noti
         for (const model of requiredModels) {
             const modelName = model.toLowerCase();
             modelIndex++;
-            const baseProgress = 55 + (modelIndex - 1) * (30 / totalModels);
+            const baseProgress = 52 + (modelIndex - 1) * (13 / totalModels);
 
             // Verificar si el modelo ya esta instalado
             if (!installedModels.includes(modelName.split(':')[0])) {
@@ -285,7 +283,7 @@ async function ensureOllamaModels(requiredModels = DEFAULT_REQUIRED_MODELS, noti
 
                 try {
                     await downloadOllamaModel(model, modelIndex, totalModels, baseProgress, notifyProgress);
-                    notifyProgress('models-ready', `Modelo ${model} listo (${modelIndex}/${totalModels})`, baseProgress + 30 / totalModels);
+                    notifyProgress('models-ready', `Modelo ${model} listo (${modelIndex}/${totalModels})`, baseProgress + 13 / totalModels);
                 } catch (pullError) {
                     console.error(`[OLLAMA-MODELS] Error al descargar ${model}:`, pullError);
                     throw pullError;
@@ -296,6 +294,7 @@ async function ensureOllamaModels(requiredModels = DEFAULT_REQUIRED_MODELS, noti
         }
 
         console.log('[OLLAMA-MODELS] Todos los modelos estan listos');
+        // No actualizar aqui, main.js maneja el porcentaje final
         return true;
 
     } catch (error) {

@@ -168,14 +168,32 @@ app.on('before-quit', () => {
 
 // === SISTEMA DE INSTALACIÓN AUTOMÁTICA ===
 
+// Wrapper para notifyProgress que fuerza progresion ordenada sin conflictos
+function createProgressNotifier() {
+    let lastPercent = 0;
+    const minPercentPerStep = 5; // Minimo incremento de porcentaje
+    
+    return (eventId, message, percent) => {
+        // Asegurar que el porcentaje nunca baje y tiene minimo incremento
+        if (percent <= lastPercent && percent !== 0) {
+            percent = Math.min(lastPercent + minPercentPerStep, 99);
+        }
+        lastPercent = percent;
+        notifyInstallationProgress(eventId, message, percent);
+    };
+}
+
 // Función principal de inicialización con progreso
 async function initializeAppWithProgress() {
     try {
-        // 1. Verificar/Instalar Python (primero porque es rapido) solo si es modo desarrollador
-        notifyInstallationProgress('python-check', 'Verificando Python...', 10);
+        // Crear notificador de progreso ordenado
+        const progressNotifier = createProgressNotifier();
+        
+        // PASO 1: Verificar/Instalar Python (0-15%)
+        progressNotifier('python-check', 'Verificando Python...', 5);
         const devMode = !isPackaged;
         if (devMode) {
-            const pythonReady = await ensurePython(mainWindow, notifyInstallationProgress);
+            const pythonReady = await ensurePython(mainWindow, progressNotifier);
             if (!pythonReady) {
                 await new Promise(resolve => setTimeout(resolve, 3000));
                 app.exit(1);
@@ -184,21 +202,22 @@ async function initializeAppWithProgress() {
         }
         else {
             console.log('[INIT] Modo produccion detectado, se asume que Python ya esta instalado.');
-            notifyInstallationProgress('python-ready', 'Python de sistema asumido listo', 20);
         }
+        progressNotifier('python-ready', 'Python listo', 15);
 
-        // 2. Verificar/Instalar Ollama (puede tardar - descarga grande)
-        notifyInstallationProgress('ollama-check', 'Verificando Ollama...', 20);
-        const ollamaReady = await ensureOllama(notifyInstallationProgress);
+        // PASO 2: Verificar/Instalar Ollama (15-35%)
+        progressNotifier('ollama-check', 'Verificando Ollama...', 20);
+        const ollamaReady = await ensureOllama(progressNotifier);
         if (!ollamaReady) {
             await new Promise(resolve => setTimeout(resolve, 5000));
-            notifyInstallationProgress('error', 'Error: Ollama no disponible', 0);
+            progressNotifier('error', 'Error: Ollama no disponible', 0);
             return false;
         }
+        progressNotifier('ollama-ready', 'Ollama listo', 35);
 
-        // 2.1 Verificacion adicional: Confirmar que Ollama responde correctamente
+        // PASO 2.1: Verificacion adicional de Ollama (35-45%)
         console.log('[INIT] Verificando que Ollama este completamente funcional...');
-        notifyInstallationProgress('ollama-verify', 'Verificando Ollama...', 55);
+        progressNotifier('ollama-verify', 'Verificando Ollama...', 38);
 
         let ollamaFunctional = false;
         for (let i = 0; i < 5; i++) {
@@ -212,36 +231,40 @@ async function initializeAppWithProgress() {
         }
 
         if (!ollamaFunctional) {
-            notifyInstallationProgress('error', 'Error: Ollama no responde', 0);
+            progressNotifier('error', 'Error: Ollama no responde', 0);
             return false;
         }
 
         console.log('[INIT] Ollama confirmado y funcional');
+        progressNotifier('ollama-verify-complete', 'Ollama verificado', 45);
 
-        // 3. Verificar/Descargar modelos de Ollama (necesita Ollama funcionando)
-        notifyInstallationProgress('models-check', 'Verificando modelos...', 60);
-        await ensureOllamaModels(REQUIRED_OLLAMA_MODELS, notifyInstallationProgress);
+        // PASO 3: Verificar/Descargar modelos de Ollama (45-65%)
+        progressNotifier('models-check', 'Verificando modelos...', 50);
+        await ensureOllamaModels(REQUIRED_OLLAMA_MODELS, progressNotifier);
+        progressNotifier('models-ready', 'Modelos listos', 65);
 
-        // 4. Configurar entorno Python y dependencias
-        notifyInstallationProgress('python-env', 'Configurando Python...', 70);
+        // PASO 4: Configurar entorno Python y dependencias (65-75%)
+        progressNotifier('python-env', 'Configurando Python...', 70);
         try {
-            await ensurePythonEnv(BACKEND_CONFIG.path, isPackaged, notifyInstallationProgress);
+            await ensurePythonEnv(BACKEND_CONFIG.path, isPackaged, progressNotifier);
         }
         catch (error) {
-            notifyInstallationProgress('python-env-error', `Error configurando Python, ${error.message}`, 0);
+            progressNotifier('python-env-error', `Error configurando Python, ${error.message}`, 0);
         }
+        progressNotifier('python-env-ready', 'Python configurado', 75);
 
-        // 5. Iniciar backend y ESPERAR a que responda (solo despues de que todo este listo)
-        notifyInstallationProgress('backend-start', 'Iniciando backend...', 80);
+        // PASO 5: Iniciar backend y ESPERAR a que responda (75-95%)
+        progressNotifier('backend-start', 'Iniciando backend...', 80);
 
         const backendReady = await startBackendAndWait_wrapper();
 
         if (!backendReady) {
             return false;
         }
+        progressNotifier('backend-ready', 'Backend listo', 95);
 
-        // 6. Backend confirmado - ocultar loader y mostrar UI
-        notifyInstallationProgress('complete', 'Inicializacion completa', 100);
+        // PASO 6: Backend confirmado - ocultar loader y mostrar UI (95-100%)
+        progressNotifier('complete', 'Inicializacion completa', 100);
 
         // Esperar un momento antes de ocultar el loader
         await new Promise(resolve => setTimeout(resolve, 1000));

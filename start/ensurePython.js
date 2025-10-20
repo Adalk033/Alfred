@@ -90,20 +90,20 @@ function findPythonExecutable(backendPath = null, isDevelopment = false) {
  * @returns {Promise<boolean>} true si Python esta listo
  */
 async function ensurePython(mainWindow, notifyProgress) {
-    notifyProgress('python-check', 'Verificando Python...', 0);
+    notifyProgress('python-check', 'Verificando Python...', 5);
 
     // Verificar si existe marca de instalacion previa
     const pythonInstalledMarker = path.join(app.getPath('userData'), '.python_installed');
 
     // Si existe la marca, Python se instalo en sesion anterior
     if (fs.existsSync(pythonInstalledMarker)) {
-        notifyProgress('python-verify', 'Verificando Python instalado...', 2);
+        notifyProgress('python-verify', 'Verificando Python instalado...', 7);
 
         try {
             findPythonExecutable(null, true); // Buscar en PATH sistema
             // Python encontrado, eliminar marca
             fs.unlinkSync(pythonInstalledMarker);
-            notifyProgress('python-ready', 'Python listo', 20);
+            // No actualizar aqui, main.js maneja los porcentajes finales
             return true;
         } catch (findError) {
             // Python aun no disponible, requiere reinicio
@@ -136,7 +136,7 @@ async function ensurePython(mainWindow, notifyProgress) {
     // No hay marca, verificar si Python ya esta instalado
     if (await checkPython()) {
         console.log('[PYTHON] Python ya esta instalado con version correcta');
-        notifyProgress('python-ready', 'Python listo', 20);
+        // No actualizar aqui, main.js maneja los porcentajes finales
         return true;
     }
 
@@ -172,14 +172,14 @@ async function downloadAndInstallPythonWindows(mainWindow, notifyProgress) {
     const downloadUrl = `https://www.python.org/ftp/python/${pythonVersion}/${installerName}`;
 
     console.log('[PYTHON] Iniciando descarga desde:', downloadUrl);
-    notifyProgress('python-download', `Descargando Python ${pythonVersion}...`, 5);
+    notifyProgress('python-download', `Descargando Python ${pythonVersion}...`, 8);
 
     try {
-        // Descargar el instalador
+        // Descargar el instalador (8-12% del total del progreso de Python)
         const { downloadFile } = require('./downloadUtils');
-        await downloadFile(downloadUrl, installerPath, notifyProgress, 'python-download', 5, 15);
+        await downloadFile(downloadUrl, installerPath, notifyProgress, 'python-download', 8, 12);
 
-        notifyProgress('python-install', `Instalando Python ${pythonVersion}...`, 15);
+        notifyProgress('python-install', `Instalando Python ${pythonVersion}...`, 13);
         console.log('[PYTHON] Ejecutando instalador...');
 
         // Instalar Python de forma silenciosa
@@ -386,7 +386,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         console.log(`  INSTALANDO ${missing.length} DEPENDENCIAS FALTANTES`);
         console.log(`========================================================`);
         console.log(`Paquetes a instalar: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`);
-        notifyProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
+        notifyProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 71);
 
         // Cerrar cualquier proceso de Python que pueda estar bloqueando archivos
         const venvPath = path.join(backendPath, "venv");
@@ -406,7 +406,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         let failedStable = [];
         if (stablePackages.length > 0) {
             console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
-            notifyProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
+            notifyProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 71);
             const tempDir = getSafeTempDir(backendPath, isPackaged);
             failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages, tempDir);
         }
@@ -415,7 +415,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         let failedProblematic = [];
         if (problematicPackages.length > 0) {
             console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
-            notifyProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
+            notifyProgress('deps-problematic', `Instalando paquetes problematicos...`, 72);
             const tempDir = getSafeTempDir(backendPath, isPackaged);
             failedProblematic = await installProblematicPackages(
                 pythonCmd,
@@ -437,11 +437,11 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
         if (allFailed.length > 0) {
             console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
-            notifyProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
+            notifyProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 73);
             const tempDir = getSafeTempDir(backendPath, isPackaged);
             await retryFailedPackages(pythonCmd, backendPath, allFailed, tempDir, notifyProgress);
         } else {
-            notifyProgress('deps-ready', 'Dependencias instaladas', 48);
+            notifyProgress('deps-ready', 'Dependencias instaladas', 74);
         }
 
         // Limpiar directorio temporal DESPUES de todos los reintentos
@@ -462,7 +462,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         console.log(`\n========================================================`);
         console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
         console.log(`========================================================`);
-        notifyProgress('deps-ready', 'Todas las dependencias ya estaban instaladas', 48);
+        // No actualizar aqui, main.js maneja el porcentaje final
 
         // Verificar si PyTorch ya esta instalado y funciona
         console.log('Verificando instalacion de PyTorch...');
@@ -470,7 +470,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
 
         if (pyTorchInstalled) {
             console.log('[GPU-VERIFY] PyTorch ya esta correctamente instalado, no requiere reinstalacion');
-            notifyProgress('pytorch-verified', 'PyTorch verificado', 50);
+            // No actualizar aqui, main.js maneja el porcentaje final
         } else {
             console.log('[GPU-VERIFY] PyTorch no esta disponible, intentando instalar...');
             const tempDir = getSafeTempDir(backendPath, isPackaged);
@@ -481,7 +481,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
             }
             catch (error) {
                 console.error('Error al instalar PyTorch:', error.message);
-                notifyProgress('deps-error', `Error al instalar PyTorch: ${error.message}`, 50);
+                // No actualizar aqui, dejar que main.js maneje errores
             }
         }
     }
@@ -511,23 +511,23 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
     // Detectar modo: Si app esta empaquetada -> PRODUCCION (usa python-portable)
     //                Si NO esta empaquetada -> DESARROLLO (usa Python del sistema)
     const isDevelopment = !isPackaged;
-    notifyProgress('[env-start]', `MODO ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'} detectado`, 20 + retryCount * 5);
+    notifyProgress('[env-start]', `MODO ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'} detectado`, 70 + retryCount * 2);
     try {
         // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
         if (!isDevelopment) {
 
             // Si existe python-portable/, usar directamente
             if (fs.existsSync(portablePythonPath)) {
-                notifyProgress('portable-ready', 'Usando Python portable optimizado...', 45);
+                notifyProgress('portable-ready', 'Usando Python portable optimizado...', 71);
                 // Verificar que funciona
                 try {
                     execSync(`"${portablePythonPath}" --version`, {
                         encoding: 'utf8',
                         stdio: 'pipe'
                     });
-                    notifyProgress('deps-ready', 'Entorno Python listo (portable)', 48);
+                    // No actualizar aqui, main.js maneja el porcentaje final
                 } catch (error) {
-                    notifyProgress('portable-error', 'Error con Python portable, reintentando...', 20 + (retryCount + 1) * 5);
+                    notifyProgress('portable-error', 'Error con Python portable, reintentando...', 70 + (retryCount + 1) * 2);
                     throw new Error(`Python portable no funciona: ${error.message}`);
                 }
 
@@ -545,7 +545,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 }
 
                 // Verificar dependencias instaladas en Python portable
-                notifyProgress('deps-check', 'Verificando dependencias de Python...', 35);
+                notifyProgress('deps-check', 'Verificando dependencias de Python...', 71);
 
                 let installedPkgs = '';
                 try {
@@ -555,8 +555,8 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     }).toLowerCase();
                 }
                 catch (err) {
-                    notifyProgress('deps-error', `Error al listar dependencias, error: ${err.message}`, 20 + (retryCount + 1) * 5);
-                    throw new Error(`Error al listar dependencias: ${err.message}`);
+                    // Error no critico, solo notificar
+                    console.error('Error al listar dependencias:', err.message);
                 }
 
                 // Usar funcion comun para verificar dependencias
@@ -564,16 +564,22 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
 
                 // Notificar paquetes faltantes
                 missing.forEach(pkg => {
-                    notifyProgress('deps-missing-item', `Dependencia faltante: ${pkg}`, 33);
+                    // No notificar cada item, es muy verbose
                 });
 
-                notifyProgress('deps-missing', `Dependencias faltantes: ${missing.length}`, 34);
-                notifyProgress('deps-install-start', 'Iniciando instalacion de dependencias...', 35);
+                if (missing.length > 0) {
+                    notifyProgress('deps-missing', `Dependencias faltantes: ${missing.length}`, 71);
+                    notifyProgress('deps-install-start', 'Instalando dependencias...', 72);
+                } else {
+                    notifyProgress('deps-ready', 'Todas las dependencias estan listas', 73);
+                }
 
-                // Usar funcion comun para instalar o verificar dependencias
-                await installOrVerifyDependencies(portablePythonPath, backendPath, requirementsPath, missing, isPackaged, notifyProgress);
+                // Usar funcion comun para instalar o verificar dependencias si hay faltantes
+                if (missing.length > 0) {
+                    await installOrVerifyDependencies(portablePythonPath, backendPath, requirementsPath, missing, isPackaged, notifyProgress);
+                }
 
-                notifyProgress('deps-ready', 'Entorno Python listo (portable) todo listo', 49);
+                // No actualizar aqui, main.js maneja el porcentaje final
                 // Guardar en caché antes de devolver
                 envCached = portablePythonPath;
                 return portablePythonPath;
@@ -602,11 +608,11 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
 
             // Encontrar Python base instalado DEL SISTEMA (portable no tiene venv)
             const basePython = findPythonExecutable(backendPath, isDevelopment);
-            notifyProgress('venv-check', 'Configurando entorno de desarrollo...', 25);
+            notifyProgress('venv-check', 'Configurando entorno de desarrollo...', 70);
 
             // Verificar si el venv existe y está corrupto
             if (fs.existsSync(venvPath)) {
-                notifyProgress('venv-verify', 'Verificando entorno virtual...', 27);
+                notifyProgress('venv-verify', 'Verificando entorno virtual...', 70);
 
                 // Intentar ejecutar python del venv para verificar si funciona
                 try {
@@ -618,7 +624,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     console.log("Entorno virtual existente funciona correctamente");
                 } catch (venvError) {
                     console.log("Entorno virtual corrupto detectado. Eliminando...");
-                    notifyProgress('venv-cleanup', 'Reparando entorno virtual...', 28);
+                    notifyProgress('venv-cleanup', 'Reparando entorno virtual...', 70);
                     // Eliminar venv corrupto recursivamente
                     try {
                         if (process.platform === 'win32') {
@@ -649,7 +655,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
             // Crear el entorno virtual si no existe
             if (!fs.existsSync(venvPath)) {
                 console.log("Creando entorno virtual...");
-                notifyProgress('venv-create', 'Creando entorno virtual...', 30);
+                notifyProgress('venv-create', 'Creando entorno virtual...', 71);
 
                 // Usar la ruta completa de Python para crear el venv
                 const createVenvCmd = `"${basePython}" -m venv venv`;
@@ -678,7 +684,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     const patch = parseInt(versionMatch[3], 10);
                     if (major < 25 || (major === 25 && minor < 2)) {
                         console.log("pip es muy antiguo, se actualizara a 25.2+");
-                        notifyProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 32);
+                        notifyProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 71);
                         execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
                             cwd: backendPath,
                             encoding: 'utf8',
@@ -692,7 +698,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
             } catch (pipError) {
                 console.log("Error al verificar/actualizar pip:", pipError.message);
                 console.log("Instalando pip...");
-                notifyProgress('pip-install', 'Instalando pip...', 32);
+                notifyProgress('pip-install', 'Instalando pip...', 71);
                 try {
                     execSync(`"${pythonCmd}" -m ensurepip --upgrade`, {
                         cwd: backendPath,
@@ -719,7 +725,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
             }
 
             // Verificar dependencias instaladas
-            notifyProgress('deps-check', 'Verificando dependencias de Python...', 35);
+            notifyProgress('deps-check', 'Verificando dependencias de Python...', 72);
             const installedPkgs = execSync(`"${pythonCmd}" -m pip freeze`, {
                 encoding: "utf8",
                 stdio: 'pipe'
@@ -757,7 +763,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 // Si hay paquetes que fallan, intentar reinstalarlos
                 if (failedChecks.length > 0) {
                     console.log(`\nDetectadas ${failedChecks.length} instalaciones corruptas. Reparando...`);
-                    notifyProgress('deps-repair', `Reparando ${failedChecks.length} paquetes corruptos...`, 49);
+                    notifyProgress('deps-repair', `Reparando ${failedChecks.length} paquetes corruptos...`, 73);
 
                     for (const check of failedChecks) {
                         console.log(`Reinstalando ${check.package}...`);
@@ -808,7 +814,7 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
         // Si el error es por archivos bloqueados y no hemos alcanzado el límite de reintentos
         if (err.message === 'VENV_LOCKED' && retryCount < MAX_RETRIES) {
             console.log(`Intento ${retryCount + 1}/${MAX_RETRIES}: Limpiando entorno virtual bloqueado...`);
-            notifyProgress('venv-cleanup', 'Limpiando entorno virtual bloqueado...', 20);
+            notifyProgress('venv-cleanup', 'Limpiando entorno virtual bloqueado...', 70);
 
             // Cerrar procesos de Python que puedan estar bloqueando archivos
             await killPythonProcesses(venvPath);
