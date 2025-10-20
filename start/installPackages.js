@@ -120,6 +120,75 @@ async function detectGPUType() {
 // ============================================================================
 
 /**
+ * Verificar si PyTorch esta correctamente instalado
+ * @param {string} pythonCmd - Comando Python
+ * @returns {Promise<boolean>} true si PyTorch (torch, torchvision, torchaudio) esta instalado
+ */
+async function verifyPyTorchInstallation(pythonCmd) {
+    return new Promise((resolve) => {
+        try {
+            console.log('[GPU-VERIFY] Verificando instalacion de PyTorch con pip freeze...');
+
+            const proc = require('child_process').spawn(pythonCmd, ['-m', 'pip', 'freeze'], {
+                stdio: 'pipe',
+                timeout: 30000
+            });
+
+            let output = '';
+            let errorOutput = '';
+
+            proc.stdout.on('data', (data) => {
+                output += data.toString();
+            });
+
+            proc.stderr.on('data', (data) => {
+                errorOutput += data.toString();
+            });
+
+            proc.on('close', (code) => {
+                if (code === 0) {
+                    // Normalizar nombres para buscar
+                    const normalizedOutput = output.toLowerCase()
+                        .split('\n')
+                        .map(line => line.replace(/-/g, '_').replace(/\./g, '_'));
+
+                    // Buscar los paquetes principales de PyTorch
+                    const torchFound = normalizedOutput.some(line => line.startsWith('torch=='));
+                    const torchvisionFound = normalizedOutput.some(line => line.startsWith('torchvision=='));
+                    const torchaudioFound = normalizedOutput.some(line => line.startsWith('torchaudio=='));
+
+                    if (torchFound && torchvisionFound && torchaudioFound) {
+                        console.log('[GPU-VERIFY] PyTorch verificado correctamente');
+                        // Mostrar versiones encontradas
+                        output.split('\n')
+                            .filter(line => line.toLowerCase().includes('torch'))
+                            .forEach(line => console.log(`[GPU-VERIFY] ${line.trim()}`));
+                        resolve(true);
+                    } else {
+                        console.log('[GPU-VERIFY] Paquetes PyTorch incompletos:');
+                        console.log(`  - torch: ${torchFound ? 'OK' : 'FALTA'}`);
+                        console.log(`  - torchvision: ${torchvisionFound ? 'OK' : 'FALTA'}`);
+                        console.log(`  - torchaudio: ${torchaudioFound ? 'OK' : 'FALTA'}`);
+                        resolve(false);
+                    }
+                } else {
+                    console.log('[GPU-VERIFY] Error al ejecutar pip freeze:', errorOutput);
+                    resolve(false);
+                }
+            });
+
+            proc.on('error', (error) => {
+                console.log('[GPU-VERIFY] Error al verificar PyTorch:', error.message);
+                resolve(false);
+            });
+        } catch (error) {
+            console.log('[GPU-VERIFY] Error inesperado:', error.message);
+            resolve(false);
+        }
+    });
+}
+
+/**
  * Instalar paquetes GPU/CPU segun hardware
  * @param {string} pythonCmd - Comando Python
  * @param {string} backendPath - Ruta backend
@@ -549,6 +618,7 @@ module.exports = {
     loadProblematicPackages,
     loadGPUPackages,
     detectGPUType,
+    verifyPyTorchInstallation,
     installGPUPackages,
     installProblematicPackages,
     installPackagesInBulk,

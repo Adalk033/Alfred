@@ -9,6 +9,7 @@ const {
     installPackagesInBulk,
     installProblematicPackages,
     installGPUPackages,
+    verifyPyTorchInstallation,
     retryFailedPackages,
     killPythonProcesses,
     loadProblematicPackages,
@@ -334,8 +335,6 @@ function checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgr
         return match ? match[1].toLowerCase().replace(/-/g, '_').replace(/\./g, '_') : null;
     }).filter(Boolean);
 
-    // Normalizar installedPkgs: convertir TODOS los guiones y puntos a guiones bajos para comparacion consistente
-    // Procesar cada linea del pip freeze output
     const normalizedInstalledPkgs = installedPkgs
         .split('\n')
         .map(line => {
@@ -348,25 +347,17 @@ function checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgr
 
     // Verificar si hay paquetes faltantes
     const missing = reqPkgNames.filter(pkg => {
-        const searchName = pkg;  // Ya esta normalizado con guiones bajos
-        
-        // Busqueda exacta: paquete-base == version
+        const searchName = pkg;
         const pattern = new RegExp(`^${searchName}==`, 'm');
         const found = pattern.test(normalizedInstalledPkgs);
-        
-        if (found) return false;  // Encontrado exacto
-        
+        if (found) { return false; }
+
         // Busqueda alternativa para meta-paquetes (ej: unstructured)
-        // Buscar componentes del paquete (ej: unstructured_client, unstructured_inference)
         const componentPattern = new RegExp(`^${searchName}_[a-z]+==`, 'm');
         const foundComponent = componentPattern.test(normalizedInstalledPkgs);
-        
-        if (foundComponent) {
-            console.log(`[DEPS] Paquete meta-detectado: ${searchName} (encontrados componentes)`);
-            return false;  // Meta-paquete esta disponible via componentes
-        }
-        
-        return true;  // No encontrado ni exacto ni componentes
+
+        if (foundComponent) { return false; }
+        return true;
     });
 
     return { reqPkgNames, missing, normalizedInstalledPkgs };
@@ -467,17 +458,25 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         console.log(`========================================================`);
         notifyProgress('deps-ready', 'Todas las dependencias ya estaban instaladas', 48);
 
-        // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
+        // Verificar si PyTorch ya esta instalado y funciona
         console.log('Verificando instalacion de PyTorch...');
-        const tempDir = getSafeTempDir(backendPath, isPackaged);
-        const gpuConfig = loadGPUPackages(backendPath);
+        const pyTorchInstalled = await verifyPyTorchInstallation(pythonCmd);
 
-        try {
-            await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
-        }
-        catch (error) {
-            console.error('Error al verificar/instalar PyTorch:', error.message);
-            notifyProgress('deps-error', `Error al verificar/instalar PyTorch: ${error.message}`, 50);
+        if (pyTorchInstalled) {
+            console.log('[GPU-VERIFY] PyTorch ya esta correctamente instalado, no requiere reinstalacion');
+            notifyProgress('pytorch-verified', 'PyTorch verificado', 50);
+        } else {
+            console.log('[GPU-VERIFY] PyTorch no esta disponible, intentando instalar...');
+            const tempDir = getSafeTempDir(backendPath, isPackaged);
+            const gpuConfig = loadGPUPackages(backendPath);
+
+            try {
+                await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
+            }
+            catch (error) {
+                console.error('Error al instalar PyTorch:', error.message);
+                notifyProgress('deps-error', `Error al instalar PyTorch: ${error.message}`, 50);
+            }
         }
     }
 }
@@ -656,14 +655,14 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     stdio: 'pipe'
                 });
                 console.log('pip actual:', pipVersion.trim());
-                // Validar si pip es version 23.2.1 o superior
+                // Validar si pip es version 25.2 o superior
                 const versionMatch = pipVersion.match(/pip (\d+)\.(\d+)\.(\d+)/);
                 if (versionMatch) {
                     const major = parseInt(versionMatch[1], 10);
                     const minor = parseInt(versionMatch[2], 10);
                     const patch = parseInt(versionMatch[3], 10);
-                    if (major < 23 || (major === 23 && minor < 2) || (major === 23 && minor === 2 && patch < 1)) {
-                        console.log("pip es muy antiguo, se actualizara");
+                    if (major < 25 || (major === 25 && minor < 2)) {
+                        console.log("pip es muy antiguo, se actualizara a 25.2+");
                         notifyProgress('pip-upgrade', 'Actualizando gestor de paquetes (pip)...', 32);
                         execSync(`"${pythonCmd}" -m pip install --upgrade pip`, {
                             cwd: backendPath,
@@ -671,8 +670,9 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                             stdio: 'pipe',
                             timeout: 80000  // 80 segundos timeout
                         });
+                    } else {
+                        console.log("pip esta actualizado (>= 25.2)");
                     }
-                    else { console.log("pip está actualizado"); }
                 }
             } catch (pipError) {
                 console.log("Error al verificar/actualizar pip:", pipError.message);
@@ -710,37 +710,9 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 stdio: 'pipe'
             }).toLowerCase();
 
-            console.log('\n[DEPENDENCIAS] Verificando dependencias requeridas...');
-
             // Usar funcion comun para verificar dependencias
-            const { reqPkgNames, missing } = checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgress);
-
-            // Mostrar logging de dependencias (solo en modo desarrollo)
-            const reqs = fs.readFileSync(requirementsPath, "utf8")
-                .split("\n")
-                .filter(line => line.trim() && !line.trim().startsWith('#'))
-                .map(line => line.trim());
-
-            reqs.forEach(req => {
-                console.log(`[DEPENDENCIAS] Requerido: ${req}`);
-            });
-
-            console.log(`Dependencias requeridas: ${reqPkgNames.length} paquetes`);
-            console.log(`Dependencias instaladas: ${installedPkgs.split('\n').filter(l => l.trim()).length} paquetes`);
-
-            // Logging de paquetes faltantes
-            missing.forEach(pkg => {
-                console.log(`[deps-check] Falta: ${pkg}`);
-            });
-            console.log('\n[DEPENDENCIAS] Verificacion completada.');
-            console.log(`Dependencias faltantes: ${missing.length} y esas son:`)
-            missing.forEach(pkg => console.log(`  - ${pkg}`));
-
-            // Usar funcion comun para instalar o verificar dependencias
+            const { missing } = checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgress);
             await installOrVerifyDependencies(pythonCmd, backendPath, requirementsPath, missing, isPackaged, notifyProgress);
-
-            // Verificacion final: Asegurar que dependencias criticas estan instaladas
-            console.log('\n=== Verificacion Final ===');
             try {
                 // Verificar multiples paquetes criticos (con sus imports reales)
                 const checks = [
@@ -795,14 +767,13 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     }
 
                     // Verificar nuevamente despues de reparar
-                    console.log('\nVerificando reparaciones...');
                     for (const check of failedChecks) {
                         execSync(`"${pythonCmd}" -c "import ${check.module}"`, {
                             encoding: 'utf8',
                             stdio: 'pipe',
                             cwd: backendPath
                         });
-                        console.log(`✓ ${check.package} verificado OK`);
+                        console.log(`${check.package} verificado OK`);
                     }
                 }
             } catch (verifyError) {
