@@ -349,9 +349,24 @@ function checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgr
     // Verificar si hay paquetes faltantes
     const missing = reqPkgNames.filter(pkg => {
         const searchName = pkg;  // Ya esta normalizado con guiones bajos
+        
+        // Busqueda exacta: paquete-base == version
         const pattern = new RegExp(`^${searchName}==`, 'm');
         const found = pattern.test(normalizedInstalledPkgs);
-        return !found;
+        
+        if (found) return false;  // Encontrado exacto
+        
+        // Busqueda alternativa para meta-paquetes (ej: unstructured)
+        // Buscar componentes del paquete (ej: unstructured_client, unstructured_inference)
+        const componentPattern = new RegExp(`^${searchName}_[a-z]+==`, 'm');
+        const foundComponent = componentPattern.test(normalizedInstalledPkgs);
+        
+        if (foundComponent) {
+            console.log(`[DEPS] Paquete meta-detectado: ${searchName} (encontrados componentes)`);
+            return false;  // Meta-paquete esta disponible via componentes
+        }
+        
+        return true;  // No encontrado ni exacto ni componentes
     });
 
     return { reqPkgNames, missing, normalizedInstalledPkgs };
