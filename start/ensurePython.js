@@ -315,6 +315,159 @@ function getSafeTempDir(backendPath, isPackaged) {
 // ============================================================================
 
 /**
+ * Verificar dependencias instaladas y comparar con requerimientos
+ * Logica comun para produccion y desarrollo
+ * @param {string} installedPkgs - Output de pip freeze (ya en lowercase)
+ * @param {string} requirementsPath - Ruta al archivo requirements.txt
+ * @param {Function} notifyProgress - Callback para notificar progreso
+ * @returns {Object} { reqPkgNames, missing, normalizedInstalledPkgs }
+ */
+function checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgress) {
+    const reqs = fs.readFileSync(requirementsPath, "utf8")
+        .split("\n")
+        .filter(line => line.trim() && !line.trim().startsWith('#'))
+        .map(line => line.trim());
+
+    // Extraer nombres de paquetes y normalizarlos (convertir guiones y puntos a guiones bajos)
+    const reqPkgNames = reqs.map(r => {
+        const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
+        return match ? match[1].toLowerCase().replace(/-/g, '_').replace(/\./g, '_') : null;
+    }).filter(Boolean);
+
+    // Normalizar installedPkgs: convertir TODOS los guiones y puntos a guiones bajos para comparacion consistente
+    // Procesar cada linea del pip freeze output
+    const normalizedInstalledPkgs = installedPkgs
+        .split('\n')
+        .map(line => {
+            // Reemplazar guiones y puntos en el nombre del paquete (antes del ==)
+            return line.replace(/^([a-z0-9._-]+)/gm, (match) => {
+                return match.replace(/-/g, '_').replace(/\./g, '_');
+            });
+        })
+        .join('\n');
+
+    // Verificar si hay paquetes faltantes
+    const missing = reqPkgNames.filter(pkg => {
+        const searchName = pkg;  // Ya esta normalizado con guiones bajos
+        const pattern = new RegExp(`^${searchName}==`, 'm');
+        const found = pattern.test(normalizedInstalledPkgs);
+        return !found;
+    });
+
+    return { reqPkgNames, missing, normalizedInstalledPkgs };
+}
+
+/**
+ * Instalar o verificar dependencias Python
+ * Logica comun para produccion y desarrollo
+ * @param {string} pythonCmd - Comando/ruta de Python a usar
+ * @param {string} backendPath - Ruta al directorio backend
+ * @param {string} requirementsPath - Ruta al archivo requirements.txt
+ * @param {Array} missing - Array de paquetes faltantes
+ * @param {boolean} isPackaged - Si la app esta empaquetada
+ * @param {Function} notifyProgress - Callback para notificar progreso
+ * @returns {Promise<void>}
+ */
+async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsPath, missing, isPackaged, notifyProgress) {
+    if (missing.length > 0) {
+        console.log(`\n========================================================`);
+        console.log(`  INSTALANDO ${missing.length} DEPENDENCIAS FALTANTES`);
+        console.log(`========================================================`);
+        console.log(`Paquetes a instalar: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`);
+        notifyProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
+
+        // Cerrar cualquier proceso de Python que pueda estar bloqueando archivos
+        const venvPath = path.join(backendPath, "venv");
+        await killPythonProcesses(venvPath);
+
+        // Pequeña pausa para asegurar que no hay procesos bloqueantes
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Separar paquetes estables de problematicos
+        const problematicConfig = loadProblematicPackages(backendPath);
+        const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
+
+        const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
+        const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
+
+        // FASE 1: Instalar paquetes estables en bloque
+        let failedStable = [];
+        if (stablePackages.length > 0) {
+            console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
+            notifyProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
+            const tempDir = getSafeTempDir(backendPath, isPackaged);
+            failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages, tempDir);
+        }
+
+        // FASE 2: Instalar paquetes problematicos uno por uno
+        let failedProblematic = [];
+        if (problematicPackages.length > 0) {
+            console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
+            notifyProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
+            const tempDir = getSafeTempDir(backendPath, isPackaged);
+            failedProblematic = await installProblematicPackages(
+                pythonCmd,
+                backendPath,
+                problematicPackages,
+                problematicConfig.install_config,
+                tempDir,
+                notifyProgress
+            );
+        }
+
+        // FASE 3: Instalar paquetes GPU/CPU segun hardware
+        console.log('\n=== FASE 3: Instalando PyTorch (GPU/CPU) ===');
+        const gpuConfig = loadGPUPackages(backendPath);
+        const tempDir = getSafeTempDir(backendPath, isPackaged);
+        const failedGPU = await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
+
+        // FASE 4: Reintentar todos los fallidos
+        const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
+        if (allFailed.length > 0) {
+            console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
+            notifyProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
+            const tempDir = getSafeTempDir(backendPath, isPackaged);
+            await retryFailedPackages(pythonCmd, backendPath, allFailed, tempDir, notifyProgress);
+        } else {
+            notifyProgress('deps-ready', 'Dependencias instaladas', 48);
+        }
+
+        // Limpiar directorio temporal DESPUES de todos los reintentos
+        console.log('Limpiando directorio temporal...');
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar que pip libere archivos
+
+        try {
+            const tempDir = getSafeTempDir(backendPath, isPackaged);
+            if (fs.existsSync(tempDir)) {
+                fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
+                console.log('Directorio temporal limpiado');
+            }
+        } catch (cleanupErr) {
+            console.log('No se pudo limpiar directorio temporal (no es critico):', cleanupErr.message);
+        }
+    }
+    else {
+        console.log(`\n========================================================`);
+        console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
+        console.log(`========================================================`);
+        notifyProgress('deps-ready', 'Todas las dependencias ya estaban instaladas', 48);
+
+        // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
+        console.log('Verificando instalacion de PyTorch...');
+        const tempDir = getSafeTempDir(backendPath, isPackaged);
+        const gpuConfig = loadGPUPackages(backendPath);
+
+        try {
+            await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
+        }
+        catch (error) {
+            console.error('Error al verificar/instalar PyTorch:', error.message);
+            notifyProgress('deps-error', `Error al verificar/instalar PyTorch: ${error.message}`, 50);
+        }
+    }
+}
+
+/**
  * Asegurar que el entorno Python este listo (venv en desarrollo, portable en produccion)
  * @param {string} backendPath - Ruta al directorio backend
  * @param {boolean} isPackaged - Si la app esta empaquetada
@@ -335,7 +488,6 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
     try {
         // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
         if (!isDevelopment) {
-            console.log('\n[PRODUCCION] Verificando Python portable...');
 
             // Si existe python-portable/, usar directamente
             if (fs.existsSync(portablePythonPath)) {
@@ -380,157 +532,36 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     throw new Error(`Error al listar dependencias: ${err.message}`);
                 }
 
-                const reqs = fs.readFileSync(requirementsPath, "utf8")
-                    .split("\n")
-                    .filter(line => line.trim() && !line.trim().startsWith('#'))
-                    .map(line => line.trim());
+                // Usar funcion comun para verificar dependencias
+                const { missing } = checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgress);
 
-                // Extraer nombres de paquetes y normalizarlos (convertir guiones a guiones bajos)
-                const reqPkgNames = reqs.map(r => {
-                    const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
-                    return match ? match[1].toLowerCase().replace(/-/g, '_') : null;
-                }).filter(Boolean);
-
-            // Verificar si hay paquetes faltantes
-            // Normalizar installedPkgs: convertir guiones a guiones bajos para comparación consistente
-            const normalizedInstalledPkgs = installedPkgs.replace(/^([a-z0-9._-]+)-/gm, '$1_');
-            const missing = reqPkgNames.filter(pkg => {
-                const searchName = pkg.replace(/\./g, '\\.');
-                const pattern = new RegExp(`^${searchName}==`, 'm');
-                const found = pattern.test(normalizedInstalledPkgs);
-                if (!found) { notifyProgress('deps-missing-item', `Dependencia faltante: ${pkg}`, 33); }
-                return !found;
-            });
+                // Notificar paquetes faltantes
+                missing.forEach(pkg => {
+                    notifyProgress('deps-missing-item', `Dependencia faltante: ${pkg}`, 33);
+                });
 
                 notifyProgress('deps-missing', `Dependencias faltantes: ${missing.length}`, 34);
                 notifyProgress('deps-install-start', 'Iniciando instalacion de dependencias...', 35);
 
-                if (missing.length > 0) {
-                    notifyProgress('deps-install', `Instalando ${missing.length} dependencias...`, 36);
+                // Usar funcion comun para instalar o verificar dependencias
+                await installOrVerifyDependencies(portablePythonPath, backendPath, requirementsPath, missing, isPackaged, notifyProgress);
 
-                    // Separar paquetes estables de problematicos
-                    const problematicConfig = loadProblematicPackages(backendPath);
-                    const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
-
-                    const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
-                    const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
-
-                    // FASE 1: Instalar paquetes estables en bloque
-                    let failedStable = [];
-                    if (stablePackages.length > 0) {
-                        notifyProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
-                        try {
-                            const tempDir = getSafeTempDir(backendPath, isPackaged);
-                            failedStable = await installPackagesInBulk(portablePythonPath, backendPath, requirementsPath, stablePackages, tempDir);
-                        }
-                        catch (bulkError) {
-                            notifyProgress('deps-error', `Error en instalacion en bloque: ${bulkError.message}`, 20 + (retryCount + 1) * 5);
-                            throw new Error(`Error en instalacion en bloque: ${bulkError.message}`);
-                        }
-                    }
-
-                    // FASE 2: Instalar paquetes problematicos uno por uno
-                    let failedProblematic = [];
-                    if (problematicPackages.length > 0) {
-                        notifyProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
-                        try {
-                            const tempDir = getSafeTempDir(backendPath, isPackaged);
-                            failedProblematic = await installProblematicPackages(
-                                portablePythonPath,
-                                backendPath,
-                                problematicPackages,
-                                problematicConfig.install_config,
-                                tempDir,
-                                notifyProgress
-                            );
-                        }
-                        catch (problematicError) {
-                            notifyProgress('deps-error', `Error en instalacion de paquetes problematicos: ${problematicError.message}`, 40);
-                        }
-                    }
-
-                    // FASE 3: Instalar PyTorch (GPU/CPU) segun hardware
-                    const gpuConfig = loadGPUPackages(backendPath);
-                    let failedGPU = [];
-                    try {
-                        const tempDir = getSafeTempDir(backendPath, isPackaged);
-                        failedGPU = await installGPUPackages(portablePythonPath, backendPath, gpuConfig, tempDir, notifyProgress);
-                    }
-                    catch (gpuError) {
-                        notifyProgress('deps-error', `Error en instalacion de paquetes GPU: ${gpuError.message}`, 42);
-                    }
-
-                    // FASE 4: Reintentar fallidos
-                    const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
-                    try {
-                        if (allFailed.length > 0) {
-                            notifyProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
-                            const tempDir = getSafeTempDir(backendPath, isPackaged);
-                            await retryFailedPackages(portablePythonPath, backendPath, allFailed, tempDir, notifyProgress);
-                        }
-                    }
-                    catch (killError) {
-                        notifyProgress('deps-error', `Error al reintentar paquetes fallidos: ${killError.message}`, 48);
-                    }
-                    notifyProgress('deps-complete', 'Instalacion de dependencias completada', 48);
-                }
-                else {
-                    console.log(`\n========================================================`);
-                    console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
-                    console.log(`========================================================`);
-                    notifyProgress('deps-ready', 'Todas las dependencias ya estaban instaladas', 48);
-
-                    // Verificar PyTorch aunque las demas esten instaladas
-                    console.log('Verificando instalacion de PyTorch...');
-                    const installedPackages = installedPkgs.split('\n')
-                        .map(line => {
-                            const match = line.match(/^([a-zA-Z0-9\-_.]+)==/);
-                            return match ? match[1].toLowerCase() : null;
-                        })
-                        .filter(Boolean);
-
-                    const hasTorch = installedPackages.some(pkg => pkg === 'torch');
-                    try {
-                        if (!hasTorch) {
-                            console.log('PyTorch no detectado, instalando...');
-                            const gpuConfig = loadGPUPackages(backendPath);
-                            const tempDir = getSafeTempDir(backendPath, isPackaged);
-                            await installGPUPackages(portablePythonPath, backendPath, gpuConfig, tempDir, notifyProgress);
-                        }
-                    }
-                    catch (error) {
-                        console.error('Error al verificar/instalar PyTorch:', error.message);
-                        notifyProgress('deps-error', `Error al verificar/instalar PyTorch: ${error.message}`, 50);
-                    }
-                }
                 notifyProgress('deps-ready', 'Entorno Python listo (portable) todo listo', 49);
                 return portablePythonPath;
             }
             else {
-                // Fallback: Si no hay Python portable en produccion, error critico
-                console.error('\n========================================================');
-                console.error('  ERROR: Python portable no encontrado');
-                console.error('========================================================');
-                console.error(`Ruta esperada: ${portablePythonPath}`);
-                console.error(`Backend path: ${backendPath}`);
-                console.error(`Backend existe: ${fs.existsSync(backendPath)}`);
-
                 // Listar contenido del backend para diagnostico
                 if (fs.existsSync(backendPath)) {
-                    console.error('\nContenido del directorio backend:');
                     try {
                         const files = fs.readdirSync(backendPath);
                         files.forEach(file => console.error(`  - ${file}`));
                     } catch (e) {
-                        console.error('  (No se pudo listar el contenido)');
+                        notifyProgress('dir-error', `No se pudo listar directorio del backend: ${e.message}`, 50);
+                        throw new Error(`No se pudo listar directorio del backend: ${e.message}`);
                     }
                 }
-                console.error('========================================================\n');
-
-                throw new Error(`Python portable no encontrado en modo produccion.\nRuta esperada: ${portablePythonPath}\nBackend path: ${backendPath}\nVerifique que el build incluyo la carpeta python-portable.`);
             }
         } else {
-            // --- MODO DESARROLLO: Crear venv tradicional ---
             console.log('========================================================');
             console.log('  MODO DESARROLLO: Usando venv tradicional');
             console.log('========================================================');
@@ -665,6 +696,11 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
             }).toLowerCase();
 
             console.log('\n[DEPENDENCIAS] Verificando dependencias requeridas...');
+
+            // Usar funcion comun para verificar dependencias
+            const { reqPkgNames, missing } = checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgress);
+
+            // Mostrar logging de dependencias (solo en modo desarrollo)
             const reqs = fs.readFileSync(requirementsPath, "utf8")
                 .split("\n")
                 .filter(line => line.trim() && !line.trim().startsWith('#'))
@@ -674,129 +710,19 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 console.log(`[DEPENDENCIAS] Requerido: ${req}`);
             });
 
-            // Extraer nombres de paquetes (antes de ==, >=, etc.) y normalizarlos (convertir guiones a guiones bajos)
-            const reqPkgNames = reqs.map(r => {
-                const match = r.match(/^([a-zA-Z0-9\-_.]+)/);
-                return match ? match[1].toLowerCase().replace(/-/g, '_') : null;
-            }).filter(Boolean);
-
             console.log(`Dependencias requeridas: ${reqPkgNames.length} paquetes`);
             console.log(`Dependencias instaladas: ${installedPkgs.split('\n').filter(l => l.trim()).length} paquetes`);
 
-            // Verificar si hay paquetes faltantes
-            // Normalizar installedPkgs: convertir guiones a guiones bajos para comparación consistente
-            const normalizedInstalledPkgs = installedPkgs.replace(/^([a-z0-9._-]+)-/gm, '$1_');
-            const missing = reqPkgNames.filter(pkg => {
-                const searchName = pkg.replace(/\./g, '\\.');
-                const pattern = new RegExp(`^${searchName}==`, 'm');
-                const found = pattern.test(normalizedInstalledPkgs);
-                if (!found) { console.log(`[deps-check] Falta: ${pkg}`); }
-                return !found;
+            // Logging de paquetes faltantes
+            missing.forEach(pkg => {
+                console.log(`[deps-check] Falta: ${pkg}`);
             });
             console.log('\n[DEPENDENCIAS] Verificacion completada.');
             console.log(`Dependencias faltantes: ${missing.length} y esas son:`)
             missing.forEach(pkg => console.log(`  - ${pkg}`));
 
-            if (missing.length > 0) {
-                console.log(`\n========================================================`);
-                console.log(`  INSTALANDO ${missing.length} DEPENDENCIAS FALTANTES`);
-                console.log(`========================================================`);
-                console.log(`Paquetes a instalar: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? '...' : ''}`);
-                notifyProgress('deps-install', `Instalando ${missing.length} dependencias de Python...`, 36);
-
-                // Cerrar cualquier proceso de Python que pueda estar bloqueando archivos
-                await killPythonProcesses(venvPath);
-
-                // Pequeña pausa para asegurar que no hay procesos bloqueantes
-                await new Promise(resolve => setTimeout(resolve, 2000));
-
-                //Separar paquetes estables de problemáticos
-                const problematicConfig = loadProblematicPackages(backendPath);
-                const problematicSet = new Set(problematicConfig.problematic_packages.map(p => p.toLowerCase()));
-
-                //Separar paquetes
-                const stablePackages = missing.filter(pkg => !problematicSet.has(pkg.toLowerCase()));
-                const problematicPackages = missing.filter(pkg => problematicSet.has(pkg.toLowerCase()));
-
-                // FASE 1: Instalar paquetes estables en bloque (rápido)
-                let failedStable = [];
-                if (stablePackages.length > 0) {
-                    console.log('\n=== FASE 1: Instalando paquetes estables en bloque ===');
-                    notifyProgress('deps-stable', `Instalando ${stablePackages.length} paquetes estables...`, 36);
-                    const tempDir = getSafeTempDir(backendPath, isPackaged);
-                    failedStable = await installPackagesInBulk(pythonCmd, backendPath, requirementsPath, stablePackages, tempDir);
-                }
-
-                // FASE 2: Instalar paquetes problematicos UNO POR UNO con delays largos
-                let failedProblematic = [];
-                if (problematicPackages.length > 0) {
-                    console.log('\n=== FASE 2: Instalando paquetes problematicos uno por uno ===');
-                    notifyProgress('deps-problematic', `Instalando paquetes problematicos...`, 38);
-                    const tempDir = getSafeTempDir(backendPath, isPackaged);
-                    failedProblematic = await installProblematicPackages(
-                        pythonCmd,
-                        backendPath,
-                        problematicPackages,
-                        problematicConfig.install_config,
-                        tempDir,
-                        notifyProgress
-                    );
-                }
-
-                // FASE 3: Instalar paquetes GPU/CPU según hardware
-                console.log('\n=== FASE 3: Instalando PyTorch (GPU/CPU) ===');
-                const gpuConfig = loadGPUPackages(backendPath);
-                const tempDir = getSafeTempDir(backendPath, isPackaged);
-                const failedGPU = await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
-
-                // FASE 4: Reintentar todos los fallidos
-                const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
-                if (allFailed.length > 0) {
-                    console.log(`\n=== FASE 4: Reintentando ${allFailed.length} paquetes fallidos ===`);
-                    notifyProgress('deps-retry', `Reintentando ${allFailed.length} paquetes...`, 46);
-                    const tempDir = getSafeTempDir(backendPath, isPackaged);
-                    await retryFailedPackages(pythonCmd, backendPath, allFailed, tempDir, notifyProgress);
-                } else {
-                    notifyProgress('deps-ready', 'Dependencias instaladas', 48);
-                }
-
-                // Limpiar directorio temporal DESPUÉS de todos los reintentos
-                console.log('Limpiando directorio temporal...');
-                await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar que pip libere archivos
-
-                try {
-                    const tempDir = getSafeTempDir(backendPath, isPackaged);
-                    if (fs.existsSync(tempDir)) {
-                        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
-                        console.log('Directorio temporal limpiado');
-                    }
-                } catch (cleanupErr) {
-                    console.log('No se pudo limpiar directorio temporal (no es critico):', cleanupErr.message);
-                }
-
-            }
-            else {
-                console.log(`\n========================================================`);
-                console.log(`  TODAS LAS DEPENDENCIAS YA ESTAN INSTALADAS`);
-                console.log(`========================================================`);
-                // SIEMPRE verificar si PyTorch esta instalado, si no, instalarlo
-                console.log('Verificando instalacion de PyTorch...');
-                // Convertir installedPkgs (string) a array de nombres de paquetes
-                const installedPackages = installedPkgs.split('\n')
-                    .map(line => {
-                        const match = line.match(/^([a-zA-Z0-9\-_.]+)==/);
-                        return match ? match[1].toLowerCase() : null;
-                    })
-                    .filter(Boolean);
-                const hasTorch = installedPackages.some(pkg => pkg === 'torch');
-                if (!hasTorch) {
-                    console.log('PyTorch no detectado, instalando...');
-                    const gpuConfig = loadGPUPackages(backendPath);
-                    const tempDir = getSafeTempDir(backendPath, isPackaged);
-                    await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
-                }
-                notifyProgress('deps-ready', 'Dependencias verificadas', 48);
-            }
+            // Usar funcion comun para instalar o verificar dependencias
+            await installOrVerifyDependencies(pythonCmd, backendPath, requirementsPath, missing, isPackaged, notifyProgress);
 
             // Verificacion final: Asegurar que dependencias criticas estan instaladas
             console.log('\n=== Verificacion Final ===');
@@ -948,5 +874,7 @@ module.exports = {
     findPythonExecutable,
     downloadAndInstallPythonWindows,
     getSafeTempDir,
-    ensurePythonEnv
+    ensurePythonEnv,
+    checkInstalledDependencies,
+    installOrVerifyDependencies
 };
