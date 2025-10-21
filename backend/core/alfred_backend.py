@@ -39,7 +39,7 @@ import json
 import functionsToHistory
 from alfred_core import AlfredCore
 from conversation_manager import get_conversation_manager
-from utils.security import encrypt_data, decrypt_data
+from utils.security import encrypt_data, decrypt_data, encrypt_for_transport, is_encryption_enabled
 from functionsToHistory import encrypt_personal_data, decrypt_personal_data
 
 # --- Utilidades para procesamiento de archivos ---
@@ -521,6 +521,26 @@ class ModeResponse(BaseModel):
     mode: str = Field(..., description="Modo actual")
     updated_at: Optional[str] = Field(None, description="Fecha de ultima actualizacion")
 
+# --- Modelos de Tema ---
+
+class ThemeRequest(BaseModel):
+    """Solicitud para cambiar el tema de la aplicacion"""
+    theme: str = Field(..., description="Tema: light, dark")
+    
+    @field_validator('theme')
+    @classmethod
+    def validate_theme(cls, v: str) -> str:
+        """Validar que el tema sea valido"""
+        allowed_themes = ['light', 'dark']
+        if v not in allowed_themes:
+            raise ValueError(f'Tema invalido. Temas permitidos: {allowed_themes}')
+        return v
+
+class ThemeResponse(BaseModel):
+    """Respuesta con el tema actual"""
+    theme: str = Field(..., description="Tema actual")
+    updated_at: Optional[str] = Field(None, description="Fecha de ultima actualizacion")
+
 # --- Inicialización del núcleo de Alfred ---
 alfred_core: Optional[AlfredCore] = None
 _initialization_complete: bool = False  # Flag para indicar cuando initialize_async() ha terminado
@@ -807,7 +827,8 @@ async def query_alfred(request: QueryRequest):
                     user_context="Guardado en historial"
                 )
         
-        return QueryResponse(
+        # Crear respuesta
+        response_data = QueryResponse(
             answer=result['answer'],
             personal_data=personal_data,
             sources=result.get('sources', []),
@@ -815,6 +836,14 @@ async def query_alfred(request: QueryRequest):
             history_score=result.get('history_score'),
             context_count=result.get('context_count', 0)
         )
+        
+        # CIFRAR DATOS SENSIBLES PARA VIAJE POR LA RED
+        if is_encryption_enabled():
+            response_dict = response_data.dict()
+            response_dict = encrypt_for_transport(response_dict)
+            response_data = QueryResponse(**response_dict)
+        
+        return response_data
     
     except Exception as e:
         # Sanitizar el mensaje de error para evitar problemas de encoding
@@ -1233,6 +1262,68 @@ async def get_mode():
         
     except Exception as e:
         error_detail = f"Error al obtener modo: {str(e)}"
+        backend_logger.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
+
+# ====================================
+# ENDPOINTS DE TEMA DE APLICACION
+# ====================================
+
+@app.post("/settings/theme", response_model=ThemeResponse, tags=["Configuración"])
+async def set_theme(request: ThemeRequest):
+    """
+    Guardar el tema actual de la aplicacion
+    
+    Temas disponibles:
+    - light: Tema claro
+    - dark: Tema oscuro
+    
+    El tema se guarda en la base de datos y se carga automaticamente
+    al iniciar la aplicacion.
+    """
+    try:
+        from db_manager import set_user_setting
+        from datetime import datetime
+        
+        # Guardar en base de datos
+        success = set_user_setting('app_theme', request.theme, 'string')
+        
+        if not success:
+            raise Exception("No se pudo guardar el tema en la base de datos")
+        
+        backend_logger.info(f"Tema cambiado a: {request.theme}")
+        
+        return ThemeResponse(
+            theme=request.theme,
+            updated_at=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        error_detail = f"Error al guardar tema: {str(e)}"
+        backend_logger.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
+
+@app.get("/settings/theme", response_model=ThemeResponse, tags=["Configuración"])
+async def get_theme():
+    """
+    Obtener el tema actual de la aplicacion
+    
+    Retorna el tema guardado en la base de datos.
+    Si no hay tema guardado, retorna 'dark' como valor por defecto.
+    """
+    try:
+        from db_manager import get_user_setting
+        
+        # Obtener de base de datos (retorna directamente el valor string)
+        theme = get_user_setting('app_theme', default='dark')
+        
+        return ThemeResponse(
+            theme=theme,
+            updated_at=None  # Opcional: podriamos consultar updated_at si es necesario
+        )
+        
+    except Exception as e:
+        error_detail = f"Error al obtener tema: {str(e)}"
         backend_logger.error(error_detail)
         raise HTTPException(status_code=500, detail=error_detail)
 
@@ -3459,6 +3550,46 @@ async def setup_encryption(request: EncryptionSetupRequest):
 class EncryptionToggleRequest(BaseModel):
     """Modelo para cambiar estado de cifrado"""
     enable_encryption: bool = Field(..., description="True para habilitar, False para deshabilitar")
+
+
+@app.get("/security/encryption-key", tags=["Seguridad"])
+async def get_encryption_key_for_frontend():
+    """
+    Obtiene la clave de cifrado para que el frontend pueda descifrar datos
+    
+    **IMPORTANTE**: Esta clave es la MISMA que se usa en el backend para cifrar.
+    El frontend la utiliza para descifrar datos durante el transporte.
+    
+    Returns:
+        - key: Clave Fernet en base64 (formato que entiende el frontend)
+        - enabled: Si el cifrado esta habilitado
+        - algorithm: "Fernet" (compatible con cryptography.fernet.Fernet)
+    """
+    try:
+        from utils.security import get_encryption_key_display, is_encryption_enabled
+        
+        key = get_encryption_key_display()
+        
+        if not key:
+            return {
+                "success": True,
+                "key": None,
+                "enabled": False,
+                "algorithm": "Fernet",
+                "message": "Cifrado no habilitado"
+            }
+        
+        return {
+            "success": True,
+            "key": key,
+            "enabled": is_encryption_enabled(),
+            "algorithm": "Fernet",
+            "message": "Clave obtenida exitosamente"
+        }
+        
+    except Exception as e:
+        backend_logger.error(f"Error obteniendo clave de cifrado para frontend: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 @app.post("/settings/encryption/toggle")

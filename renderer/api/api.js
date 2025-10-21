@@ -3,7 +3,7 @@
 import { getSettings, getCurrentConversationId, addToConversationHistory } from '../state/state.js';
 import { addMessage, addMessageWithTyping, showTypingIndicator, hideTypingIndicator, clearMessages } from './messages.js';
 import { showNotification, updateStatus, disableInput, clearInput, showSidebar, checkSidebar, hideSidebar } from './ui.js';
-import { escapeHtml } from '../dom/dom-utils.js';
+import { getCryptoManager } from '../crypto/crypto.js';
 
 // Verificar estado del servidor
 export async function checkServerStatus() {
@@ -33,6 +33,28 @@ async function loadInitialStats() {
         }
     } catch (error) {
         console.error('Error al cargar estadisticas:', error);
+    }
+}
+
+/**
+ * Descifra respuesta del backend si es necesario
+ * Utiliza el gestor de cifrado para descifrar datos en transito
+ */
+async function decryptResponseIfNeeded(response) {
+    try {
+        const cryptoManager = getCryptoManager();
+        if (!cryptoManager.isEncryptionEnabled()) {
+            return response;
+        }
+
+        console.log('[API] Descifrando respuesta del backend...');
+        const decryptedResponse = await cryptoManager.decryptObject(response);
+        console.log('[API] Respuesta descifrada correctamente');
+        return decryptedResponse;
+    } catch (error) {
+        console.error('[API] Error al descifrar respuesta:', error);
+        // Continuar con respuesta sin descifrar
+        return response;
     }
 }
 
@@ -66,18 +88,21 @@ export async function sendMessage(message, searchMode, conversationId, onSuccess
         if (result.success) {
             const response = result.data;
 
+            // DESCIFRAR RESPUESTA SI ES NECESARIO
+            const decryptedResponse = await decryptResponseIfNeeded(response);
+
             // Agregar respuesta de Alfred con efecto de escritura
-            await addMessageWithTyping(response.answer, 'assistant', response, message);
+            await addMessageWithTyping(decryptedResponse.answer, 'assistant', decryptedResponse, message);
 
             addToConversationHistory({
                 role: 'assistant',
-                content: response.answer,
-                metadata: response
+                content: decryptedResponse.answer,
+                metadata: decryptedResponse
             });
 
             // Callback de exito
             if (onSuccess) {
-                onSuccess(response);
+                onSuccess(decryptedResponse);
             }
         } else {
             const errorMsg = result.error || 'Error desconocido';
@@ -126,11 +151,14 @@ export async function showHistory() {
         const result = await window.alfredAPI.getHistory(20);
 
         if (result.success) {
-            const content = renderHistoryContent(result.data);
+            // DESCIFRAR HISTORIAL SI ES NECESARIO
+            const decryptedData = await Promise.all(result.data.map(item => decryptResponseIfNeeded(item)));
+            
+            const content = renderHistoryContent(decryptedData);
             showSidebar('Historial Preguntas rapidas', content);
             
             // Agregar event listeners despues de insertar el HTML
-            attachHistoryListeners(result.data);
+            attachHistoryListeners(decryptedData);
         }
     } catch (error) {
         showNotification('error', 'Error al cargar el historial');

@@ -73,3 +73,70 @@ def get_encryption_key_display():
 def encryption_key_exists():
     """Verifica si existe el archivo de clave"""
     return KEY_FILE.exists()
+
+def encrypt_for_transport(data: dict) -> dict:
+    """
+    Cifra datos sensibles en una respuesta para viaje seguro por la red
+    
+    Args:
+        data: Diccionario con datos a cifrar (ej: respuesta QueryResponse)
+        
+    Returns:
+        Diccionario con campos sensibles cifrados
+    """
+    if not is_encryption_enabled():
+        return data
+    
+    encrypted_data = data.copy()
+    
+    # Campos sensibles que deben cifrarse
+    sensitive_fields = ['answer', 'personal_data', 'user_input', 'assistant_output']
+    
+    for field in sensitive_fields:
+        if field in encrypted_data and encrypted_data[field]:
+            if isinstance(encrypted_data[field], dict):
+                # Si es dict (como personal_data), convertir a JSON y cifrar
+                import json
+                encrypted_data[field] = encrypt_data(json.dumps(encrypted_data[field]))
+            elif isinstance(encrypted_data[field], str):
+                encrypted_data[field] = encrypt_data(encrypted_data[field])
+            elif isinstance(encrypted_data[field], list):
+                # Si es lista (como sources), convertir a JSON y cifrar
+                import json
+                encrypted_data[field] = encrypt_data(json.dumps(encrypted_data[field]))
+    
+    return encrypted_data
+
+def decrypt_from_transport(data: dict) -> dict:
+    """
+    Descifra datos recibidos del viaje por la red
+    
+    Args:
+        data: Diccionario con datos cifrados
+        
+    Returns:
+        Diccionario con campos sensibles descifrados
+    """
+    if not is_encryption_enabled():
+        return data
+    
+    decrypted_data = data.copy()
+    
+    # Campos que pueden haber sido cifrados
+    sensitive_fields = ['answer', 'personal_data', 'user_input', 'assistant_output']
+    
+    for field in sensitive_fields:
+        if field in decrypted_data and decrypted_data[field]:
+            try:
+                decrypted_value = decrypt_data(decrypted_data[field])
+                # Intentar parsear si es JSON
+                if decrypted_value.startswith(('{', '[')):
+                    import json
+                    decrypted_data[field] = json.loads(decrypted_value)
+                else:
+                    decrypted_data[field] = decrypted_value
+            except Exception as e:
+                # Si falla descifrado, dejar como estaba
+                print(f"Warning: No se pudo descifrar campo {field}: {str(e)}")
+    
+    return decrypted_data
