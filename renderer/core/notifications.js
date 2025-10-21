@@ -12,7 +12,11 @@ export function showNotification(type, message) {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
 
-    // Crear contenedor de mensaje
+    // Crear contenedor de contenido
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'notification-content';
+
+    // Crear elemento de mensaje
     const messageSpan = document.createElement('span');
     messageSpan.className = 'notification-message';
     messageSpan.textContent = message;
@@ -39,7 +43,8 @@ export function showNotification(type, message) {
     closeButton.addEventListener('click', closeNotification);
 
     // Agregar elementos a la notificación
-    notification.appendChild(messageSpan);
+    contentDiv.appendChild(messageSpan);
+    notification.appendChild(contentDiv);
     notification.appendChild(closeButton);
 
     // Agregar al contenedor

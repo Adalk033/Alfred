@@ -39,14 +39,35 @@ export async function createNewConversation(title = null, showWelcome = true) {
                 const welcomeDiv = document.createElement('div');
                 welcomeDiv.className = 'welcome-message';
                 welcomeDiv.innerHTML = `
-                    <h2>Hola! Soy Alfred</h2>
-                    <p>Soy tu asistente personal inteligente. Puedo ayudarte con:</p>
-                    <ul>
-                        <li>Buscar informacion en tus documentos</li>
-                        <li>Responder preguntas generales</li>
-                        <li>Recordar informacion de conversaciones anteriores</li>
-                    </ul>
-                    <p>Como puedo ayudarte hoy?</p>
+                    <div class="welcome-header">
+                        <div class="welcome-icon">🤖</div>
+                        <div class="welcome-title">
+                            <h2>Bienvenido a Alfred</h2>
+                            <p class="welcome-subtitle">Tu asistente inteligente personal</p>
+                        </div>
+                    </div>
+                    
+                    <div class="welcome-features">
+                        <div class="feature-card">
+                            <div class="feature-icon">📚</div>
+                            <h3>Buscar Documentos</h3>
+                            <p>Acceso inmediato a la información en tus archivos personales</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">💭</div>
+                            <h3>Respuestas Inteligentes</h3>
+                            <p>Respondo preguntas complejas con precisión y contexto</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🧠</div>
+                            <h3>Memoria Conversacional</h3>
+                            <p>Recuerdo el contexto de nuestras conversaciones anteriores</p>
+                        </div>
+                    </div>
+                    
+                    <div class="welcome-cta">
+                        <p>¿En qué puedo ayudarte?</p>
+                    </div>
                 `;
                 State.messagesContainer.appendChild(welcomeDiv);
                 showNotification('success', 'Nueva conversacion creada');
@@ -122,7 +143,7 @@ export function updateConversationsList() {
                            onchange="window.conversationActions.toggleSelection('${conv.id}')">
                 </div>
             ` : ''}
-            <div class="conversation-info" onclick="${!isSelectionMode ? `window.conversationActions.load('${conv.id}')` : ''}">
+            <div class="conversation-info" onclick="${isSelectionMode ? `window.conversationActions.toggleCheckbox('${conv.id}')` : `window.conversationActions.load('${conv.id}')`}" style="${isSelectionMode ? 'cursor: pointer;' : ''}">
                 <div class="conversation-title">${conv.title}</div>
                 <div class="conversation-meta">
                     <span class="message-count">${conv.message_count} mensajes</span>
@@ -240,6 +261,25 @@ window.conversationActions = {
         const checkbox = document.querySelector(`input[data-conv-id="${conversationId}"]`);
         if (!checkbox) return;
         
+        const selectedConvs = State.selectedConversations || new Set();
+        
+        if (checkbox.checked) {
+            selectedConvs.add(conversationId);
+        } else {
+            selectedConvs.delete(conversationId);
+        }
+        
+        State.setSelectedConversations(selectedConvs);
+        updateDeleteButtonState();
+    },
+    toggleCheckbox: (conversationId) => {
+        const checkbox = document.querySelector(`input[data-conv-id="${conversationId}"]`);
+        if (!checkbox) return;
+        
+        // Cambiar el estado del checkbox
+        checkbox.checked = !checkbox.checked;
+        
+        // Ejecutar la lógica de selección
         const selectedConvs = State.selectedConversations || new Set();
         
         if (checkbox.checked) {
@@ -609,3 +649,93 @@ export function enableEditMode(conversationId, titleElement) {
 }
 
 // Eliminar funcion formatDate ya que ahora esta en dom-utils.js
+
+// ====================================
+// AUTO-RENOMBRAR CONVERSACION
+// ====================================
+
+/**
+ * Detectar si una conversacion tiene el formato de fecha por defecto
+ * Formato esperado: "Conversacion YYYY-MM-DD HH:MM"
+ * @param {string} title - Titulo de la conversacion
+ * @returns {boolean}
+ */
+export function hasDefaultConversationTitle(title) {
+    // Regex para detectar el formato "Conversacion YYYY-MM-DD HH:MM"
+    const dateFormatRegex = /^Conversacion \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
+    return dateFormatRegex.test(title);
+}
+
+/**
+ * Generar un titulo corto basado en el primer mensaje del usuario
+ * Toma las primeras palabras significativas del mensaje
+ * @param {string} message - Primer mensaje del usuario
+ * @returns {string} - Titulo sugerido (maximo 50 caracteres)
+ */
+export function generateTitleFromMessage(message) {
+    if (!message || !message.trim()) {
+        return 'Conversacion sin titulo';
+    }
+
+    // Limpiar espacios
+    const cleaned = message.trim();
+    
+    // Tomar las primeras 50 caracteres o hasta el primer salto de linea
+    let title = cleaned.split('\n')[0].substring(0, 50).trim();
+    
+    // Agregar puntos suspensivos si fue cortado
+    if (cleaned.length > 50) {
+        title += '...';
+    }
+    
+    return title || 'Conversacion sin titulo';
+}
+
+/**
+ * Auto-renombrar una conversacion si tiene el titulo por defecto
+ * Se llama despues de enviar el primer mensaje
+ * @param {string} conversationId - ID de la conversacion
+ * @param {string} userMessage - Primer mensaje del usuario
+ */
+export async function autoRenameConversationIfDefault(conversationId, userMessage) {
+    try {
+        // Obtener lista de conversaciones actual para verificar titulo
+        const conversations = State.conversations;
+        const conversation = conversations.find(c => c.id === conversationId);
+        
+        if (!conversation) {
+            console.log('Conversacion no encontrada en state');
+            return;
+        }
+
+        // Verificar si tiene el formato de fecha por defecto
+        if (!hasDefaultConversationTitle(conversation.title)) {
+            console.log('Conversacion no tiene titulo por defecto, no se renombra');
+            return;
+        }
+
+        // Generar nuevo titulo basado en el mensaje
+        const newTitle = generateTitleFromMessage(userMessage);
+        
+        if (newTitle === 'Conversacion sin titulo') {
+            console.log('No se puede generar titulo valido del mensaje');
+            return;
+        }
+
+        console.log(`Auto-renombrando conversacion: "${conversation.title}" -> "${newTitle}"`);
+
+        // Llamar a la API para actualizar el titulo
+        const result = await window.alfredAPI.updateConversationTitle(conversationId, newTitle);
+
+        if (result.success) {
+            // Actualizar lista de conversaciones
+            await loadConversations();
+            console.log('Conversacion renombrada exitosamente');
+        } else {
+            console.error('Error al auto-renombrar conversacion:', result.error);
+        }
+    } catch (error) {
+        console.error('Error en autoRenameConversationIfDefault:', error);
+        // No mostrar error al usuario, es una operacion secundaria
+    }
+}

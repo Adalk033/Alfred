@@ -1,0 +1,181 @@
+/* Tema Claro */
+body[data-theme="light"] {
+    --text-primary: #1a1a1a;
+    --text-secondary: #666666;
+    --border-color: #e0e0e0;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --message-user-bg: var(--mode-primary);
+    --message-assistant-bg: var(--bg-tertiary);
+
+    /* Background colors LIGHT */
+    --bg-primary: #ffffff;
+    --bg-secondary: #fafafa;
+    --bg-tertiary: #f0f0f0;
+    --bg-hover: #e8e8e8;
+    --input-bg: #ffffff;
+}
+
+body[data-theme="light"] .topbar {
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .sidebar {
+    background-color: var(--bg-primary);
+    border-left: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .left-sidebar {
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="light"] .left-sidebar-nav {
+    background-color: var(--bg-secondary);
+}
+
+body[data-theme="light"] .left-sidebar-content {
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="light"] .messages {
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="light"] .input-container {
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] textarea {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] textarea:focus {
+    border-color: var(--mode-primary);
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="light"] .modal-content {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .modal-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .modal-footer {
+    border-top: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] input[type="text"],
+body[data-theme="light"] input[type="number"],
+body[data-theme="light"] input[type="email"],
+body[data-theme="light"] input[type="password"],
+body[data-theme="light"] select {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] input:focus,
+body[data-theme="light"] select:focus {
+    border-color: var(--mode-primary);
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="light"] .button {
+    transition: var(--transition);
+}
+
+body[data-theme="light"] .settings-menu-dropdown {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .settings-menu-item:hover {
+    background-color: var(--bg-hover);
+}
+
+body[data-theme="light"] .separator-vertical {
+    background: linear-gradient(180deg,
+            transparent 0%,
+            rgba(0, 0, 0, 0.08) 10%,
+            rgba(0, 0, 0, 0.12) 50%,
+            rgba(0, 0, 0, 0.08) 90%,
+            transparent 100%);
+}
+
+body[data-theme="light"] .mode-indicator {
+    background: var(--mode-primary-transparent);
+    border: 1px solid var(--mode-primary);
+    color: var(--mode-primary);
+}
+
+body[data-theme="light"] .status {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .icon-button {
+    color: var(--text-secondary);
+}
+
+body[data-theme="light"] .icon-button:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .model-select {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .model-select:hover {
+    border-color: var(--mode-primary);
+    background-color: var(--mode-primary-transparent);
+}
+
+body[data-theme="light"] .model-select option {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .nav-item {
+    color: var(--text-secondary);
+}
+
+body[data-theme="light"] .nav-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .nav-item.active {
+    color: var(--mode-primary);
+    background-color: var(--mode-primary-transparent);
+}
+
+body[data-theme="light"] h1,
+body[data-theme="light"] h2,
+body[data-theme="light"] h3,
+body[data-theme="light"] h4,
+body[data-theme="light"] h5,
+body[data-theme="light"] h6 {
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .message {
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .message.assistant {
+    background-color: var(--bg-tertiary);
+}
+
+body[data-theme="light"] .message.user {
+    background-color: var(--mode-primary);
+    color: var(--mode-text-on-primary);
+}

@@ -65,8 +65,8 @@
 .modal-content {
     background-color: var(--bg-secondary);
     border-radius: 12px;
-    width: 90%;
-    max-width: 80%;
+    width: 100%;
+    max-width: 1100px;
     height: 90dvh;
     overflow: hidden;
     display: flex;
@@ -232,8 +232,8 @@
 }
 
 .preset-btn.active {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: transparent;
+    color: var(--primary-color);
     border-color: var(--primary-color);
 }
 
@@ -377,13 +377,16 @@
 }
 
 .conversation-item:hover {
-    background-color: var(--border-color);
+    background-color: var(--primary-color);
+    color: white;
     transform: translateX(4px);
+    font-weight: 500;
 }
 
 .conversation-item.active {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: transparent;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
 }
 
 .conversation-info {

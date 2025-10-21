@@ -52,6 +52,10 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   },
   onBackendReady: (callback) => {
     ipcRenderer.on('backend-ready', (event) => callback());
-  }
+  },
+
+  // API de cifrado
+  getEncryptionKey: () => ipcRenderer.invoke('get-encryption-key'),
+  decryptFernet: (encryptedData) => ipcRenderer.invoke('decrypt-fernet', encryptedData)
 });
 

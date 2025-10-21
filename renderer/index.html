@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="./styles/main.css">
 </head>
 
-<body>
+<body data-theme="dark">
     <!-- Overlay de carga del backend -->
     <div class="backend-loading-overlay" id="backendLoadingOverlay">
         <div class="backend-loading-content">
@@ -190,6 +190,76 @@
                     <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
                 </svg>
             </button>
+            <!-- Menu desplegable de Modos y Tema -->
+            <div class="settings-menu-container">
+                <button class="icon-button settings-menu-btn" id="settingsMenuBtn" title="Modos y Tema">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="12" cy="5" r="1"></circle>
+                        <circle cx="12" cy="19" r="1"></circle>
+                    </svg>
+                </button>
+                <div class="settings-menu-dropdown" id="settingsMenuDropdown" style="display: none;">
+                    <!-- Seccion de Modos -->
+                    <div class="settings-menu-section">
+                        <div class="settings-menu-header">Modo</div>
+                        <div class="settings-menu-items">
+                            <button class="settings-menu-item mode-menu-item active" data-mode="work">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z" />
+                                </svg>
+                                <span>Work</span>
+                            </button>
+                            <button class="settings-menu-item mode-menu-item" data-mode="focus">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" />
+                                </svg>
+                                <span>Focus</span>
+                            </button>
+                            <button class="settings-menu-item mode-menu-item" data-mode="personal">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                                </svg>
+                                <span>Personal</span>
+                            </button>
+                            <button class="settings-menu-item mode-menu-item" data-mode="creative">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z" />
+                                </svg>
+                                <span>Creative</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Separador -->
+                    <div class="settings-menu-separator"></div>
+                    <!-- Seccion de Tema -->
+                    <div class="settings-menu-section">
+                        <div class="settings-menu-header">Tema</div>
+                        <div class="settings-menu-items">
+                            <button class="settings-menu-item theme-menu-item" data-theme="light">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <circle cx="12" cy="12" r="5"></circle>
+                                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                                </svg>
+                                <span>Claro</span>
+                            </button>
+                            <button class="settings-menu-item theme-menu-item active" data-theme="dark">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                                </svg>
+                                <span>Oscuro</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="profile-picture-topbar" id="profilePictureTopbar" title="Perfil">
                 <span class="default-avatar">👤</span>
             </div>
@@ -230,43 +300,6 @@
                 </button>
             </nav>
 
-            <!-- Selector de Modo -->
-            <div class="mode-selector">
-                <div class="mode-selector-header">
-                    <span>Modo</span>
-                </div>
-                <div class="mode-buttons">
-                    <button class="mode-btn active" data-mode="work" title="Modo Trabajo">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path
-                                d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z" />
-                        </svg>
-                        <span>Work</span>
-                    </button>
-                    <button class="mode-btn" data-mode="focus" title="Modo Concentracion">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path
-                                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" />
-                        </svg>
-                        <span>Focus</span>
-                    </button>
-                    <button class="mode-btn" data-mode="personal" title="Modo Personal">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path
-                                d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                        </svg>
-                        <span>Personal</span>
-                    </button>
-                    <button class="mode-btn" data-mode="creative" title="Modo Creativo">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path
-                                d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z" />
-                        </svg>
-                        <span>Creative</span>
-                    </button>
-                </div>
-            </div>
-
             <!-- Contenido dinamico del sidebar -->
             <div class="left-sidebar-content" id="leftSidebarContent">
                 <!-- Aqui se mostrara el contenido de conversaciones, historial o estadisticas -->
@@ -277,10 +310,35 @@
         <div class="chat-container">
             <div class="messages" id="messages">
                 <div class="welcome-message">
-                    <div class="welcome-icon">🤖</div>
-                    <h2>¡Hola! Soy Alfred</h2>
-                    <p>Tu asistente personal inteligente</p>
-                    <p class="welcome-subtitle">Pregúntame cualquier cosa sobre tus documentos</p>
+                    <div class="welcome-header">
+                        <div class="welcome-icon">🤖</div>
+                        <div class="welcome-title">
+                            <h2>Bienvenido a Alfred</h2>
+                            <p class="welcome-subtitle">Tu asistente inteligente personal</p>
+                        </div>
+                    </div>
+                    
+                    <div class="welcome-features">
+                        <div class="feature-card">
+                            <div class="feature-icon">📚</div>
+                            <h3>Buscar Documentos</h3>
+                            <p>Acceso inmediato a la información en tus archivos personales</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">💭</div>
+                            <h3>Respuestas Inteligentes</h3>
+                            <p>Respondo preguntas complejas con precisión y contexto</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🧠</div>
+                            <h3>Memoria Conversacional</h3>
+                            <p>Recuerdo el contexto de nuestras conversaciones anteriores</p>
+                        </div>
+                    </div>
+                    
+                    <div class="welcome-cta">
+                        <p>¿En qué puedo ayudarte?</p>
+                    </div>
                 </div>
             </div>
 
@@ -413,13 +471,13 @@
                         <h3 class="section-title">Perfil</h3>
                         
                         <!-- Informacion personal -->
-                        <div class="setting-group">
+                        <div class="setting-group __name">
                             <label for="userName">Nombre</label>
                             <input type="text" id="userName" placeholder="Ingresa tu nombre" maxlength="100">
                             <small>Alfred usara tu nombre para personalizar las conversaciones</small>
                         </div>
 
-                        <div class="setting-group">
+                        <div class="setting-group __age">
                             <label for="userAge">Edad</label>
                             <input type="number" id="userAge" placeholder="Ingresa tu edad" min="1" max="150">
                             <small>Ayuda a Alfred a dar respuestas mas personalizadas</small>

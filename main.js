@@ -69,7 +69,8 @@ function createWindow() {
         icon: path.join(__dirname, 'assets', 'icon.png'),
         show: false, // No mostrar hasta que esté listo
         frame: true,
-        titleBarStyle: 'default'
+        titleBarStyle: 'default',
+        maximized: true // Abrir siempre maximizado
     });
 
     mainWindow.loadFile('./renderer/index.html');

@@ -2,6 +2,7 @@
 const { ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const fernet = require('fernet');
 
 /**
  * Registrar todos los IPC handlers
@@ -634,6 +635,53 @@ function registerIPCHandlers(dependencies) {
             return { success: true, data: result.data };
         } catch (error) {
             return { success: false, error: error.message };
+        }
+    });
+
+    // ============================================================================
+    // HANDLERS DE SEGURIDAD Y CIFRADO
+    // ============================================================================
+
+    ipcMain.handle('get-encryption-key', async () => {
+        try {
+            console.log('[MAIN] Obteniendo clave de cifrado del backend...');
+            const result = await makeRequest('http://127.0.0.1:8000/security/encryption-key');
+            
+            if (result.statusCode >= 400) {
+                console.error('[MAIN] Error obteniendo clave de cifrado:', result.data);
+                return { success: false, error: result.data?.detail || 'Error al obtener clave' };
+            }
+            
+            console.log('[MAIN] Clave de cifrado obtenida correctamente');
+            return { success: true, data: result.data };
+        } catch (error) {
+            console.error('[MAIN] Error en get-encryption-key:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // Handler para descifrar datos con Fernet en el main process
+    let fernetInstance = null;
+    
+    ipcMain.handle('decrypt-fernet', async (event, encryptedData) => {
+        try {
+            // Si no tenemos instancia de Fernet, obtener la clave primero
+            if (!fernetInstance) {
+                const keyResult = await makeRequest('http://127.0.0.1:8000/security/encryption-key');
+                if (keyResult.statusCode < 400 && keyResult.data?.key) {
+                    fernetInstance = new fernet.Secret(keyResult.data.key);
+                    console.log('[MAIN] Instancia Fernet inicializada');
+                } else {
+                    return { success: false, error: 'No se pudo obtener clave de cifrado' };
+                }
+            }
+
+            // Descifrar los datos
+            const decrypted = fernetInstance.decode(encryptedData);
+            return { success: true, data: decrypted };
+        } catch (error) {
+            console.error('[MAIN] Error descifrando con Fernet:', error);
+            return { success: false, error: error.message, original: encryptedData };
         }
     });
 

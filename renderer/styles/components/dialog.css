@@ -87,7 +87,7 @@
     font-weight: 600;
     margin-bottom: 0.75rem;
     text-align: center;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 /* Mensaje del dialogo */
@@ -133,7 +133,7 @@
 /* Boton secundario (cancelar) */
 .custom-dialog-actions .button.secondary {
     background: var(--surface-color);
-    color: var(--text-color);
+    color: var(--text-primary);
     border: 1px solid var(--border-color);
 }
 

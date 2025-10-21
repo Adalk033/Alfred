@@ -1,0 +1,99 @@
+/* Tema Oscuro */
+body[data-theme="dark"] {
+    --text-primary: #FAFAFA;
+    --text-secondary: #b0b0b0;
+    --border-color: #262626;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --message-user-bg: var(--mode-primary);
+    --message-assistant-bg: var(--bg-tertiary);
+
+    /* Background colors DARK */
+    --bg-primary: #181818;
+    --bg-secondary: #202020;
+    --bg-tertiary: #2b2b2b;
+    --bg-hover: #444444;
+}
+
+body[data-theme="dark"] .topbar {
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] .sidebar {
+    background-color: var(--bg-primary);
+    border-left: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] .left-sidebar {
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="dark"] .left-sidebar-nav {
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="dark"] .left-sidebar-content {
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="dark"] .messages {
+    background-color: var(--bg-primary);
+}
+
+body[data-theme="dark"] .input-container {
+    background-color: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] textarea {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] textarea:focus {
+    border-color: var(--mode-primary);
+    background-color: var(--bg-hover);
+}
+
+body[data-theme="dark"] .modal-content {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] .modal-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] .modal-footer {
+    border-top: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] input[type="text"],
+body[data-theme="dark"] input[type="number"],
+body[data-theme="dark"] input[type="email"],
+body[data-theme="dark"] input[type="password"],
+body[data-theme="dark"] select {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] input:focus,
+body[data-theme="dark"] select:focus {
+    border-color: var(--mode-primary);
+    background-color: var(--bg-hover);
+}
+
+body[data-theme="dark"] .button {
+    transition: var(--transition);
+}
+
+body[data-theme="dark"] .settings-menu-dropdown {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="dark"] .settings-menu-item:hover {
+    background-color: var(--bg-tertiary);
+}

@@ -1,8 +1,9 @@
 import { showNotification } from './core/notifications.js';
 import { showAlert, showConfirm } from './core/dialogs.js';
 import { addMessage, scrollToBottom, markdownToHtml, updateStatus } from './dom/dom-utils.js';
-import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory } from './core/conversations.js';
+import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory, autoRenameConversationIfDefault } from './core/conversations.js';
 import * as State from './state/state.js';
+import { getCryptoManager } from './crypto/crypto.js';
 
 // Escuchar notificaciones del backend
 window.alfredAPI.onBackendNotification((data) => {
@@ -165,6 +166,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Esperar a que el backend este listo antes de habilitar el chat
     await waitForBackendReady();
 
+    // IMPORTANTE: Inicializar gestor de cifrado para datos en transito
+    console.log('[INIT] Inicializando gestor de cifrado...');
+    const cryptoManager = getCryptoManager();
+    const cryptoInitialized = await cryptoManager.initialize();
+    if (cryptoInitialized) {
+        console.log('[INIT] Gestor de cifrado inicializado correctamente');
+    } else {
+        console.warn('[INIT] No se pudo inicializar cifrado, continuando sin cifrado');
+    }
+
     // Verificar si es primera instalacion:
     // 1. Primero mostrar bienvenida (nombre, edad, foto)
     // 2. Luego mostrar configuracion de cifrado
@@ -173,6 +184,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar modo desde BD antes de continuar
     await loadMode();
+
+    // Cargar tema desde BD
+    await loadTheme();
 
     // Cargar modelos disponibles en el selector del topbar
     await loadModelsIntoSelector();
@@ -246,24 +260,84 @@ function setupEventListeners() {
         settingsModal.classList.remove('none');
     });
 
-    // Event listeners para botones de modo
-    const modeButtons = document.querySelectorAll('.mode-btn');
-    modeButtons.forEach(btn => {
+    // Event listeners para botones de modo en el nuevo menu
+    const modeMenuItems = document.querySelectorAll('.mode-menu-item');
+    modeMenuItems.forEach(btn => {
         btn.addEventListener('click', async () => {
             const mode = btn.dataset.mode;
 
             // Cambiar clase active
-            modeButtons.forEach(b => b.classList.remove('active'));
+            modeMenuItems.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+
+            // Cerrar menu
+            settingsMenuDropdown.style.display = 'none';
 
             // Cambiar modo en la aplicacion
             await window.setMode(mode);
         });
     });
 
+    // Event listeners para botones de tema en el nuevo menu
+    const themeMenuItems = document.querySelectorAll('.theme-menu-item');
+    themeMenuItems.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const theme = btn.dataset.theme;
+
+            // Cambiar clase active
+            themeMenuItems.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Cerrar menu
+            settingsMenuDropdown.style.display = 'none';
+
+            // Cambiar tema en la aplicacion
+            await window.setTheme(theme);
+        });
+    });
+
+    // Event listener para abrir/cerrar el menu de configuracion
+    const settingsMenuBtn = document.getElementById('settingsMenuBtn');
+    const settingsMenuDropdown = document.getElementById('settingsMenuDropdown');
+
+    settingsMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = settingsMenuDropdown.style.display !== 'none';
+        settingsMenuDropdown.style.display = isVisible ? 'none' : 'flex';
+    });
+
+    // Cerrar menu al hacer clic fuera
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.settings-menu-container')) {
+            settingsMenuDropdown.style.display = 'none';
+        }
+    });
+
     closeSettings.addEventListener('click', () => settingsModal.classList.add('none'));
     cancelSettings.addEventListener('click', () => settingsModal.classList.add('none'));
     saveSettings.addEventListener('click', saveSettingsHandler);
+
+    // Event listener para cerrar modales con tecla ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // Cerrar modal de configuraciones si está abierta
+            if (settingsModal && !settingsModal.classList.contains('none')) {
+                settingsModal.classList.add('none');
+            }
+
+            // Cerrar modal de diálogo personalizado si está abierta
+            const customDialogOverlay = document.getElementById('customDialogOverlay');
+            if (customDialogOverlay && customDialogOverlay.style.display !== 'none') {
+                customDialogOverlay.style.display = 'none';
+            }
+
+            // Cerrar menú desplegable si está abierto
+            const settingsMenuDropdown = document.getElementById('settingsMenuDropdown');
+            if (settingsMenuDropdown && settingsMenuDropdown.style.display !== 'none') {
+                settingsMenuDropdown.style.display = 'none';
+            }
+        }
+    });
 
     // Event listeners para navegacion de configuraciones
     const settingsNavItems = document.querySelectorAll('.settings-nav-item');
@@ -354,6 +428,9 @@ function setupEventListeners() {
     if (removeFileBtn) {
         removeFileBtn.addEventListener('click', removeAttachedFile);
     }
+
+    // Drag and Drop en el area de conversacion
+    setupDragAndDrop();
 
     // Event listeners para Keep Alive de Ollama
     if (ollamaKeepAliveSlider) {
@@ -692,6 +769,91 @@ function removeAttachedFile() {
 }
 
 /**
+ * Configurar Drag and Drop en el area de conversacion
+ */
+function setupDragAndDrop() {
+    const messagesContainer = State.messagesContainer;
+    const chatContainer = document.querySelector('.chat-container');
+
+    if (!messagesContainer || !chatContainer) return;
+
+    // Variables para el overlay visual
+    let dragOverlay = null;
+    let dragCounter = 0;
+
+    // Evitar el comportamiento por defecto en el contenedor
+    chatContainer.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter++;
+
+        // Mostrar overlay visual solo la primera vez
+        if (!dragOverlay) {
+            dragOverlay = document.createElement('div');
+            dragOverlay.className = 'drag-overlay';
+            dragOverlay.innerHTML = '<div class="drag-overlay-content"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg><p>Suelta el archivo aqui</p></div>';
+            chatContainer.appendChild(dragOverlay);
+        }
+        dragOverlay.classList.add('active');
+    });
+
+    chatContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+
+    chatContainer.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter--;
+
+        // Remover overlay cuando se sale completamente del contenedor
+        if (dragCounter === 0 && dragOverlay) {
+            dragOverlay.classList.remove('active');
+        }
+    });
+
+    chatContainer.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Reset contador y remover overlay
+        dragCounter = 0;
+        if (dragOverlay) {
+            dragOverlay.classList.remove('active');
+        }
+
+        const files = e.dataTransfer.files;
+        if (files.length === 0) return;
+
+        const file = files[0];
+
+        // Validar que sea un formato aceptado
+        const acceptedFormats = ['.txt', '.pdf', '.docx', '.xlsx', '.pptx', '.md', '.json', '.xml', '.csv'];
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+        if (!acceptedFormats.includes(fileExtension)) {
+            showNotification('error', `Formato no soportado: ${fileExtension}`);
+            return;
+        }
+
+        // Simular un evento change en el file input
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            // Crear un DataTransfer para asignar el archivo al input
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            fileInput.files = dataTransfer.files;
+
+            // Disparar el evento change
+            const event = new Event('change', { bubbles: true });
+            fileInput.dispatchEvent(event);
+        }
+    });
+}
+
+/**
  * Formatear tamaño de archivo
  */
 function formatFileSize(bytes) {
@@ -786,6 +948,10 @@ async function sendMessage() {
                 content: response.answer,
                 metadata: response
             });
+
+            // Auto-renombrar la conversacion si tiene el titulo por defecto
+            const conversationId = getCurrentConversationId();
+            await autoRenameConversationIfDefault(conversationId, message);
 
             // Actualizar lista de conversaciones
             await loadConversations();
@@ -2689,8 +2855,17 @@ const MODE_NAMES = {
     creative: 'Creative'
 };
 
+// Temas disponibles
+const THEMES = {
+    LIGHT: 'light',
+    DARK: 'dark'
+};
+
 // Estado actual del modo
 let currentMode = MODES.WORK;
+
+// Estado actual del tema
+let currentTheme = THEMES.DARK;
 
 /**
  * Actualiza el indicador visual de modo en el topbar
@@ -2782,13 +2957,13 @@ async function loadMode() {
         // Actualizar indicador de modo en topbar
         updateModeIndicator(savedMode);
 
-        // Marcar el boton activo en la UI
-        const modeButtons = document.querySelectorAll('.mode-btn');
-        console.log('[loadMode] Botones de modo encontrados:', modeButtons.length);
-        modeButtons.forEach(btn => {
+        // Marcar el boton activo en la UI (en el nuevo menu)
+        const modeMenuItems = document.querySelectorAll('.mode-menu-item');
+        console.log('[loadMode] Items de modo encontrados:', modeMenuItems.length);
+        modeMenuItems.forEach(btn => {
             if (btn.dataset.mode === savedMode) {
                 btn.classList.add('active');
-                console.log('[loadMode] Boton marcado como activo:', btn.dataset.mode);
+                console.log('[loadMode] Item marcado como activo:', btn.dataset.mode);
             } else {
                 btn.classList.remove('active');
             }
@@ -2802,9 +2977,122 @@ async function loadMode() {
         updateModeIndicator(MODES.WORK);
 
         // Marcar work como activo por defecto
-        const modeButtons = document.querySelectorAll('.mode-btn');
-        modeButtons.forEach(btn => {
+        const modeMenuItems = document.querySelectorAll('.mode-menu-item');
+        modeMenuItems.forEach(btn => {
             if (btn.dataset.mode === 'work') {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+}
+
+/**
+ * Cambia el tema de la aplicacion
+ * @param {string} theme - Tema a activar (light, dark)
+ */
+async function setTheme(theme) {
+    if (!Object.values(THEMES).includes(theme)) {
+        console.error(`Tema invalido: ${theme}`);
+        return;
+    }
+
+    // Actualizar tema actual
+    currentTheme = theme;
+
+    // Agregar clase de transición al body
+    document.body.classList.add('theme-transition');
+
+    // Aplicar el tema al body
+    document.body.setAttribute('data-theme', theme);
+
+    // Actualizar los botones de tema en el menu
+    const themeMenuItems = document.querySelectorAll('.theme-menu-item');
+    themeMenuItems.forEach(btn => {
+        if (btn.dataset.theme === theme) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Remover clase de transición después de que termine
+    setTimeout(() => {
+        document.body.classList.remove('theme-transition');
+    }, 300);
+
+    // Guardar en base de datos
+    try {
+        const response = await fetch('http://127.0.0.1:8000/settings/theme', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ theme })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+            throw new Error(`HTTP ${response.status}: ${errorData.detail || 'Error al guardar el tema'}`);
+        }
+
+        const data = await response.json();
+        console.log('[setTheme] Respuesta del servidor:', data);
+        showNotification('success', `Tema ${theme === 'light' ? 'claro' : 'oscuro'} activado`);
+    } catch (error) {
+        console.error('Error al guardar tema:', error);
+        showNotification('error', `Error al guardar el tema: ${error.message}`);
+    }
+}
+
+/**
+ * Obtiene el tema actual desde la base de datos
+ */
+async function loadTheme() {
+    try {
+        console.log('[loadTheme] Iniciando carga de tema...');
+        const response = await fetch('http://127.0.0.1:8000/settings/theme');
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+            throw new Error(`HTTP ${response.status}: ${errorData.detail || 'Error al cargar el tema'}`);
+        }
+
+        const data = await response.json();
+        // Modo oscuro por defecto si no hay tema guardado
+        const savedTheme = data.theme || THEMES.DARK;
+
+        console.log('[loadTheme] Tema recibido del backend:', savedTheme);
+
+        // Aplicar el tema guardado
+        currentTheme = savedTheme;
+        document.body.setAttribute('data-theme', savedTheme);
+        console.log('[loadTheme] Aplicado data-theme al body:', savedTheme);
+
+        // Marcar el boton activo en la UI
+        const themeMenuItems = document.querySelectorAll('.theme-menu-item');
+        console.log('[loadTheme] Items de tema encontrados:', themeMenuItems.length);
+        themeMenuItems.forEach(btn => {
+            if (btn.dataset.theme === savedTheme) {
+                btn.classList.add('active');
+                console.log('[loadTheme] Item marcado como activo:', btn.dataset.theme);
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        console.log(`[loadTheme] Tema cargado exitosamente: ${savedTheme}`);
+    } catch (error) {
+        console.error('[loadTheme] Error al cargar tema:', error);
+        console.warn('[loadTheme] Usando tema por defecto (dark)');
+        // Si falla, usar tema por defecto (dark)
+        document.body.setAttribute('data-theme', THEMES.DARK);
+
+        // Marcar dark como activo por defecto
+        const themeMenuItems = document.querySelectorAll('.theme-menu-item');
+        themeMenuItems.forEach(btn => {
+            if (btn.dataset.theme === 'dark') {
                 btn.classList.add('active');
             } else {
                 btn.classList.remove('active');
@@ -3363,8 +3651,10 @@ window.createNewConversation = createNewConversation;
 window.stopOllama = stopOllama;
 window.restartBackend = restartBackend;
 window.setMode = setMode;
+window.setTheme = setTheme;
 window.getCurrentMode = getCurrentMode;
 window.MODES = MODES;
+window.THEMES = THEMES;
 
 // Funciones de documentos
 window.addDocPath = addDocPath;

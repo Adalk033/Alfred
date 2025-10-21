@@ -38,48 +38,158 @@
 
 /* Mensaje de bienvenida */
 .welcome-message {
-    text-align: center;
-    padding: 60px 20px;
-    max-width: 600px;
-    margin: auto;
+    padding: 40px 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+/* Header de bienvenida */
+.welcome-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    text-align: left;
 }
 
 .welcome-icon {
-    font-size: 64px;
-    margin-bottom: 20px;
+    font-size: 56px;
+    flex-shrink: 0;
     animation: float 3s ease-in-out infinite;
 }
 
 @keyframes float {
-
     0%,
     100% {
         transform: translateY(0);
     }
-
     50% {
         transform: translateY(-10px);
     }
 }
 
-.welcome-message h2 {
-    font-size: 32px;
-    margin-bottom: 10px;
+.welcome-title h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+    padding: 0;
     background: var(--mode-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
-.welcome-message p {
+.welcome-subtitle {
+    font-size: 14px;
     color: var(--text-secondary);
-    font-size: 16px;
-    margin-bottom: 8px;
+    margin: 8px 0 0 0;
+    padding: 0;
 }
 
-.welcome-subtitle {
-    font-size: 14px !important;
-    margin-top: 20px !important;
+/* Feature cards */
+.welcome-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
+.feature-card {
+    padding: 20px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.feature-card:hover {
+    border-color: var(--mode-primary);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.feature-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    display: inline-block;
+}
+
+.feature-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+    padding: 0;
+}
+
+.feature-card p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+    padding: 0;
+    line-height: 1.4;
+}
+
+/* CTA */
+.welcome-cta {
+    text-align: center;
+    padding: 16px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--mode-primary-transparent) 0%, rgba(102, 214, 237, 0.05) 100%);
+    border: 1px solid rgba(0, 184, 219, 0.2);
+}
+
+.welcome-cta p {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--mode-primary-light);
+    margin: 0;
+    padding: 0;
+}
+
+/* Responsividad para pantallas pequeñas */
+@media (max-width: 768px) {
+    .welcome-message {
+        padding: 30px 16px;
+        gap: 24px;
+    }
+
+    .welcome-header {
+        flex-direction: column;
+        text-align: center;
+        gap: 16px;
+    }
+
+    .welcome-icon {
+        font-size: 48px;
+    }
+
+    .welcome-title h2 {
+        font-size: 24px;
+    }
+
+    .welcome-features {
+        grid-template-columns: 1fr;
+    }
+
+    .feature-card {
+        padding: 16px;
+    }
+
+    .feature-icon {
+        font-size: 28px;
+    }
+
+    .feature-card h3 {
+        font-size: 14px;
+    }
+
+    .feature-card p {
+        font-size: 12px;
+    }
 }
 
 /* Mensajes */
@@ -135,6 +245,7 @@
     border-radius: 12px;
     line-height: 1.5;
     word-wrap: break-word;
+    font-size: 14px;
 }
 
 .message.user .message-bubble {
@@ -142,22 +253,45 @@
     color: var(--mode-text-on-primary);
     text-shadow: var(--mode-text-shadow);
     border-bottom-right-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .message.assistant .message-bubble {
     background-color: var(--message-assistant-bg);
     border-bottom-left-radius: 4px;
+    border: 1px solid var(--border-color);
 }
 
 .message.system .message-avatar {
-    background: linear-gradient(135deg, #ffa500, #ff6347);
+    background: linear-gradient(135deg, #4a9eff 0%, #0097b3 100%);
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+}
+
+.message.system .message-avatar svg {
+    width: 20px;
+    height: 20px;
+    stroke: #ffffff;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .message.system .message-bubble {
-    background-color: rgba(255, 165, 0, 0.15);
-    border-left: 3px solid #ffa500;
+    background: linear-gradient(135deg, rgba(74, 158, 255, 0.08) 0%, rgba(0, 151, 179, 0.04) 100%);
+    border: 1px solid rgba(74, 158, 255, 0.2);
+    border-radius: 8px;
     font-size: 13px;
     color: var(--text-secondary);
+    font-weight: 500;
+    padding: 10px 14px;
 }
 
 .message-meta {
@@ -550,6 +684,54 @@
 .message.assistant .message-bubble table.markdown-table td:nth-child(4) {
     text-align: right;
     font-family: 'Courier New', monospace;
+}
+
+/* Drag and Drop Overlay */
+.drag-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--mode-primary-transparent) 0%, rgba(102, 214, 237, 0.05) 100%);
+    border: 2px dashed var(--mode-primary);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+    z-index: 100;
+}
+
+.drag-overlay.active {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.drag-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    color: var(--mode-primary);
+    font-weight: 500;
+}
+
+.drag-overlay-content svg {
+    color: var(--mode-primary);
+    stroke: var(--mode-primary);
+    animation: float 2s ease-in-out infinite;
+}
+
+.drag-overlay-content p {
+    margin: 0;
+    font-size: 16px;
+    color: var(--mode-primary-light);
 }
 
 

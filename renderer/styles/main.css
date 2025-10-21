@@ -1,7 +1,7 @@
 /* Importacion de estilos - DEBE IR PRIMERO */
 @import './themes/base.css';
 @import './themes/dark.css';
-/* @import './themes/light.css'; */
+@import './themes/light.css';
 @import './components/support.css';
 @import './components/bottom.css';
 @import './components/messages.css';
@@ -31,8 +31,14 @@
     min-height: 0;
     min-width: 0;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
 }
 
+/* Transición suave de tema */
+body.theme-transition,
+body.theme-transition * {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important;
+}
 
 @media (width <=768px) {
 

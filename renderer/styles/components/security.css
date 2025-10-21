@@ -9,7 +9,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
@@ -18,14 +18,20 @@
     animation: fadeIn 0.3s ease;
 }
 
+/* Overlay mas claro en modo light */
+body[data-theme="light"] .modal-overlay {
+    background: rgba(0, 0, 0, 0.5);
+}
+
 .first-time-modal {
-    background: var(--bg-color);
+    background: var(--bg-secondary);
     border-radius: 16px;
     padding: 2.5rem;
     max-width: 600px;
     width: 90%;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     animation: slideUp 0.4s ease;
+    border: 1px solid var(--border-color);
 }
 
 .first-time-modal-icon {
@@ -35,14 +41,14 @@
 
 .first-time-modal-icon svg {
     color: var(--primary-color);
-    filter: drop-shadow(0 0 20px rgba(74, 158, 255, 0.5));
+    filter: drop-shadow(0 0 20px rgba(74, 158, 255, 0.3));
 }
 
 .first-time-modal h2 {
     text-align: center;
     margin: 0 0 0.5rem 0;
     font-size: 1.8rem;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .first-time-subtitle {
@@ -63,7 +69,7 @@
     display: flex;
     gap: 1rem;
     padding: 1.25rem;
-    background: var(--hover-bg);
+    background: var(--bg-tertiary);
     border-radius: 12px;
     border: 1px solid var(--border-color);
     transition: all 0.2s;
@@ -72,7 +78,7 @@
 .info-card:hover {
     border-color: var(--primary-color);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .info-card-icon {
@@ -98,7 +104,7 @@
 .info-card h3 {
     margin: 0 0 0.5rem 0;
     font-size: 1.1rem;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .info-card p {
@@ -184,13 +190,13 @@
 .alert-info {
     background: rgba(74, 158, 255, 0.1);
     border: 1px solid rgba(74, 158, 255, 0.3);
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .alert-warning {
     background: rgba(255, 193, 7, 0.1);
     border: 1px solid rgba(255, 193, 7, 0.3);
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .alert h4 {
@@ -265,7 +271,7 @@
     background: var(--input-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    color: var(--text-color);
+    color: var(--text-primary);
     font-family: 'Courier New', monospace;
     font-size: 0.85rem;
     letter-spacing: 1px;
@@ -286,7 +292,7 @@
 }
 
 .encryption-key-container .icon-button:hover {
-    background: var(--hover-bg);
+    background: var(--bg-hover);
     border-color: var(--primary-color);
 }
 
@@ -329,11 +335,11 @@
     margin: 0 0 0.75rem 0;
     font-size: 0.95rem;
     font-weight: 600;
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 #encryptionKeyGroup {
-    background: var(--hover-bg);
+    background: var(--bg-hover);
     padding: 1rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
@@ -389,7 +395,7 @@
 
 .form-group label {
     font-weight: 500;
-    color: var(--text-color);
+    color: var(--text-primary);
     font-size: 0.95rem;
 }
 
@@ -398,8 +404,8 @@
     padding: 0.875rem;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: var(--hover-bg);
-    color: var(--text-color);
+    background: var(--bg-hover);
+    color: var(--text-primary);
     font-size: 1rem;
     transition: all 0.2s;
 }
@@ -409,6 +415,12 @@
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.1);
+}
+
+.form-group input[type="text"]::placeholder,
+.form-group input[type="number"]::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.7;
 }
 
 .profile-picture-upload {
@@ -421,7 +433,7 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: var(--hover-bg);
+    background: var(--bg-hover);
     border: 2px solid var(--border-color);
     display: flex;
     align-items: center;
@@ -443,4 +455,97 @@
 .profile-picture-preview:hover {
     border-color: var(--primary-color);
     transform: scale(1.05);
+}
+
+/* ===================================================
+   ESTILOS ESPECIFICOS PARA MODO LIGHT
+   =================================================== */
+
+body[data-theme="light"] .first-time-modal {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+body[data-theme="light"] .first-time-modal-icon svg {
+    filter: drop-shadow(0 0 15px rgba(74, 158, 255, 0.2));
+}
+
+body[data-theme="light"] .info-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+body[data-theme="light"] .button.secondary {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .button.secondary:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--primary-color);
+}
+
+body[data-theme="light"] .first-time-note {
+    background: rgba(74, 158, 255, 0.08);
+    border: 1px solid rgba(74, 158, 255, 0.2);
+}
+
+body[data-theme="light"] .profile-picture-preview svg {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+body[data-theme="light"] .form-group input[type="text"],
+body[data-theme="light"] .form-group input[type="number"] {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .form-group input[type="text"]:focus,
+body[data-theme="light"] .form-group input[type="number"]:focus {
+    background: var(--bg-primary);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.08);
+}
+
+/* Estilos para el modal de configuracion de seguridad en modo light */
+body[data-theme="light"] #encryptionKeyGroup {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .encryption-key-field {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme="light"] .encryption-key-container .icon-button {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .encryption-key-container .icon-button:hover {
+    background: var(--bg-hover);
+    border-color: var(--primary-color);
+}
+
+body[data-theme="light"] .alert-warning {
+    background: rgba(255, 193, 7, 0.08);
+    border: 1px solid rgba(255, 193, 7, 0.25);
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .alert-info {
+    background: rgba(74, 158, 255, 0.08);
+    border: 1px solid rgba(74, 158, 255, 0.25);
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .security-info-list li {
+    color: var(--text-primary);
+}
+
+body[data-theme="light"] .security-info-list li svg {
+    color: var(--text-secondary);
 }
