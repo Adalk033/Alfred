@@ -15,6 +15,7 @@
 @import './components/progress.css';
 @import './components/security.css';
 @import './components/dialog.css';
+@import './components/history-search.css';
 
 .container {
     flex: 1;

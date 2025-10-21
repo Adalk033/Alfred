@@ -955,6 +955,18 @@ async function sendMessage() {
 
             // Actualizar lista de conversaciones
             await loadConversations();
+            
+            // Actualizar el estado de busqueda si estamos en vista de busqueda
+            if (window.conversationsState) {
+                window.conversationsState.allConversations = State.conversations;
+                window.conversationsState.filteredConversations = State.conversations;
+                window.conversationsState.totalItems = State.conversations.length;
+                
+                // Re-renderizar la vista de busqueda si existe
+                if (window.renderConversationsResults && typeof window.renderConversationsResults === 'function') {
+                    window.renderConversationsResults();
+                }
+            }
         } else {
             State.typingIndicator.style.display = 'none';
             const errorMsg = result.error || 'Error desconocido';
@@ -1238,7 +1250,33 @@ function setActiveNavItem(button) {
     }
 }
 
-// Mostrar historial
+// Estado global para el historial
+let historyState = {
+    allHistory: [],
+    filteredHistory: [],
+    currentPage: 1,
+    itemsPerPage: 5,
+    searchTerm: '',
+    totalItems: 0
+};
+
+// Exponer historyState globalmente para que otros módulos puedan acceder
+window.historyState = historyState;
+
+// Estado global para conversaciones
+let conversationsState = {
+    allConversations: [],
+    filteredConversations: [],
+    currentPage: 1,
+    itemsPerPage: 6,
+    searchTerm: '',
+    totalItems: 0
+};
+
+// Exponer conversationsState globalmente para que otros módulos puedan acceder
+window.conversationsState = conversationsState;
+
+// Mostrar historial con busqueda y paginacion
 async function showHistory() {
     // Si ya esta activo, ocultarlo
     if (activeNavItem === historyBtn && leftSidebarContent.classList.contains('active')) {
@@ -1248,64 +1286,207 @@ async function showHistory() {
     }
 
     try {
-        const result = await window.alfredAPI.getHistory(20);
+        const result = await window.alfredAPI.getHistory(50);
 
         if (result.success) {
-            State.sidebarContent.innerHTML = '<h4 style="margin-bottom: 16px; color: var(--text-primary);">Historial Preguntas rapidas</h4>';
+            historyState.allHistory = result.data;
+            historyState.filteredHistory = result.data;
+            historyState.currentPage = 1;
+            historyState.totalItems = result.data.length;
+            historyState.searchTerm = '';
 
-            if (result.data.length === 0) {
-                State.sidebarContent.innerHTML += '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No hay conversaciones guardadas</p>';
-            } else {
-                result.data.forEach(item => {
-                    const historyItem = document.createElement('div');
-                    historyItem.className = 'history-item';
-
-                    const contentWrapper = document.createElement('div');
-                    contentWrapper.className = 'history-item-content';
-                    contentWrapper.onclick = () => loadHistoryItem(item);
-
-                    const question = document.createElement('div');
-                    question.className = 'history-question';
-                    question.textContent = item.question;
-
-                    const answer = document.createElement('div');
-                    answer.className = 'history-answer';
-                    answer.textContent = item.answer;
-
-                    const time = document.createElement('div');
-                    time.className = 'history-time';
-                    time.textContent = new Date(item.timestamp).toLocaleString('es-ES');
-
-                    contentWrapper.appendChild(question);
-                    contentWrapper.appendChild(answer);
-                    contentWrapper.appendChild(time);
-
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'history-item-actions';
-
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'delete-history-btn';
-                    deleteBtn.textContent = 'x';
-                    deleteBtn.title = 'Eliminar del historial';
-                    deleteBtn.onclick = async (e) => {
-                        e.stopPropagation();
-                        await deleteHistoryItem(item.timestamp);
-                    };
-
-                    actionsDiv.appendChild(deleteBtn);
-
-                    historyItem.appendChild(contentWrapper);
-                    historyItem.appendChild(actionsDiv);
-                    State.sidebarContent.appendChild(historyItem);
-                });
-            }
-
+            renderHistoryWithSearch();
             showLeftSidebarContent();
             setActiveNavItem(historyBtn);
         }
     } catch (error) {
         showNotification('Error al cargar el historial', 'error');
         console.error('Error:', error);
+    }
+}
+
+// Renderizar historial con interfaz de busqueda
+function renderHistoryWithSearch() {
+    State.sidebarContent.innerHTML = '';
+
+    // Titulo principal
+    const title = document.createElement('h4');
+    title.style.marginBottom = '16px';
+    title.style.color = 'var(--text-primary)';
+    title.textContent = 'Historial Preguntas Rapidas';
+    State.sidebarContent.appendChild(title);
+
+    // Contenedor de busqueda
+    const searchContainer = document.createElement('div');
+    searchContainer.className = 'history-search-container';
+
+    // Input de busqueda directo
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'history-search-bar';
+    searchInput.placeholder = 'Buscar preguntas...';
+    searchInput.addEventListener('input', (e) => handleHistorySearch(e.target.value));
+
+    searchContainer.appendChild(searchInput);
+    State.sidebarContent.appendChild(searchContainer);
+
+    // Renderizar resultados iniciales
+    renderHistoryResults();
+}
+
+// Manejar busqueda de historial
+async function handleHistorySearch(searchTerm) {
+    historyState.searchTerm = searchTerm.toLowerCase();
+    historyState.currentPage = 1;
+
+    if (searchTerm.trim().length === 0) {
+        historyState.filteredHistory = historyState.allHistory;
+    } else {
+        filterHistoryResults();
+    }
+
+    renderHistoryResults();
+}
+
+// Filtrar resultados del historial
+function filterHistoryResults() {
+    const term = historyState.searchTerm;
+
+    if (term.length === 0) {
+        historyState.filteredHistory = historyState.allHistory;
+    } else {
+        historyState.filteredHistory = historyState.allHistory.filter(item => {
+            const questionMatch = item.question.toLowerCase().includes(term);
+            const answerMatch = item.answer.toLowerCase().includes(term);
+            return questionMatch || answerMatch;
+        });
+    }
+
+    historyState.totalItems = historyState.filteredHistory.length;
+}
+
+// Renderizar resultados del historial con paginacion
+function renderHistoryResults() {
+    // Limpiar contenedor de resultados anterior si existe
+    let resultsContainer = State.sidebarContent.querySelector('.history-results-container');
+    if (resultsContainer) {
+        resultsContainer.remove();
+    }
+
+    // Crear contenedor de resultados
+    const resultsContainerDiv = document.createElement('div');
+    resultsContainerDiv.className = 'history-results-container';
+
+    // Info de resultados
+    const resultsInfo = document.createElement('div');
+    resultsInfo.className = 'history-results-info';
+
+    const countText = document.createElement('span');
+    countText.className = 'history-results-count';
+    if (historyState.totalItems === 0) {
+        countText.textContent = 'Sin resultados';
+    } else {
+        const startItem = (historyState.currentPage - 1) * historyState.itemsPerPage + 1;
+        const endItem = Math.min(historyState.currentPage * historyState.itemsPerPage, historyState.totalItems);
+        countText.innerHTML = `<span>${startItem}-${endItem} de ${historyState.totalItems}</span>`;
+    }
+
+    resultsInfo.appendChild(countText);
+    resultsContainerDiv.appendChild(resultsInfo);
+
+    // Contenedor de items
+    const itemsContainer = document.createElement('div');
+    itemsContainer.className = 'history-items-container';
+
+    if (historyState.filteredHistory.length === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'history-empty-state';
+        emptyState.innerHTML = `
+            <div class="history-empty-state-icon">📭</div>
+            <div class="history-empty-state-text">
+                ${historyState.searchTerm ? 'No se encontraron resultados para tu busqueda' : 'No hay conversaciones guardadas'}
+            </div>
+        `;
+        itemsContainer.appendChild(emptyState);
+    } else {
+        // Calcular items de la pagina actual
+        const startIdx = (historyState.currentPage - 1) * historyState.itemsPerPage;
+        const endIdx = startIdx + historyState.itemsPerPage;
+        const pageItems = historyState.filteredHistory.slice(startIdx, endIdx);
+
+        pageItems.forEach(item => {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'history-item-content';
+            contentWrapper.onclick = () => loadHistoryItem(item);
+
+            const question = document.createElement('div');
+            question.className = 'history-question';
+            question.textContent = item.question;
+
+            contentWrapper.appendChild(question);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'history-item-actions';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-history-btn';
+            deleteBtn.textContent = 'x';
+            deleteBtn.title = 'Eliminar del historial';
+            deleteBtn.onclick = async (e) => {
+                e.stopPropagation();
+                await deleteHistoryItem(item.timestamp);
+            };
+
+            actionsDiv.appendChild(deleteBtn);
+
+            historyItem.appendChild(contentWrapper);
+            historyItem.appendChild(actionsDiv);
+            itemsContainer.appendChild(historyItem);
+        });
+    }
+
+    resultsContainerDiv.appendChild(itemsContainer);
+    State.sidebarContent.appendChild(resultsContainerDiv);
+
+    // Agregar paginacion si hay mas de una pagina
+    const totalPages = Math.ceil(historyState.totalItems / historyState.itemsPerPage);
+    if (totalPages > 1) {
+        const paginationDiv = document.createElement('div');
+        paginationDiv.className = 'history-pagination';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'pagination-btn';
+        prevBtn.disabled = historyState.currentPage === 1;
+        prevBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg> Anterior';
+        prevBtn.addEventListener('click', () => {
+            if (historyState.currentPage > 1) {
+                historyState.currentPage--;
+                renderHistoryResults();
+            }
+        });
+
+        const pageInfo = document.createElement('span');
+        pageInfo.className = 'pagination-info';
+        pageInfo.textContent = `Pagina ${historyState.currentPage} de ${totalPages}`;
+
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'pagination-btn';
+        nextBtn.disabled = historyState.currentPage === totalPages;
+        nextBtn.innerHTML = 'Siguiente <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+        nextBtn.addEventListener('click', () => {
+            if (historyState.currentPage < totalPages) {
+                historyState.currentPage++;
+                renderHistoryResults();
+            }
+        });
+
+        paginationDiv.appendChild(prevBtn);
+        paginationDiv.appendChild(pageInfo);
+        paginationDiv.appendChild(nextBtn);
+        resultsContainerDiv.appendChild(paginationDiv);
     }
 }
 
@@ -1358,37 +1539,14 @@ async function showConversations() {
     try {
         await loadConversations();
 
-        State.sidebarContent.innerHTML = `
-            <div class="conversations-header">
-                <h4 id="conversationsTitle">Conversaciones</h4>
-                <div class="conversations-actions">
-                    <button id="selectionModeBtn" 
-                            class="icon-btn-small" 
-                            onclick="window.conversationActions.toggleSelectionMode()"
-                            title="Seleccionar multiples">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 11l3 3L22 4"/>
-                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
-                        </svg>
-                    </button>
-                    <button id="deleteSelectedBtn" 
-                            class="icon-btn-small danger" 
-                            onclick="window.conversationActions.deleteSelected()"
-                            title="Eliminar seleccionadas"
-                            style="display: none;"
-                            disabled>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                        <span class="selected-count" style="display: none;"></span>
-                    </button>
-                </div>
-            </div>
-            <div id="conversationsList" class="conversations-list"></div>
-        `;
+        // Cargar todas las conversaciones en el estado
+        conversationsState.allConversations = State.conversations;
+        conversationsState.filteredConversations = State.conversations;
+        conversationsState.currentPage = 1;
+        conversationsState.totalItems = State.conversations.length;
+        conversationsState.searchTerm = '';
 
-        updateConversationsList();
+        renderConversationsWithSearch();
         showLeftSidebarContent();
         setActiveNavItem(conversationsBtn);
     } catch (error) {
@@ -1396,6 +1554,288 @@ async function showConversations() {
         console.error('Error:', error);
     }
 }
+
+// Renderizar conversaciones con interfaz de busqueda
+function renderConversationsWithSearch() {
+    State.sidebarContent.innerHTML = '';
+
+    // Header con titulo y acciones
+    const header = document.createElement('div');
+    header.className = 'conversations-header';
+
+    const title = document.createElement('h4');
+    title.textContent = 'Conversaciones';
+    title.style.marginBottom = '16px';
+    title.style.color = 'var(--text-primary)';
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'conversations-actions';
+
+    const selectionBtn = document.createElement('button');
+    selectionBtn.id = 'selectionModeBtn';
+    selectionBtn.className = 'icon-btn-small';
+    selectionBtn.title = 'Seleccionar multiples';
+    selectionBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>';
+    selectionBtn.onclick = () => window.conversationActions.toggleSelectionMode();
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.id = 'deleteSelectedBtn';
+    deleteBtn.className = 'icon-btn-small danger';
+    deleteBtn.title = 'Eliminar seleccionadas';
+    deleteBtn.style.display = 'none';
+    deleteBtn.disabled = true;
+    deleteBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg><span class="selected-count" style="display: none;"></span>';
+    deleteBtn.onclick = () => window.conversationActions.deleteSelected();
+
+    actionsDiv.appendChild(selectionBtn);
+    actionsDiv.appendChild(deleteBtn);
+
+    header.appendChild(title);
+    header.appendChild(actionsDiv);
+    State.sidebarContent.appendChild(header);
+
+    // Contenedor de busqueda
+    const searchContainer = document.createElement('div');
+    searchContainer.className = 'history-search-container';
+
+    // Input de busqueda directo
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'history-search-bar';
+    searchInput.placeholder = 'Buscar conversaciones...';
+    searchInput.addEventListener('input', (e) => handleConversationsSearch(e.target.value));
+
+    searchContainer.appendChild(searchInput);
+    State.sidebarContent.appendChild(searchContainer);
+
+    // Renderizar resultados iniciales
+    renderConversationsResults();
+}
+
+// Manejar busqueda de conversaciones
+function handleConversationsSearch(searchTerm) {
+    conversationsState.searchTerm = searchTerm.toLowerCase();
+    conversationsState.currentPage = 1;
+
+    if (searchTerm.trim().length === 0) {
+        conversationsState.filteredConversations = conversationsState.allConversations;
+    } else {
+        filterConversationsResults();
+    }
+
+    renderConversationsResults();
+}
+
+// Filtrar resultados de conversaciones
+function filterConversationsResults() {
+    const term = conversationsState.searchTerm;
+
+    if (term.length === 0) {
+        conversationsState.filteredConversations = conversationsState.allConversations;
+    } else {
+        conversationsState.filteredConversations = conversationsState.allConversations.filter(conv => {
+            const titleMatch = conv.title.toLowerCase().includes(term);
+            const messagesMatch = conv.messages && conv.messages.some(msg =>
+                (msg.content && msg.content.toLowerCase().includes(term))
+            );
+            return titleMatch || messagesMatch;
+        });
+    }
+
+    conversationsState.totalItems = conversationsState.filteredConversations.length;
+}
+
+// Renderizar resultados de conversaciones con paginacion
+function renderConversationsResults() {
+    // Limpiar contenedor de resultados anterior si existe
+    let resultsContainer = State.sidebarContent.querySelector('.conversations-results-container');
+    if (resultsContainer) {
+        resultsContainer.remove();
+    }
+
+    // Crear contenedor de resultados
+    const resultsContainerDiv = document.createElement('div');
+    resultsContainerDiv.className = 'conversations-results-container history-results-container';
+
+    // Info de resultados
+    const resultsInfo = document.createElement('div');
+    resultsInfo.className = 'history-results-info';
+
+    const countText = document.createElement('span');
+    countText.className = 'history-results-count';
+    if (conversationsState.totalItems === 0) {
+        countText.textContent = 'Sin resultados';
+    } else {
+        const startItem = (conversationsState.currentPage - 1) * conversationsState.itemsPerPage + 1;
+        const endItem = Math.min(conversationsState.currentPage * conversationsState.itemsPerPage, conversationsState.totalItems);
+        countText.innerHTML = `<span>${startItem}-${endItem} de ${conversationsState.totalItems}</span>`;
+    }
+
+    resultsInfo.appendChild(countText);
+    resultsContainerDiv.appendChild(resultsInfo);
+
+    // Contenedor de items
+    const itemsContainer = document.createElement('div');
+    itemsContainer.className = 'conversations-list history-items-container';
+
+    if (conversationsState.filteredConversations.length === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'history-empty-state';
+        emptyState.innerHTML = `
+            <div class="history-empty-state-icon">🗂️</div>
+            <div class="history-empty-state-text">
+                ${conversationsState.searchTerm ? 'No se encontraron conversaciones' : 'No hay conversaciones guardadas'}
+            </div>
+        `;
+        itemsContainer.appendChild(emptyState);
+    } else {
+        // Calcular items de la pagina actual
+        const startIdx = (conversationsState.currentPage - 1) * conversationsState.itemsPerPage;
+        const endIdx = startIdx + conversationsState.itemsPerPage;
+        const pageItems = conversationsState.filteredConversations.slice(startIdx, endIdx);
+
+        pageItems.forEach(conversation => {
+            const convItem = document.createElement('div');
+            convItem.className = 'conversation-item history-item';
+            convItem.setAttribute('data-conversation-id', conversation.id);
+
+            // Agregar checkbox si estamos en modo seleccion
+            if (State.conversationSelectionMode) {
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.className = 'item-checkbox';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = State.selectedConversations.has(conversation.id);
+                checkbox.onclick = (e) => {
+                    e.stopPropagation();
+                    if (checkbox.checked) {
+                        State.selectedConversations.add(conversation.id);
+                        convItem.classList.add('selected');
+                    } else {
+                        State.selectedConversations.delete(conversation.id);
+                        convItem.classList.remove('selected');
+                    }
+                    // Llamar a la funcion global que actualiza el boton de eliminar
+                    if (window.conversationActions && window.conversationActions.updateDeleteButton) {
+                        window.conversationActions.updateDeleteButton();
+                    }
+                };
+                
+                checkboxDiv.appendChild(checkbox);
+                convItem.appendChild(checkboxDiv);
+                
+                // Si el item esta seleccionado, marcar visualmente
+                if (State.selectedConversations.has(conversation.id)) {
+                    convItem.classList.add('selected');
+                }
+            }
+
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'history-item-content';
+            contentWrapper.style.cursor = State.conversationSelectionMode ? 'pointer' : 'pointer';
+            
+            if (State.conversationSelectionMode) {
+                // En modo selección, al hacer click se marca/desmarca el checkbox
+                contentWrapper.onclick = () => {
+                    const checkbox = convItem.querySelector('input[type="checkbox"]');
+                    if (checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                        
+                        if (checkbox.checked) {
+                            State.selectedConversations.add(conversation.id);
+                            convItem.classList.add('selected');
+                        } else {
+                            State.selectedConversations.delete(conversation.id);
+                            convItem.classList.remove('selected');
+                        }
+                        
+                        // Actualizar el botón de eliminar
+                        if (window.conversationActions && window.conversationActions.updateDeleteButton) {
+                            window.conversationActions.updateDeleteButton();
+                        }
+                    }
+                };
+            } else {
+                // En modo normal, abre la conversación
+                contentWrapper.onclick = () => window.conversationActions.load(conversation.id);
+            }
+
+            const title = document.createElement('div');
+            title.className = 'history-question';
+            title.textContent = conversation.title;
+
+            contentWrapper.appendChild(title);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'history-item-actions';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-history-btn';
+            deleteBtn.textContent = 'x';
+            deleteBtn.title = 'Eliminar conversación';
+            deleteBtn.onclick = async (e) => {
+                e.stopPropagation();
+                await window.conversationActions.delete(conversation.id);
+            };
+
+            actionsDiv.appendChild(deleteBtn);
+
+            // Agregar clase selected si esta en selectedConversations
+            if (State.selectedConversations.has(conversation.id)) {
+                convItem.classList.add('selected');
+            }
+
+            convItem.appendChild(contentWrapper);
+            convItem.appendChild(actionsDiv);
+            itemsContainer.appendChild(convItem);
+        });
+    }
+
+    resultsContainerDiv.appendChild(itemsContainer);
+    State.sidebarContent.appendChild(resultsContainerDiv);
+
+    // Agregar paginacion si hay mas de una pagina
+    const totalPages = Math.ceil(conversationsState.totalItems / conversationsState.itemsPerPage);
+    if (totalPages > 1) {
+        const paginationDiv = document.createElement('div');
+        paginationDiv.className = 'history-pagination';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'pagination-btn';
+        prevBtn.disabled = conversationsState.currentPage === 1;
+        prevBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg> Anterior';
+        prevBtn.addEventListener('click', () => {
+            if (conversationsState.currentPage > 1) {
+                conversationsState.currentPage--;
+                renderConversationsResults();
+            }
+        });
+
+        const pageInfo = document.createElement('span');
+        pageInfo.className = 'pagination-info';
+        pageInfo.textContent = `Pagina ${conversationsState.currentPage} de ${totalPages}`;
+
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'pagination-btn';
+        nextBtn.disabled = conversationsState.currentPage === totalPages;
+        nextBtn.innerHTML = 'Siguiente <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+        nextBtn.addEventListener('click', () => {
+            if (conversationsState.currentPage < totalPages) {
+                conversationsState.currentPage++;
+                renderConversationsResults();
+            }
+        });
+
+        paginationDiv.appendChild(prevBtn);
+        paginationDiv.appendChild(pageInfo);
+        paginationDiv.appendChild(nextBtn);
+        resultsContainerDiv.appendChild(paginationDiv);
+    }
+}
+
+// Exponer renderConversationsResults globalmente para que toggleSelectionMode pueda llamarla
+window.renderConversationsResults = renderConversationsResults;
 
 // Cargar configuracion
 function loadSettings() {

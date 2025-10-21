@@ -292,7 +292,8 @@ window.conversationActions = {
         updateDeleteButtonState();
     },
     toggleSelectionMode: () => toggleSelectionMode(),
-    deleteSelected: () => deleteSelectedConversations()
+    deleteSelected: () => deleteSelectedConversations(),
+    updateDeleteButton: () => updateDeleteButtonState()
 };
 
 // Cerrar menús al hacer clic fuera
@@ -397,6 +398,19 @@ export async function deleteConversationById(conversationId) {
             // Actualizar lista DESPUÉS de crear la nueva conversacion (si aplica)
             try {
                 await loadConversations();
+                
+                // Actualizar el estado de busqueda si estamos en vista de busqueda
+                if (window.conversationsState) {
+                    window.conversationsState.allConversations = State.conversations;
+                    window.conversationsState.filteredConversations = State.conversations;
+                    window.conversationsState.currentPage = 1;
+                    window.conversationsState.totalItems = State.conversations.length;
+                    
+                    // Re-renderizar la vista de busqueda si existe
+                    if (window.renderConversationsResults && typeof window.renderConversationsResults === 'function') {
+                        window.renderConversationsResults();
+                    }
+                }
             } catch (err) {
                 console.error('Error al cargar conversaciones:', err);
             }
@@ -425,6 +439,20 @@ export async function renameConversation(conversationId, newTitle) {
         if (result.success) {
             // Actualizar lista de conversaciones
             await loadConversations();
+            
+            // Actualizar el estado de busqueda si estamos en vista de busqueda
+            if (window.conversationsState) {
+                window.conversationsState.allConversations = State.conversations;
+                window.conversationsState.filteredConversations = State.conversations;
+                window.conversationsState.currentPage = 1;
+                window.conversationsState.totalItems = State.conversations.length;
+                
+                // Re-renderizar la vista de busqueda si existe
+                if (window.renderConversationsResults && typeof window.renderConversationsResults === 'function') {
+                    window.renderConversationsResults();
+                }
+            }
+            
             showNotification('success', 'Conversacion renombrada');
             return true;
         } else {
@@ -450,6 +478,11 @@ export function toggleSelectionMode() {
     
     updateConversationsList();
     updateSelectionModeUI();
+    
+    // Si existe renderConversationsResults en el scope global, llamarlo para actualizar vista de busqueda
+    if (window.renderConversationsResults && typeof window.renderConversationsResults === 'function') {
+        window.renderConversationsResults();
+    }
 }
 
 export function updateSelectionModeUI() {
@@ -549,6 +582,19 @@ export async function deleteSelectedConversations() {
     // Recargar conversaciones
     await loadConversations();
     updateSelectionModeUI();
+    
+    // Actualizar el estado de busqueda si estamos en vista de busqueda
+    if (window.conversationsState) {
+        window.conversationsState.allConversations = State.conversations;
+        window.conversationsState.filteredConversations = State.conversations;
+        window.conversationsState.currentPage = 1;
+        window.conversationsState.totalItems = State.conversations.length;
+        
+        // Re-renderizar la vista de busqueda si existe
+        if (window.renderConversationsResults && typeof window.renderConversationsResults === 'function') {
+            window.renderConversationsResults();
+        }
+    }
     
     if (successCount > 0) {
         showNotification('success', `${successCount} conversacion(es) eliminada(s)`);
@@ -730,6 +776,19 @@ export async function autoRenameConversationIfDefault(conversationId, userMessag
         if (result.success) {
             // Actualizar lista de conversaciones
             await loadConversations();
+            
+            // Actualizar el estado de busqueda si estamos en vista de busqueda
+            if (window.conversationsState) {
+                window.conversationsState.allConversations = State.conversations;
+                window.conversationsState.filteredConversations = State.conversations;
+                window.conversationsState.totalItems = State.conversations.length;
+                
+                // Re-renderizar la vista de busqueda si existe
+                if (window.renderConversationsResults && typeof window.renderConversationsResults === 'function') {
+                    window.renderConversationsResults();
+                }
+            }
+            
             console.log('Conversacion renombrada exitosamente');
         } else {
             console.error('Error al auto-renombrar conversacion:', result.error);
