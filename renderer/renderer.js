@@ -900,12 +900,27 @@ async function sendMessage() {
     const startTime = performance.now();
 
     try {
+        // Obtener gestor de cifrado
+        const cryptoManager = getCryptoManager();
+        
+        // Cifrar el mensaje antes de enviarlo al backend
+        let encryptedMessage = message;
+        if (cryptoManager.isEncryptionEnabled()) {
+            console.log('🔒 Cifrando mensaje antes de enviar...');
+            encryptedMessage = await cryptoManager.encrypt(message);
+            console.log('✅ Mensaje cifrado:', {
+                originalLength: message.length,
+                encryptedLength: encryptedMessage.length,
+                isEncrypted: encryptedMessage.startsWith('gAAAAAB')
+            });
+        }
+        
         // Enviar consulta a Alfred con el modo de busqueda seleccionado y el ID de conversacion
         const searchDocuments = State.searchMode === 'documents';
 
         // Preparar datos con archivo adjunto si existe
         const queryData = {
-            message,
+            message: encryptedMessage, // Enviar mensaje cifrado
             conversationId: getCurrentConversationId(),
             searchDocuments,
             attachedFile: attachedFile ? {
@@ -914,7 +929,13 @@ async function sendMessage() {
             } : null
         };
 
-        console.log('📤 Enviando consulta:', queryData);
+        console.log('📤 Enviando consulta:', {
+            conversationId: queryData.conversationId,
+            searchDocuments: queryData.searchDocuments,
+            hasAttachment: !!queryData.attachedFile,
+            messageLength: queryData.message.length,
+            isEncrypted: queryData.message.startsWith('gAAAAAB')
+        });
 
         const result = await window.alfredAPI.sendQueryWithAttachment(queryData);
 

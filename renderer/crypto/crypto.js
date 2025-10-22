@@ -96,6 +96,48 @@ class CryptoManager {
     }
 
     /**
+     * Cifra datos usando Fernet via IPC (Main Process)
+     * Retorna la cadena cifrada en formato Fernet (gAAAAAB...)
+     */
+    async encrypt(plainData) {
+        if (!plainData || !this.isEnabled || !this.encryptionKey) {
+            console.warn('[CRYPTO] Cifrado deshabilitado o sin clave');
+            return plainData;
+        }
+
+        try {
+            // Convertir a string si no lo es
+            const dataToEncrypt = typeof plainData === 'string' 
+                ? plainData 
+                : JSON.stringify(plainData);
+
+            // Cifrar usando Fernet via IPC
+            if (this.fernetInstance && window.alfredAPI?.encryptFernet) {
+                try {
+                    const result = await window.alfredAPI.encryptFernet(dataToEncrypt);
+                    if (result.success) {
+                        console.log('[CRYPTO] Datos cifrados exitosamente');
+                        return result.data;
+                    } else {
+                        console.error('[CRYPTO] Error cifrando con Fernet:', result.error);
+                        return plainData; // Fallback a texto plano
+                    }
+                } catch (error) {
+                    console.error('[CRYPTO] Error en IPC encrypt:', error);
+                    return plainData; // Fallback a texto plano
+                }
+            }
+
+            console.warn('[CRYPTO] Fernet no disponible, enviando sin cifrar');
+            return plainData;
+
+        } catch (error) {
+            console.error('[CRYPTO] Error inesperado al cifrar:', error);
+            return plainData;
+        }
+    }
+
+    /**
      * Descifra datos usando Fernet via IPC (Main Process)
      * Si Fernet no esta disponible, muestra warning pero permite continuar
      */

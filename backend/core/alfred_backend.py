@@ -777,7 +777,10 @@ async def query_alfred(request: QueryRequest):
     **NOTA DE SEGURIDAD**: Los datos personales se cifran automaticamente antes de almacenarlos
     y se descifran antes de enviarlos al cliente.
     
-    - **question**: Pregunta del usuario
+    **CIFRADO END-TO-END**: Las preguntas pueden venir cifradas desde el frontend y se descifran
+    aqui antes de procesarlas.
+    
+    - **question**: Pregunta del usuario (puede estar cifrada con Fernet)
     - **use_history**: Buscar primero en el historial de respuestas
     - **save_response**: Guardar automáticamente la respuesta en el historial (con cifrado)
     - **search_documents**: Buscar en documentos o solo usar el prompt
@@ -787,11 +790,29 @@ async def query_alfred(request: QueryRequest):
         raise HTTPException(status_code=503, detail="Alfred Core no está inicializado")
     
     try:
-        print(f"Procesando consulta: {request.question[:50]}...")
+        # DESCIFRAR PREGUNTA SI VIENE CIFRADA (End-to-End Encryption)
+        question = request.question
+        was_encrypted = False
+        
+        if question and question.startswith('gAAAAAB'):
+            # La pregunta viene cifrada, descifrarla
+            backend_logger.info(f"🔓 Pregunta cifrada detectada, descifrando...")
+            try:
+                question = decrypt_data(question)
+                was_encrypted = True
+                backend_logger.info(f"✅ Pregunta descifrada correctamente: {question[:50]}...")
+            except Exception as decrypt_error:
+                backend_logger.error(f"❌ Error al descifrar pregunta: {decrypt_error}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Error al descifrar la pregunta. Verifica que el cifrado este configurado correctamente."
+                )
+        
+        print(f"Procesando consulta {'(descifrada)' if was_encrypted else ''}: {question[:50]}...")
         
         # Ejecutar consulta con version async optimizada
         result = await alfred_core.query_async(
-            question=request.question,
+            question=question,  # Usar pregunta descifrada
             use_history=request.use_history,
             search_documents=request.search_documents,
             search_kwargs=request.search_kwargs
@@ -2034,7 +2055,10 @@ async def query_with_conversation(request: QueryWithConversationRequest):
     **NOTA DE SEGURIDAD**: Los datos personales en metadata se cifran automaticamente al guardar
     en la conversacion y se descifran al leerlos.
     
-    - **question**: Pregunta del usuario
+    **CIFRADO END-TO-END**: Las preguntas pueden venir cifradas desde el frontend y se descifran
+    aqui antes de procesarlas.
+    
+    - **question**: Pregunta del usuario (puede estar cifrada con Fernet)
     - **conversation_id**: ID de la conversacion activa (opcional)
     - **use_history**: Buscar primero en el historial Q&A
     - **save_response**: Guardar respuesta en historial Q&A (con cifrado)
@@ -2045,7 +2069,25 @@ async def query_with_conversation(request: QueryWithConversationRequest):
         raise HTTPException(status_code=503, detail="Alfred Core no esta inicializado")
     
     try:
-        print(f"Procesando consulta con conversacion: {request.question[:50]}...")
+        # DESCIFRAR PREGUNTA SI VIENE CIFRADA (End-to-End Encryption)
+        question = request.question
+        was_encrypted = False
+        
+        if question and question.startswith('gAAAAAB'):
+            # La pregunta viene cifrada, descifrarla
+            backend_logger.info(f"🔓 Pregunta cifrada detectada (conversacion), descifrando...")
+            try:
+                question = decrypt_data(question)
+                was_encrypted = True
+                backend_logger.info(f"✅ Pregunta descifrada correctamente: {question[:50]}...")
+            except Exception as decrypt_error:
+                backend_logger.error(f"❌ Error al descifrar pregunta: {decrypt_error}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Error al descifrar la pregunta. Verifica que el cifrado este configurado correctamente."
+                )
+        
+        print(f"Procesando consulta con conversacion {'(descifrada)' if was_encrypted else ''}: {question[:50]}...")
         
         # Obtener historial de conversacion si existe (descifra automaticamente)
         conversation_history = None
@@ -2062,7 +2104,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
             ]
         
         # Si hay documento temporal adjunto, agregarlo al contexto de la pregunta
-        question_with_context = request.question
+        question_with_context = question  # Usar pregunta descifrada
         force_prompt_only = False
         
         if request.temp_document:
@@ -2107,7 +2149,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
             document_context = f"\n\n--- DOCUMENTO ADJUNTO: {file_name} ---\n"
             document_context += doc_content
             document_context += f"\n--- FIN DEL DOCUMENTO ---\n\n"
-            question_with_context = document_context + request.question
+            question_with_context = document_context + question  # Usar pregunta descifrada
         
         # Ejecutar consulta con contexto de conversacion
         # Si hay documento adjunto, forzar search_documents=False para mejor rendimiento
@@ -2135,11 +2177,11 @@ async def query_with_conversation(request: QueryWithConversationRequest):
         # Agregar mensajes a la conversacion si existe
         if request.conversation_id:
             conv_mgr = get_conversation_manager()
-            # Agregar pregunta del usuario
+            # Agregar pregunta del usuario (ya descifrada)
             conv_mgr.add_message(
                 conversation_id=request.conversation_id,
                 role="user",
-                content=request.question,
+                content=question,  # Usar pregunta descifrada
                 metadata={},
                 encrypt_sensitive=False  # No hay datos sensibles en pregunta
             )
@@ -2166,7 +2208,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
         # Guardar en historial Q&A si se solicita (cifra automaticamente)
         if request.save_response and not result.get('from_history', False):
             functionsToHistory.save_qa_to_history(
-                question=request.question,
+                question=question,  # Usar pregunta descifrada
                 answer=result['answer'],
                 personal_data=personal_data,
                 sources=result.get('sources', []),

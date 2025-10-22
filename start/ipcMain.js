@@ -679,6 +679,35 @@ function registerIPCHandlers(dependencies) {
         }
     });
 
+    // Handler para cifrar datos con Fernet en el main process
+    ipcMain.handle('encrypt-fernet', async (event, plainData) => {
+        try {
+            // Si no tenemos Secret de Fernet, obtener la clave primero
+            if (!fernetSecret) {
+                const keyResult = await makeRequest('http://127.0.0.1:8000/security/encryption-key');
+                if (keyResult.statusCode < 400 && keyResult.data?.encryption_key) {
+                    fernetSecret = new fernet.Secret(keyResult.data.encryption_key);
+                    console.log('[MAIN] Fernet Secret inicializado para cifrado');
+                } else {
+                    return { success: false, error: 'No se pudo obtener clave de cifrado' };
+                }
+            }
+
+            // Crear Token de Fernet y cifrar los datos
+            const token = new fernet.Token({
+                secret: fernetSecret,
+                ttl: 0
+            });
+
+            const encrypted = token.encode(plainData);
+            console.log('[MAIN] Datos cifrados exitosamente, longitud:', encrypted.length);
+            return { success: true, data: encrypted };
+        } catch (error) {
+            console.error('[MAIN] Error cifrando con Fernet:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
     // Handler para descifrar datos con Fernet en el main process
     let fernetSecret = null;
     
