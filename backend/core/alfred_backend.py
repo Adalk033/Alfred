@@ -56,7 +56,7 @@ def extract_text_from_pdf(content: str, file_name: str) -> str:
         Texto extraído del PDF
     """
     try:
-        import PyPDF2
+        import pypdf
         import base64
         from io import BytesIO
         import re
@@ -87,7 +87,7 @@ def extract_text_from_pdf(content: str, file_name: str) -> str:
         # Crear objeto PDF
         print(f"📄 Creando lector PDF...")
         pdf_file = BytesIO(pdf_bytes)
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        pdf_reader = pypdf.PdfReader(pdf_file)
         
         print(f"📚 PDF cargado: {len(pdf_reader.pages)} paginas")
         

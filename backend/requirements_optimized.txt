@@ -137,8 +137,7 @@ packaging==25.0
 pandas==2.2.3
 
 # === PDF Processing (livianos) ===
-PyPDF2==3.0.1
-pypdf==6.1.1
+pypdf==6.1.2
 
 # === Image Processing (sin pillow pesado) ===
 pi_heif==1.1.1
