@@ -12,6 +12,7 @@ class CryptoManager {
         this.encryptionKey = null;
         this.isEnabled = false;
         this.fernetInstance = null;
+        this.sensitiveFields = new Set(); // Lista de campos que deben descifrarse
     }
 
     /**
@@ -24,11 +25,15 @@ class CryptoManager {
                 this.encryptionKey = result.data.key;
                 this.isEnabled = result.data.enabled || true;
                 
+                // Obtener lista de campos sensibles
+                await this._loadSensitiveFields();
+                
                 // Cargar libreria Fernet si esta disponible
                 await this._loadFernetLibrary();
                 
                 console.log('[CRYPTO] Gestor de cifrado inicializado');
                 console.log('[CRYPTO] Algoritmo:', result.data.algorithm || 'Fernet');
+                console.log('[CRYPTO] Campos sensibles:', this.sensitiveFields);
                 return true;
             } else {
                 console.warn('[CRYPTO] No se pudo obtener clave de cifrado');
@@ -39,6 +44,34 @@ class CryptoManager {
             console.error('[CRYPTO] Error al inicializar:', error);
             this.isEnabled = false;
             return false;
+        }
+    }
+
+    /**
+     * Obtiene la lista de campos sensibles del backend
+     */
+    async _loadSensitiveFields() {
+        try {
+            const result = await window.alfredAPI.getSensitiveFields();
+            if (result.success && result.data) {
+                this.sensitiveFields = new Set([
+                    ...result.data,
+                    // Campos adicionales de respuestas de consultas
+                    'answer', 'personal_data', 'user_input', 'assistant_output', 'sources'
+                ]);
+            } else {
+                // Fallback a lista por defecto
+                this.sensitiveFields = new Set([
+                    'user_name', 'user_age', 'profile_picture',
+                    'answer', 'personal_data', 'user_input', 'assistant_output', 'sources'
+                ]);
+            }
+        } catch (error) {
+            console.warn('[CRYPTO] Error al obtener campos sensibles, usando lista por defecto');
+            this.sensitiveFields = new Set([
+                'user_name', 'user_age', 'profile_picture',
+                'answer', 'personal_data', 'user_input', 'assistant_output', 'sources'
+            ]);
         }
     }
 
@@ -139,10 +172,8 @@ class CryptoManager {
             const entries = Object.entries(obj);
             
             for (const [key, value] of entries) {
-                // Campos que deberían estar cifrados
-                const sensibleFields = ['answer', 'personal_data', 'user_input', 'assistant_output', 'sources'];
-                
-                if (sensibleFields.includes(key)) {
+                // Verificar si es un campo sensible
+                if (this.sensitiveFields.has(key)) {
                     if (typeof value === 'string' && this.isFernetEncrypted(value)) {
                         // Descifrar campo
                         try {

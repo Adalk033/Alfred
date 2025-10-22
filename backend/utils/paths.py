@@ -10,7 +10,7 @@ def is_development_mode():
     
     Retorna True si:
     - ALFRED_DEV_MODE=1 esta establecido explicitamente
-    - O si ./chroma_db existe (fallback automático para scripts locales)
+    - O si ../chroma_db existe en raiz del proyecto (fallback automatico para scripts locales)
     
     Retorna False (produccion) por defecto.
     """
@@ -18,8 +18,9 @@ def is_development_mode():
     if dev_mode == "1" or dev_mode == "true":
         return True
     
-    # Fallback: detectar por archivo local
-    if Path("./chroma_db").exists() or Path("../chroma_db").exists():
+    # Fallback: detectar por archivo local en raiz del proyecto
+    project_root = Path(__file__).parent.parent.parent
+    if (project_root / "chroma_db").exists():
         return True
     
     return False
@@ -27,12 +28,12 @@ def is_development_mode():
 def get_data_path():
     """
     Obtiene la ruta de datos persistentes.
-    - DESARROLLO: ./data (en el directorio del proyecto)
+    - DESARROLLO: ../data (en el directorio raiz del proyecto)
     - PRODUCCION: C:\\Users\\{USER}\\AppData\\Roaming\\Alfred\\data
     """
     if is_development_mode():
-        # DESARROLLO: Usar carpeta local
-        base = Path("./data")
+        # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
+        base = Path(__file__).parent.parent.parent / "data"
     else:
         # PRODUCCION: Usar AppData del usuario Windows
         env_path = os.getenv("ALFRED_DATA_PATH")
@@ -49,12 +50,12 @@ def get_data_path():
 def get_log_path():
     """
     Obtiene la ruta de logs.
-    - DESARROLLO: ./logs (en el directorio del proyecto)
+    - DESARROLLO: ../logs (en el directorio raiz del proyecto)
     - PRODUCCION: C:\\Users\\{USER}\\AppData\\Roaming\\Alfred\\logs
     """
     if is_development_mode():
-        # DESARROLLO: Usar carpeta local
-        path = Path("./logs")
+        # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
+        path = Path(__file__).parent.parent.parent / "logs"
     else:
         # PRODUCCION: Usar AppData del usuario Windows
         env_path = os.getenv("ALFRED_LOG_PATH")
@@ -71,14 +72,14 @@ def get_log_path():
 def get_db_path():
     """
     Obtiene la ruta de base de datos SQLite.
-    - DESARROLLO: ./db (en el directorio del proyecto)
+    - DESARROLLO: ../db (en el directorio raiz del proyecto)
     - PRODUCCION: C:\\Users\\{USER}\\AppData\\Roaming\\Alfred\\db
     
     Almacena: alfred.db (conversaciones, Q&A history, metadata)
     """
     if is_development_mode():
-        # DESARROLLO: Usar carpeta local
-        path = Path("./db")
+        # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
+        path = Path(__file__).parent.parent.parent / "db"
     else:
         # PRODUCCION: Usar AppData del usuario Windows
         env_path = os.getenv("ALFRED_DB_PATH")
@@ -95,14 +96,14 @@ def get_db_path():
 def get_chroma_path():
     """
     Obtiene la ruta de ChromaDB (base de datos vectorial).
-    - DESARROLLO: ./chroma_db (en el directorio del proyecto)
+    - DESARROLLO: ../chroma_db (en el directorio raiz del proyecto)
     - PRODUCCION: C:\\Users\\{USER}\\AppData\\Roaming\\Alfred\\data\\chroma_store
     
     Almacena: Indices vectoriales de embeddings y metadata de documentos
     """
     if is_development_mode():
-        # DESARROLLO: Usar carpeta local
-        path = Path("./chroma_db")
+        # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
+        path = Path(__file__).parent.parent.parent / "chroma_db"
     else:
         # PRODUCCION: Usar AppData del usuario Windows
         env_path = os.getenv("ALFRED_CHROMA_PATH")

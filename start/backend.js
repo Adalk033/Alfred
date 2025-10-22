@@ -7,7 +7,7 @@ const { app } = require('electron');
 
 // NOTAS sobre ALFRED_DEV_MODE:
 // - DESARROLLO (npm run dev o durante tests): ALFRED_DEV_MODE=1
-//   Datos se guardan en ./data, ./db, ./logs, ./chroma_db (carpetas del proyecto)
+//   Datos se guardan en ./data, ./db, ./logs, ./chroma_db (carpetas en raiz del proyecto)
 // - PRODUCCION (app.isPackaged): ALFRED_DEV_MODE=0
 //   Datos se guardan en %AppData%\Alfred\ (AppData del usuario)
 

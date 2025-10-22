@@ -2871,10 +2871,42 @@ async function loadProfilePicture() {
 
         if (result.success && result.data) {
             const { current, history } = result.data;
+            
+            console.log('📦 Datos recibidos del backend:', {
+                hasCurrent: !!current,
+                currentLength: current?.length,
+                isEncrypted: current?.startsWith('gAAAAAB'),
+                historyCount: history?.length || 0
+            });
+            
+            // Obtener gestor de cifrado
+            const cryptoManager = getCryptoManager();
+            
+            // Descifrar foto de perfil usando IPC (Main Process con Fernet)
+            let decryptedCurrent = current;
+            if (current && cryptoManager.isFernetEncrypted(current)) {
+                console.log('🔓 Descifrando foto de perfil con Fernet...');
+                try {
+                    const decryptResult = await window.alfredAPI.decryptFernet(current);
+                    if (decryptResult.success) {
+                        decryptedCurrent = decryptResult.data;
+                        console.log('✅ Foto descifrada correctamente, longitud:', decryptedCurrent?.length);
+                    } else {
+                        console.error('❌ Error al descifrar con Fernet:', decryptResult.error);
+                        // Mantener cifrado si falla
+                        decryptedCurrent = current;
+                    }
+                } catch (decryptError) {
+                    console.error('❌ Excepcion al descifrar:', decryptError);
+                    decryptedCurrent = current;
+                }
+            } else {
+                console.log('ℹ️ Foto no requiere descifrado (texto plano o vacia)');
+            }
 
             // Actualizar estado local
             State.updateSettings({
-                profilePicture: current,
+                profilePicture: decryptedCurrent,
                 profilePictureHistory: history || []
             });
 
@@ -2882,14 +2914,15 @@ async function loadProfilePicture() {
             localStorage.setItem('alfred-settings', JSON.stringify(State.settings));
 
             // Actualizar UI
-            if (current) {
-                updateProfilePictureDisplay(current);
+            if (decryptedCurrent) {
+                updateProfilePictureDisplay(decryptedCurrent);
             }
             updateProfileHistory();
 
             console.log('✅ Foto de perfil cargada:', {
-                hasCurrent: !!current,
-                historyCount: history?.length || 0
+                hasCurrent: !!decryptedCurrent,
+                historyCount: history?.length || 0,
+                isValidDataUrl: decryptedCurrent?.startsWith('data:')
             });
         } else {
             console.log('ℹ️ No hay foto de perfil guardada');
@@ -3081,21 +3114,69 @@ async function restoreProfilePicture(imageData, index) {
 async function loadUserInfo() {
     try {
         console.log('📋 Cargando informacion personal...');
+        
+        // Obtener gestor de cifrado
+        const cryptoManager = getCryptoManager();
 
         // Cargar nombre
         const nameResult = await window.alfredAPI.getUserSetting('user_name');
         if (nameResult.success && nameResult.data) {
-            const userName = nameResult.data.value || '';
+            let userName = nameResult.data.value || '';
+            
+            console.log('📦 user_name recibido:', {
+                length: userName?.length,
+                isEncrypted: userName?.startsWith('gAAAAAB')
+            });
+            
+            // Descifrar si es necesario usando IPC (Main Process con Fernet)
+            if (cryptoManager.isFernetEncrypted(userName)) {
+                console.log('🔓 Descifrando user_name con Fernet...');
+                try {
+                    const decryptResult = await window.alfredAPI.decryptFernet(userName);
+                    if (decryptResult.success) {
+                        userName = decryptResult.data;
+                        console.log('✅ Nombre descifrado:', userName);
+                    } else {
+                        console.error('❌ Error al descifrar user_name:', decryptResult.error);
+                    }
+                } catch (decryptError) {
+                    console.error('❌ Excepcion al descifrar user_name:', decryptError);
+                }
+            }
+            
             document.getElementById('userName').value = userName;
-            console.log('✅ Nombre cargado:', userName);
+            console.log('✅ Nombre cargado en UI:', userName);
         }
 
         // Cargar edad
         const ageResult = await window.alfredAPI.getUserSetting('user_age');
         if (ageResult.success && ageResult.data && document.getElementById('userAge')) {
-            const userAge = ageResult.data.value || '';
+            let userAge = ageResult.data.value || '';
+            
+            console.log('📦 user_age recibido:', {
+                value: userAge,
+                type: typeof userAge,
+                isEncrypted: (typeof userAge === 'string' && userAge?.startsWith('gAAAAAB'))
+            });
+            
+            // Descifrar si es necesario usando IPC (Main Process con Fernet)
+            if (typeof userAge === 'string' && cryptoManager.isFernetEncrypted(userAge)) {
+                console.log('🔓 Descifrando user_age con Fernet...');
+                try {
+                    const decryptResult = await window.alfredAPI.decryptFernet(userAge);
+                    if (decryptResult.success) {
+                        userAge = decryptResult.data;
+                        console.log('✅ Edad descifrada:', userAge);
+                    } else {
+                        console.error('❌ Error al descifrar user_age:', decryptResult.error);
+                    }
+                } catch (decryptError) {
+                    console.error('❌ Excepcion al descifrar user_age:', decryptError);
+                }
+            }
+            
             document.getElementById('userAge').value = userAge;
-            console.log('✅ Edad cargada:', userAge);
+            console.log('✅ Edad cargada en UI:', userAge);
         }
 
     } catch (error) {

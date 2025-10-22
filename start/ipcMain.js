@@ -440,6 +440,47 @@ function registerIPCHandlers(dependencies) {
         }
     });
 
+    // ============================================================================
+    // SEGURIDAD Y CIFRADO
+    // ============================================================================
+
+    ipcMain.handle('get-encryption-key', async () => {
+        try {
+            console.log('[MAIN] Obteniendo clave de cifrado...');
+            const result = await makeRequest('http://127.0.0.1:8000/security/encryption-key');
+            
+            // makeRequest puede devolver result.data o result directamente
+            const data = result.data || result;
+            
+            return { 
+                success: true, 
+                data: {
+                    key: data.encryption_key,
+                    algorithm: data.algorithm,
+                    enabled: true
+                }
+            };
+        } catch (error) {
+            console.error('[MAIN] Error al obtener clave de cifrado:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('get-sensitive-fields', async () => {
+        try {
+            console.log('[MAIN] Obteniendo campos sensibles...');
+            const result = await makeRequest('http://127.0.0.1:8000/security/sensitive-fields');
+            
+            // makeRequest puede devolver result.data o result directamente
+            const data = result.data || result;
+            
+            return { success: true, data: data.sensitive_fields };
+        } catch (error) {
+            console.error('[MAIN] Error al obtener campos sensibles:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
     ipcMain.handle('select-profile-picture', async () => {
         try {
             console.log('[MAIN] Abriendo selector de foto de perfil...');
@@ -638,46 +679,32 @@ function registerIPCHandlers(dependencies) {
         }
     });
 
-    // ============================================================================
-    // HANDLERS DE SEGURIDAD Y CIFRADO
-    // ============================================================================
-
-    ipcMain.handle('get-encryption-key', async () => {
-        try {
-            console.log('[MAIN] Obteniendo clave de cifrado del backend...');
-            const result = await makeRequest('http://127.0.0.1:8000/security/encryption-key');
-            
-            if (result.statusCode >= 400) {
-                console.error('[MAIN] Error obteniendo clave de cifrado:', result.data);
-                return { success: false, error: result.data?.detail || 'Error al obtener clave' };
-            }
-            
-            console.log('[MAIN] Clave de cifrado obtenida correctamente');
-            return { success: true, data: result.data };
-        } catch (error) {
-            console.error('[MAIN] Error en get-encryption-key:', error);
-            return { success: false, error: error.message };
-        }
-    });
-
     // Handler para descifrar datos con Fernet en el main process
-    let fernetInstance = null;
+    let fernetSecret = null;
     
     ipcMain.handle('decrypt-fernet', async (event, encryptedData) => {
         try {
             // Si no tenemos instancia de Fernet, obtener la clave primero
-            if (!fernetInstance) {
+            if (!fernetSecret) {
                 const keyResult = await makeRequest('http://127.0.0.1:8000/security/encryption-key');
-                if (keyResult.statusCode < 400 && keyResult.data?.key) {
-                    fernetInstance = new fernet.Secret(keyResult.data.key);
-                    console.log('[MAIN] Instancia Fernet inicializada');
+                if (keyResult.statusCode < 400 && keyResult.data?.encryption_key) {
+                    // Crear Secret de Fernet con la clave del backend
+                    fernetSecret = new fernet.Secret(keyResult.data.encryption_key);
+                    console.log('[MAIN] Fernet Secret inicializado');
                 } else {
                     return { success: false, error: 'No se pudo obtener clave de cifrado' };
                 }
             }
 
+            // Crear Token de Fernet a partir de los datos cifrados
+            const token = new fernet.Token({
+                secret: fernetSecret,
+                token: encryptedData,
+                ttl: 0 // Sin TTL para tokens que ya existen
+            });
+
             // Descifrar los datos
-            const decrypted = fernetInstance.decode(encryptedData);
+            const decrypted = token.decode();
             return { success: true, data: decrypted };
         } catch (error) {
             console.error('[MAIN] Error descifrando con Fernet:', error);

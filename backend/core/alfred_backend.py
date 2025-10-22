@@ -2254,15 +2254,50 @@ async def global_exception_handler(request, exc):
 @app.get("/user/settings", tags=["Usuario"])
 async def get_user_settings():
     """
-    Obtener todas las configuraciones de usuario
+    Obtener todas las configuraciones de usuario (CIFRADAS para el frontend)
     
     Returns:
-        Diccionario con todas las configuraciones guardadas
+        Diccionario con todas las configuraciones (valores RAW sin descifrar)
     """
     try:
-        from db_manager import get_all_user_settings
+        from db_manager import get_connection, SENSITIVE_USER_SETTINGS
+        import json
         
-        settings = get_all_user_settings()
+        # Leer directamente de BD sin descifrar
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT setting_key, setting_value, setting_type, updated_at FROM user_settings")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        settings = {}
+        for row in rows:
+            key = row["setting_key"]
+            value_str = row["setting_value"]
+            setting_type = row["setting_type"]
+            
+            # Si es campo sensible, enviar como string cifrado sin conversion
+            if key in SENSITIVE_USER_SETTINGS:
+                value = value_str  # Mantener cifrado
+            else:
+                # Convertir tipo de dato solo si NO es sensible
+                if setting_type == 'json':
+                    value = json.loads(value_str) if value_str else None
+                elif setting_type == 'int':
+                    value = int(value_str) if value_str else None
+                elif setting_type == 'float':
+                    value = float(value_str) if value_str else None
+                elif setting_type == 'bool':
+                    value = value_str == '1' or value_str.lower() == 'true'
+                else:
+                    value = value_str
+            
+            settings[key] = {
+                "value": value,
+                "type": setting_type,
+                "updated_at": row["updated_at"]
+            }
+        
         return {
             "success": True,
             "settings": settings,
@@ -2272,17 +2307,20 @@ async def get_user_settings():
         raise HTTPException(status_code=500, detail=f"Error al obtener configuraciones: {str(e)}")
 
 @app.get("/user/setting/{key}", response_model=UserSettingResponse, tags=["Usuario"])
-async def get_user_setting(key: str):
+async def get_user_setting_endpoint(key: str):
     """
-    Obtener una configuracion especifica de usuario
+    Obtener una configuracion especifica de usuario (CIFRADA para el frontend)
     
     Args:
         key: Clave de la configuracion (ej: 'profile_picture', 'ollama_keep_alive')
+    
+    Returns:
+        Valor RAW de la BD (cifrado si es campo sensible, texto plano si no lo es)
     """
     try:
-        from db_manager import get_user_setting, get_connection
+        from db_manager import get_connection, SENSITIVE_USER_SETTINGS
         
-        # Obtener valor con metadata
+        # Obtener valor RAW directamente de BD (sin descifrar)
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT setting_value, setting_type, updated_at FROM user_settings WHERE setting_key = ?", (key,))
@@ -2296,17 +2334,24 @@ async def get_user_setting(key: str):
         value_str = row["setting_value"]
         setting_type = row["setting_type"]
         
-        # Convertir valor
-        if setting_type == 'json':
-            value = json.loads(value_str) if value_str else None
-        elif setting_type == 'int':
-            value = int(value_str) if value_str else None
-        elif setting_type == 'float':
-            value = float(value_str) if value_str else None
-        elif setting_type == 'bool':
-            value = value_str == '1' or value_str.lower() == 'true'
+        # NO descifrar - enviar RAW al frontend
+        # El frontend se encargara de descifrar campos sensibles
+        
+        # Si es campo sensible, enviar como string cifrado sin conversion
+        if key in SENSITIVE_USER_SETTINGS:
+            value = value_str  # Mantener cifrado
         else:
-            value = value_str
+            # Convertir tipo de dato solo si NO es sensible
+            if setting_type == 'json':
+                value = json.loads(value_str) if value_str else None
+            elif setting_type == 'int':
+                value = int(value_str) if value_str else None
+            elif setting_type == 'float':
+                value = float(value_str) if value_str else None
+            elif setting_type == 'bool':
+                value = value_str == '1' or value_str.lower() == 'true'
+            else:
+                value = value_str
         
         return {
             "key": key,
@@ -2370,6 +2415,55 @@ async def delete_user_setting(key: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+@app.get("/security/encryption-key", tags=["Seguridad"])
+async def get_encryption_key():
+    """
+    Obtener la clave de cifrado para el frontend
+    
+    IMPORTANTE: Esta clave permite descifrar datos sensibles.
+    Solo debe usarse en comunicacion local (127.0.0.1)
+    
+    Returns:
+        Clave de cifrado en formato base64 (Fernet)
+    """
+    try:
+        from utils.security import get_encryption_key_display, encryption_key_exists
+        
+        if not encryption_key_exists():
+            raise HTTPException(status_code=500, detail="Clave de cifrado no inicializada")
+        
+        key = get_encryption_key_display()
+        
+        return {
+            "success": True,
+            "encryption_key": key,
+            "algorithm": "AES-256-GCM (Fernet)",
+            "warning": "Esta clave es sensible. No la expongas publicamente."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener clave: {str(e)}")
+
+@app.get("/security/sensitive-fields", tags=["Seguridad"])
+async def get_sensitive_fields():
+    """
+    Obtener lista de campos sensibles que requieren descifrado en el frontend
+    
+    Returns:
+        Lista de claves de user_settings que estan cifradas
+    """
+    try:
+        from db_manager import SENSITIVE_USER_SETTINGS
+        
+        return {
+            "success": True,
+            "sensitive_fields": list(SENSITIVE_USER_SETTINGS),
+            "count": len(SENSITIVE_USER_SETTINGS)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
 # --- Endpoints especificos para foto de perfil ---
 
 @app.post("/user/profile-picture", tags=["Usuario"])
@@ -2421,16 +2515,42 @@ async def set_profile_picture(request: ProfilePictureRequest):
 @app.get("/user/profile-picture", response_model=ProfilePictureHistoryResponse, tags=["Usuario"])
 async def get_profile_picture():
     """
-    Obtener foto de perfil actual y su historial
+    Obtener foto de perfil actual y su historial (CIFRADA para el frontend)
+    El frontend debe descifrar usando CryptoManager
     """
     try:
-        from db_manager import get_user_setting
+        from db_manager import get_connection
+        import json
         
-        current = get_user_setting('profile_picture', default=None)
-        history = get_user_setting('profile_picture_history', default=[], setting_type='json')
+        # Leer directamente de BD sin descifrar (RAW)
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Obtener profile_picture (cifrada)
+        cursor.execute("SELECT setting_value FROM user_settings WHERE setting_key = ?", ('profile_picture',))
+        pic_row = cursor.fetchone()
+        current = pic_row["setting_value"] if pic_row else None
+        
+        # Obtener profile_picture_history (puede ser JSON)
+        cursor.execute("SELECT setting_value, setting_type FROM user_settings WHERE setting_key = ?", ('profile_picture_history',))
+        hist_row = cursor.fetchone()
+        
+        if hist_row and hist_row["setting_value"]:
+            # Si es JSON, parsear
+            if hist_row["setting_type"] == 'json':
+                try:
+                    history = json.loads(hist_row["setting_value"])
+                except:
+                    history = []
+            else:
+                history = []
+        else:
+            history = []
+        
+        conn.close()
         
         return {
-            "current": current,
+            "current": current,  # ← Cifrada (gAAAAA...)
             "history": history,
             "history_count": len(history)
         }

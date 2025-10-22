@@ -735,11 +735,14 @@ def delete_model_setting(key: str):
     finally:
         conn.close()
 
-# --- Funciones para User Settings (configuracion de usuario) ---
+# --- Funciones para User Settings (configuracion de usuario con cifrado) ---
+
+# Campos sensibles que deben cifrarse en user_settings
+SENSITIVE_USER_SETTINGS = {'user_name', 'user_age', 'profile_picture'}
 
 def set_user_setting(key: str, value: any, setting_type: str = 'string'):
     """
-    Guarda una configuracion de usuario
+    Guarda una configuracion de usuario (cifra campos sensibles)
     
     Args:
         key: Clave de configuracion (ej: 'profile_picture', 'ollama_keep_alive')
@@ -763,13 +766,17 @@ def set_user_setting(key: str, value: any, setting_type: str = 'string'):
         else:
             value_str = str(value)
         
+        # Cifrar si es campo sensible
+        if key in SENSITIVE_USER_SETTINGS and value_str:
+            value_str = encrypt_data(value_str)
+        
         cursor.execute(
             """INSERT OR REPLACE INTO user_settings (setting_key, setting_value, setting_type, updated_at) 
                VALUES (?, ?, ?, CURRENT_TIMESTAMP)""",
             (key, value_str, setting_type)
         )
         conn.commit()
-        db_logger.info(f"User setting guardado: {key} ({setting_type})")
+        db_logger.info(f"User setting guardado: {key} ({setting_type}){' [CIFRADO]' if key in SENSITIVE_USER_SETTINGS else ''}")
         return True
     except Exception as e:
         db_logger.error(f"Error al guardar user setting: {e}")
@@ -779,7 +786,7 @@ def set_user_setting(key: str, value: any, setting_type: str = 'string'):
 
 def get_user_setting(key: str, default: any = None, setting_type: str = 'string'):
     """
-    Obtiene una configuracion de usuario
+    Obtiene una configuracion de usuario (descifra campos sensibles)
     
     Args:
         key: Clave de configuracion
@@ -801,6 +808,13 @@ def get_user_setting(key: str, default: any = None, setting_type: str = 'string'
         
         value_str = row["setting_value"]
         stored_type = row["setting_type"]
+        
+        # Descifrar si es campo sensible
+        if key in SENSITIVE_USER_SETTINGS and value_str:
+            try:
+                value_str = decrypt_data(value_str)
+            except Exception as e:
+                db_logger.warning(f"No se pudo descifrar {key}, puede ser texto plano: {e}")
         
         # Convertir valor segun tipo almacenado
         import json
@@ -824,7 +838,7 @@ def get_user_setting(key: str, default: any = None, setting_type: str = 'string'
 
 def get_all_user_settings():
     """
-    Obtiene todas las configuraciones de usuario
+    Obtiene todas las configuraciones de usuario (descifra campos sensibles)
     
     Returns:
         Diccionario con todas las configuraciones {key: {value, type, updated_at}}
@@ -840,8 +854,16 @@ def get_all_user_settings():
         
         settings = {}
         for row in rows:
+            key = row["setting_key"]
             value_str = row["setting_value"]
             setting_type = row["setting_type"]
+            
+            # Descifrar si es campo sensible
+            if key in SENSITIVE_USER_SETTINGS and value_str:
+                try:
+                    value_str = decrypt_data(value_str)
+                except Exception as e:
+                    db_logger.warning(f"No se pudo descifrar {key}, puede ser texto plano: {e}")
             
             # Convertir valor
             if setting_type == 'json':
@@ -855,7 +877,7 @@ def get_all_user_settings():
             else:
                 value = value_str
             
-            settings[row["setting_key"]] = {
+            settings[key] = {
                 "value": value,
                 "type": setting_type,
                 "updated_at": row["updated_at"]

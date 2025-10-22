@@ -76,7 +76,8 @@ class AlfredCore:
         
         # Configuracion desde variables de entorno (valores por defecto)
         # Las rutas de documentos ahora se gestionan desde la base de datos
-        self.chroma_db_path = os.getenv('ALFRED_CHROMA_PATH', './chroma_db')
+        from utils.paths import get_chroma_path
+        self.chroma_db_path = os.getenv('ALFRED_CHROMA_PATH', get_chroma_path())
         self.force_reload = os.getenv('ALFRED_FORCE_RELOAD', 'false').lower() == 'true'
         # qa_history_file OBSOLETO - ahora se usa SQLite (db_manager.py)
         
