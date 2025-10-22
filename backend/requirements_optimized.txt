@@ -255,7 +255,7 @@ tokenizers==0.22.1
 tqdm==4.67.1
 
 # === Transformers (Hugging Face) ===
-transformers==4.46.3
+transformers==4.57.1
 
 # === CLI Framework ===
 typer==0.19.2

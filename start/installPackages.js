@@ -398,6 +398,7 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
             '--disable-pip-version-check',
             '--retries', '3',
             '--timeout', '300',
+            '--force-reinstall',
             ...specsToInstall
         ], {
             cwd: backendPath,
@@ -545,7 +546,8 @@ function installSinglePackage(pythonCmd, packageSpec, backendPath, tempDir, inde
             '--progress-bar', 'off',
             '--disable-pip-version-check',
             '--retries', String(retries),
-            '--timeout', String(timeout)
+            '--timeout', String(timeout),
+            '--force-reinstall'
         ];
 
         if (indexUrl) {

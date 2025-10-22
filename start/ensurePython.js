@@ -341,6 +341,14 @@ function checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgr
         return match ? match[1].toLowerCase().replace(/-/g, '_').replace(/\./g, '_') : null;
     }).filter(Boolean);
 
+    const reqPkgNameVersions = {};
+    reqs.forEach(r => {
+        const match = r.match(/^([a-zA-Z0-9\-_.]+)==([0-9a-zA-Z._-]+)/);
+        if (match) {
+            reqPkgNameVersions[match[1].toLowerCase().replace(/-/g, '_').replace(/\./g, '_')] = match[2];
+        }
+    });
+
     const normalizedInstalledPkgs = installedPkgs
         .split('\n')
         .map(line => {
@@ -350,6 +358,12 @@ function checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgr
             });
         })
         .join('\n');
+    const checkVersion = (pkg, version) => {
+        const pattern = new RegExp(`^${pkg}==([0-9a-zA-Z._-]+)`, 'm');
+        const match = normalizedInstalledPkgs.match(pattern);
+        if (match) { return match[1] === version; }
+        else { return false; }
+    };
 
     // Verificar si hay paquetes faltantes
     const missing = reqPkgNames.filter(pkg => {
@@ -364,6 +378,32 @@ function checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgr
 
         if (foundComponent) { return false; }
         return true;
+    });
+
+    // Log de versiones instaladas
+    reqPkgNames.forEach(pkg => {
+        const pattern = new RegExp(`^${pkg}==([0-9a-zA-Z._-]+)`, 'm');
+        const match = normalizedInstalledPkgs.match(pattern);
+        if (match) {
+            console.log(`[DEPS] Paquete instalado: ${pkg}==${match[1]}`);
+            // Verificar si la version coincide con la requerida
+            const requiredVersion = reqPkgNameVersions[pkg];
+            if (requiredVersion && !checkVersion(pkg, requiredVersion)) {
+                console.warn(`[DEPS] Version no coincide para ${pkg}: ${match[1]} !== ${requiredVersion}`);
+                missing.push(pkg);
+            }
+        } else if (pkg === 'unstructured') {
+            // TRATO ESPECIAL para unstructured: buscar componentes
+            const componentPattern = new RegExp(`^unstructured_[a-z_]+==`, 'm');
+            const foundComponent = componentPattern.test(normalizedInstalledPkgs);
+            if (foundComponent) {
+                // Listar componentes encontrados
+                const components = normalizedInstalledPkgs.match(/^unstructured_[a-z_]+==.+/gm) || [];
+                components.forEach(comp => console.log(`  - ${comp}`));
+            }
+            else { missing.push(pkg); }
+        }
+        else { missing.push(pkg); }
     });
 
     return { reqPkgNames, missing, normalizedInstalledPkgs };
@@ -393,7 +433,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         await killPythonProcesses(venvPath);
 
         // Pequeña pausa para asegurar que no hay procesos bloqueantes
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Separar paquetes estables de problematicos
         const problematicConfig = loadProblematicPackages(backendPath);
@@ -427,11 +467,16 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
             );
         }
 
-        // FASE 3: Instalar paquetes GPU/CPU segun hardware
-        console.log('\n=== FASE 3: Instalando PyTorch (GPU/CPU) ===');
-        const gpuConfig = loadGPUPackages(backendPath);
-        const tempDir = getSafeTempDir(backendPath, isPackaged);
-        const failedGPU = await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
+        //Verificar si PyTorch ya esta instalado y funciona
+        const pyTorchInstalled = await verifyPyTorchInstallation(pythonCmd);
+        let failedGPU = [];
+        if (!pyTorchInstalled) {
+            // FASE 3: Instalar paquetes GPU/CPU segun hardware
+            console.log('\n=== FASE 3: Instalando PyTorch (GPU/CPU) ===');
+            const gpuConfig = loadGPUPackages(backendPath);
+            const tempDir = getSafeTempDir(backendPath, isPackaged);
+            failedGPU = await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
+        }
 
         // FASE 4: Reintentar todos los fallidos
         const allFailed = [...failedStable, ...failedProblematic, ...failedGPU];
@@ -440,13 +485,10 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
             console.log(`[deps-retry] Reintentando ${allFailed.length} paquetes...`);
             const tempDir = getSafeTempDir(backendPath, isPackaged);
             await retryFailedPackages(pythonCmd, backendPath, allFailed, tempDir, notifyProgress);
-        } else {
-            console.log('[deps-ready] Dependencias instaladas');
         }
 
         // Limpiar directorio temporal DESPUES de todos los reintentos
-        console.log('Limpiando directorio temporal...');
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar que pip libere archivos
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar que pip libere archivos
 
         try {
             const tempDir = getSafeTempDir(backendPath, isPackaged);
@@ -467,21 +509,15 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
         // Verificar si PyTorch ya esta instalado y funciona
         console.log('Verificando instalacion de PyTorch...');
         const pyTorchInstalled = await verifyPyTorchInstallation(pythonCmd);
-
-        if (pyTorchInstalled) {
-            console.log('[GPU-VERIFY] PyTorch ya esta correctamente instalado, no requiere reinstalacion');
-            // No actualizar aqui, main.js maneja el porcentaje final
-        } else {
+        if (!pyTorchInstalled) {
             console.log('[GPU-VERIFY] PyTorch no esta disponible, intentando instalar...');
             const tempDir = getSafeTempDir(backendPath, isPackaged);
             const gpuConfig = loadGPUPackages(backendPath);
-
             try {
                 await installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, notifyProgress);
             }
             catch (error) {
                 console.error('Error al instalar PyTorch:', error.message);
-                // No actualizar aqui, dejar que main.js maneje errores
             }
         }
     }
