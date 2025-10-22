@@ -272,7 +272,7 @@ tzdata==2024.2
 unstructured-client==0.42.3
 
 # === HTTP Client ===
-urllib3==2.2.3
+urllib3==2.5.0
 
 # === ASGI Server ===
 uvicorn==0.37.0
