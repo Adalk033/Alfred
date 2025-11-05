@@ -153,7 +153,7 @@ foreach ($pkg in $requiredPackages.Keys) {
 }
 
 Write-Host ""
-Write-Host "� Resumen de verificacion:" -ForegroundColor Cyan
+Write-Host "Resumen de verificacion:" -ForegroundColor Cyan
 Write-Host "   ✅ Actualizados: $upToDate paquetes" -ForegroundColor Green
 Write-Host "   ⚠️  Desactualizados: $($toUpdate.Count) paquetes" -ForegroundColor Yellow
 Write-Host "   ➕ Faltantes: $($toInstall.Count) paquetes" -ForegroundColor Cyan

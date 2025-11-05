@@ -295,13 +295,6 @@ if ($setupExe) {
     Write-Host "║           BUILD COMPLETADO EXITOSAMENTE              ║" -ForegroundColor Green
     Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
     Write-Host ""
-    
-    # Preguntar si desea abrir la carpeta dist
-    $openDist = Read-Host "Deseas abrir la carpeta dist? (s/n)"
-    if ($openDist -eq 's') {
-        Start-Process explorer.exe $distPath
-    }
-    
     exit 0
 } else {
     Write-Host "⚠️  Build completo pero no se encontro el instalador .exe" -ForegroundColor Yellow
