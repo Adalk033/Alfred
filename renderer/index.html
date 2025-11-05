@@ -34,7 +34,7 @@
             </div>
             <h2>Bienvenido a Alfred</h2>
             <p class="first-time-subtitle">Cuentanos un poco sobre ti (todo es opcional)</p>
-            
+
             <div class="first-time-content">
                 <div class="form-group">
                     <label for="welcomeName">Tu nombre</label>
@@ -50,13 +50,15 @@
                     <label>Foto de perfil</label>
                     <div class="profile-picture-upload">
                         <div class="profile-picture-preview" id="welcomeProfilePreview">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                                 <circle cx="12" cy="7" r="4"></circle>
                             </svg>
                         </div>
                         <input type="file" id="welcomeProfileInput" accept="image/*" style="display: none;">
-                        <button class="button secondary small" onclick="document.getElementById('welcomeProfileInput').click()">
+                        <button class="button secondary small"
+                            onclick="document.getElementById('welcomeProfileInput').click()">
                             Seleccionar foto
                         </button>
                     </div>
@@ -94,18 +96,20 @@
             </div>
             <h2>Bienvenido a Alfred</h2>
             <p class="first-time-subtitle">Configuracion inicial de seguridad</p>
-            
+
             <div class="first-time-content">
                 <div class="info-card">
                     <div class="info-card-icon success">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                         </svg>
                     </div>
                     <div>
                         <h3>Cifrado de datos</h3>
-                        <p>Protege tus conversaciones y datos personales con cifrado AES-256. Si pierdes la clave, no podras recuperar tu informacion.</p>
+                        <p>Protege tus conversaciones y datos personales con cifrado AES-256. Si pierdes la clave, no
+                            podras recuperar tu informacion.</p>
                     </div>
                 </div>
             </div>
@@ -206,25 +210,29 @@
                         <div class="settings-menu-items">
                             <button class="settings-menu-item mode-menu-item active" data-mode="work">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z" />
+                                    <path
+                                        d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z" />
                                 </svg>
                                 <span>Work</span>
                             </button>
                             <button class="settings-menu-item mode-menu-item" data-mode="focus">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" />
+                                    <path
+                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" />
                                 </svg>
                                 <span>Focus</span>
                             </button>
                             <button class="settings-menu-item mode-menu-item" data-mode="personal">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                                    <path
+                                        d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                                 </svg>
                                 <span>Personal</span>
                             </button>
                             <button class="settings-menu-item mode-menu-item" data-mode="creative">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z" />
+                                    <path
+                                        d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z" />
                                 </svg>
                                 <span>Creative</span>
                             </button>
@@ -317,7 +325,7 @@
                             <p class="welcome-subtitle">Tu asistente inteligente personal</p>
                         </div>
                     </div>
-                    
+
                     <div class="welcome-features">
                         <div class="feature-card">
                             <div class="feature-icon">📚</div>
@@ -335,7 +343,7 @@
                             <p>Recuerdo el contexto de nuestras conversaciones anteriores</p>
                         </div>
                     </div>
-                    
+
                     <div class="welcome-cta">
                         <p>¿En qué puedo ayudarte?</p>
                     </div>
@@ -357,11 +365,14 @@
                         autocomplete="off"></textarea>
                     <div class="input-actions">
                         <button id="attachFileBtn" class="icon-button" title="Adjuntar documento temporal">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                             </svg>
                         </button>
-                        <input type="file" id="fileInput" style="display: none;" accept=".txt,.pdf,.docx,.xlsx,.pptx,.md,.json,.xml,.csv" />
+                        <input type="file" id="fileInput" style="display: none;"
+                            accept=".txt,.pdf,.docx,.xlsx,.pptx,.md,.json,.xml,.csv" />
                         <button id="searchDocsBtn" class="mode-toggle-btn" title="Buscar en documentos">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path
@@ -387,14 +398,15 @@
                 <div class="attached-file-indicator" id="attachedFileIndicator" style="display: none;">
                     <div class="attached-file-info">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z"/>
+                            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z" />
                         </svg>
                         <span class="file-name" id="attachedFileName"></span>
                         <span class="file-size" id="attachedFileSize"></span>
                     </div>
                     <button class="remove-file-btn" id="removeFileBtn" title="Quitar archivo">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 6L6 18M6 6l12 12"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
@@ -419,14 +431,16 @@
                 <div class="settings-sidebar">
                     <nav class="settings-nav">
                         <button class="settings-nav-item active" data-section="perfil">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                                 <circle cx="12" cy="7" r="4"></circle>
                             </svg>
                             <span>Perfil</span>
                         </button>
                         <button class="settings-nav-item" data-section="modelos">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                                 <line x1="8" y1="21" x2="16" y2="21"></line>
                                 <line x1="12" y1="17" x2="12" y2="21"></line>
@@ -434,20 +448,26 @@
                             <span>Modelos</span>
                         </button>
                         <button class="settings-nav-item" data-section="personalizacion">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2v6M12 18v4M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M18 12h4M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"></path>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path>
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                                </path>
                             </svg>
                             <span>Personalización</span>
                         </button>
                         <button class="settings-nav-item" data-section="documentos">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                                 <polyline points="13 2 13 9 20 9"></polyline>
                             </svg>
                             <span>Documentos</span>
                         </button>
                         <button class="settings-nav-item" data-section="aplicaciones">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <rect x="3" y="3" width="7" height="7"></rect>
                                 <rect x="14" y="3" width="7" height="7"></rect>
                                 <rect x="14" y="14" width="7" height="7"></rect>
@@ -456,7 +476,8 @@
                             <span>Aplicaciones</span>
                         </button>
                         <button class="settings-nav-item" data-section="seguridad">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                             </svg>
                             <span>Seguridad</span>
@@ -469,7 +490,7 @@
                     <!-- Seccion Perfil -->
                     <div class="settings-section active" data-section="perfil">
                         <h3 class="section-title">Perfil</h3>
-                        
+
                         <!-- Informacion personal -->
                         <div class="setting-group __name">
                             <label for="userName">Nombre</label>
@@ -486,7 +507,7 @@
                         <div class="setting-group">
                             <button class="button primary" id="saveUserInfoBtn">Guardar informacion personal</button>
                         </div>
-                        
+
                         <div class="setting-group profile-section">
                             <label>Foto de perfil</label>
                             <div class="profile-picture-container">
@@ -518,24 +539,24 @@
                             </div>
                         </div>
 
-                        <div class="setting-group">
+                        <div class="setting-group none">
                             <label for="serverUrl">URL del servidor Alfred</label>
                             <input type="text" id="serverUrl" value="http://127.0.0.1:8000" />
                         </div>
 
-                        <div class="setting-group">
+                        <div class="setting-group none">
                             <label>
                                 <input type="checkbox" id="autoSave" checked />
                                 Guardar conversaciones automaticamente
                             </label>
                         </div>
-                        <div class="setting-group">
+                        <div class="setting-group none">
                             <label>
                                 <input type="checkbox" id="useHistory" checked />
                                 Buscar en historial primero
                             </label>
                         </div>
-                        <div class="setting-group">
+                        <div class="setting-group none">
                             <label>
                                 <input type="checkbox" id="soundEnabled" />
                                 Habilitar sonidos
@@ -552,7 +573,8 @@
                             <div class="models-header">
                                 <label>Modelos instalados</label>
                                 <button class="button secondary" id="refreshModelsBtn">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <polyline points="23 4 23 10 17 10"></polyline>
                                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                                     </svg>
@@ -570,9 +592,11 @@
                         <div class="setting-group">
                             <label for="downloadModel">Descargar modelo</label>
                             <div class="download-model-controls">
-                                <input type="text" id="downloadModel" placeholder="Nombre del modelo (ej: llama3.2:3b, mistral)" />
+                                <input type="text" id="downloadModel"
+                                    placeholder="Nombre del modelo (ej: llama3.2:3b, mistral)" />
                                 <button class="button primary" id="downloadModelBtn">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                         <polyline points="7 10 12 15 17 10"></polyline>
                                         <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -581,7 +605,8 @@
                                 </button>
                             </div>
                             <p class="setting-description">
-                                Ingresa el nombre del modelo de Ollama que deseas descargar. Ejemplos: llama3.2:3b, mistral, gemma2:9b
+                                Ingresa el nombre del modelo de Ollama que deseas descargar. Ejemplos: llama3.2:3b,
+                                mistral, gemma2:9b
                             </p>
                             <!-- Lista de descargas en progreso -->
                             <div id="downloadProgress" class="download-progress-container" style="display: none;">
@@ -642,7 +667,8 @@
 
                         <div class="setting-group">
                             <label for="customInstructions">Instrucciones personalizadas</label>
-                            <textarea id="customInstructions" rows="4" placeholder="Instrucciones especificas para el asistente..."></textarea>
+                            <textarea id="customInstructions" rows="4"
+                                placeholder="Instrucciones especificas para el asistente..."></textarea>
                             <p class="setting-description">
                                 Instrucciones que el asistente seguira en todas las conversaciones.
                             </p>
@@ -650,7 +676,8 @@
 
                         <div class="setting-group">
                             <label for="userOccupation">Ocupacion</label>
-                            <input type="text" id="userOccupation" placeholder="Desarrollador, Diseñador, Estudiante..." />
+                            <input type="text" id="userOccupation"
+                                placeholder="Desarrollador, Diseñador, Estudiante..." />
                             <p class="setting-description">
                                 Ayuda al asistente a entender tu contexto profesional.
                             </p>
@@ -658,7 +685,8 @@
 
                         <div class="setting-group">
                             <label for="aboutUser">Acerca de ti</label>
-                            <textarea id="aboutUser" rows="3" placeholder="Cuentale al asistente sobre ti, tus intereses, objetivos..."></textarea>
+                            <textarea id="aboutUser" rows="3"
+                                placeholder="Cuentale al asistente sobre ti, tus intereses, objetivos..."></textarea>
                             <p class="setting-description">
                                 Esta informacion ayudara al asistente a personalizar sus respuestas.
                             </p>
@@ -672,21 +700,23 @@
                     <!-- Seccion Documentos -->
                     <div class="settings-section" data-section="documentos">
                         <h3 class="section-title">Documentos</h3>
-                        <p class="section-description">Gestiona las rutas de documentos para el sistema de busqueda RAG y la indexacion de embeddings.</p>
+                        <p class="section-description">Gestiona las rutas de documentos para el sistema de busqueda RAG
+                            y la indexacion de embeddings.</p>
 
                         <!-- Paths de documentos -->
                         <div class="setting-group">
                             <div class="setting-header">
                                 <label>Rutas de documentos</label>
                                 <button class="button-icon" id="addDocPathBtn" title="Agregar nueva ruta">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <line x1="12" y1="5" x2="12" y2="19"></line>
                                         <line x1="5" y1="12" x2="19" y2="12"></line>
                                     </svg>
                                 </button>
                             </div>
                             <small>Carpetas donde Alfred buscara documentos para responder tus preguntas</small>
-                            
+
                             <div id="docPathsList" class="doc-paths-list">
                                 <!-- Lista dinamica de paths -->
                             </div>
@@ -720,21 +750,26 @@
                             <label>Acciones de indexacion</label>
                             <div class="action-buttons">
                                 <button class="button primary" id="reindexDocsBtn">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <polyline points="23 4 23 10 17 10"></polyline>
                                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                                     </svg>
                                     Reindexar documentos
                                 </button>
                                 <button class="button secondary" id="clearIndexBtn">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <polyline points="3 6 5 6 21 6"></polyline>
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        <path
+                                            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                        </path>
                                     </svg>
                                     Limpiar indice
                                 </button>
                             </div>
-                            <small>La reindexacion puede tardar varios minutos dependiendo del numero de documentos</small>
+                            <small>La reindexacion puede tardar varios minutos dependiendo del numero de
+                                documentos</small>
                         </div>
 
                         <!-- Configuracion avanzada -->
@@ -747,12 +782,14 @@
                                 </div>
                                 <div class="setting-row">
                                     <span>Tamano de chunk:</span>
-                                    <input type="number" id="chunkSize" value="1000" min="100" max="5000" step="100" class="input-small">
+                                    <input type="number" id="chunkSize" value="1000" min="100" max="5000" step="100"
+                                        class="input-small">
                                     <small>caracteres</small>
                                 </div>
                                 <div class="setting-row">
                                     <span>Overlap de chunks:</span>
-                                    <input type="number" id="chunkOverlap" value="200" min="0" max="1000" step="50" class="input-small">
+                                    <input type="number" id="chunkOverlap" value="200" min="0" max="1000" step="50"
+                                        class="input-small">
                                     <small>caracteres</small>
                                 </div>
                             </div>
@@ -762,86 +799,13 @@
                     <!-- Seccion Aplicaciones -->
                     <div class="settings-section" data-section="aplicaciones">
                         <h3 class="section-title">Aplicaciones conectadas</h3>
-                        <p class="section-description">Conecta tus aplicaciones favoritas para extender las capacidades de Alfred.</p>
+                        <p class="section-description">Conecta tus aplicaciones favoritas para extender las capacidades
+                            de Alfred.</p>
 
                         <div class="apps-grid">
-                            <div class="app-card">
-                                <div class="app-icon">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z"/>
-                                    </svg>
-                                </div>
-                                <div class="app-info">
-                                    <h4>Google Calendar</h4>
-                                    <p>Gestiona tu agenda y eventos</p>
-                                </div>
-                                <button class="button secondary app-connect-btn">Conectar</button>
-                            </div>
-
-                            <div class="app-card">
-                                <div class="app-icon">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
-                                    </svg>
-                                </div>
-                                <div class="app-info">
-                                    <h4>Tidal</h4>
-                                    <p>Control de musica y playlists</p>
-                                </div>
-                                <button class="button secondary app-connect-btn">Conectar</button>
-                            </div>
-
-                            <div class="app-card">
-                                <div class="app-icon">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 7h14v2H5zm0 4h14v2H5zm0 4h7v2H5z"/>
-                                    </svg>
-                                </div>
-                                <div class="app-info">
-                                    <h4>Notion</h4>
-                                    <p>Sincroniza tus notas y tareas</p>
-                                </div>
-                                <button class="button secondary app-connect-btn">Conectar</button>
-                            </div>
-
-                            <div class="app-card">
-                                <div class="app-icon">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/>
-                                    </svg>
-                                </div>
-                                <div class="app-info">
-                                    <h4>Gmail</h4>
-                                    <p>Gestiona tu correo electronico</p>
-                                </div>
-                                <button class="button secondary app-connect-btn">Conectar</button>
-                            </div>
-
-                            <div class="app-card">
-                                <div class="app-icon">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
-                                    </svg>
-                                </div>
-                                <div class="app-info">
-                                    <h4>Trello</h4>
-                                    <p>Organiza tus proyectos</p>
-                                </div>
-                                <button class="button secondary app-connect-btn">Conectar</button>
-                            </div>
-
-                            <div class="app-card">
-                                <div class="app-icon">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                    </svg>
-                                </div>
-                                <div class="app-info">
-                                    <h4>Slack</h4>
-                                    <p>Integracion con tu equipo</p>
-                                </div>
-                                <button class="button secondary app-connect-btn">Conectar</button>
-                            </div>
+                            <p
+                                style="text-align: center; color: var(--text-secondary); font-size: 1.1em; padding: 2rem; grid-column: 1 / -1;">
+                                Proximamente</p>
                         </div>
                     </div>
 
@@ -853,19 +817,22 @@
                         <!-- Alerta de primera configuracion -->
                         <div class="security-first-setup" id="securityFirstSetup" style="display: none;">
                             <div class="alert alert-info">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
                                     <circle cx="12" cy="12" r="10"></circle>
                                     <line x1="12" y1="16" x2="12" y2="12"></line>
                                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                                 </svg>
                                 <div>
                                     <h4>Configuracion de seguridad</h4>
-                                    <p>Alfred cifrara tus conversaciones y datos personales para mayor seguridad. Guarda tu clave de cifrado en un lugar seguro.</p>
+                                    <p>Alfred cifrara tus conversaciones y datos personales para mayor seguridad. Guarda
+                                        tu clave de cifrado en un lugar seguro.</p>
                                 </div>
                             </div>
                             <div class="first-setup-options">
                                 <button class="button primary" id="enableEncryptionBtn">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                     </svg>
@@ -879,7 +846,8 @@
                             <div class="setting-group">
                                 <div class="security-status-header">
                                     <div class="status-badge" id="encryptionStatusBadge">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                         </svg>
@@ -892,35 +860,44 @@
                             <div class="setting-group" id="encryptionKeyGroup">
                                 <label>Clave de cifrado</label>
                                 <div class="encryption-key-container">
-                                    <input type="password" id="encryptionKeyField" readonly class="encryption-key-field" value="••••••••••••••••••••••••••••••••">
-                                    <button class="icon-button" id="toggleEncryptionKeyBtn" title="Mostrar/Ocultar clave">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="eyeIcon">
+                                    <input type="password" id="encryptionKeyField" readonly class="encryption-key-field"
+                                        value="••••••••••••••••••••••••••••••••">
+                                    <button class="icon-button" id="toggleEncryptionKeyBtn"
+                                        title="Mostrar/Ocultar clave">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" id="eyeIcon">
                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                             <circle cx="12" cy="12" r="3"></circle>
                                         </svg>
                                     </button>
                                     <button class="icon-button" id="reloadEncryptionKeyBtn" title="Recargar clave">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <polyline points="23 4 23 10 17 10"></polyline>
                                             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                                         </svg>
                                     </button>
                                     <button class="icon-button" id="copyEncryptionKeyBtn" title="Copiar clave">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
                                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                                         </svg>
                                     </button>
                                 </div>
                                 <div class="alert alert-warning">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path
+                                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                                        </path>
                                         <line x1="12" y1="9" x2="12" y2="13"></line>
                                         <line x1="12" y1="17" x2="12.01" y2="17"></line>
                                     </svg>
                                     <div>
                                         <strong>IMPORTANTE: Guarda esta clave en un lugar seguro</strong>
-                                        <p>Si pierdes esta clave, no podras recuperar tus datos cifrados. No podemos recuperarla por ti.</p>
+                                        <p>Si pierdes esta clave, no podras recuperar tus datos cifrados. No podemos
+                                            recuperarla por ti.</p>
                                     </div>
                                 </div>
                             </div>
@@ -937,19 +914,22 @@
                             <h4>¿Que se cifra?</h4>
                             <ul class="security-info-list">
                                 <li>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
                                     Conversaciones y mensajes
                                 </li>
                                 <li>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
                                     Datos personales extraidos (RFC, CURP, NSS, etc.)
                                 </li>
                                 <li>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <polyline points="20 6 9 17 4 12"></polyline>
                                     </svg>
                                     Historial de consultas y respuestas
@@ -961,26 +941,26 @@
                             <h4>¿Que NO se cifra?</h4>
                             <ul class="security-info-list">
                                 <li>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
                                     </svg>
                                     Documentos indexados (permanecen en su ubicacion original)
                                 </li>
                                 <li>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
                                     </svg>
                                     Indices de vectores (no contienen texto completo)
                                 </li>
                                 <li>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
                                     </svg>
                                     Configuracion de la aplicacion
                                 </li>
