@@ -63,7 +63,8 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, 'preload.js'),
+            devTools: !isPackaged // Deshabilitar DevTools en produccion
         },
         backgroundColor: '#1e1e1e',
         icon: path.join(__dirname, 'assets', 'icon.png'),
@@ -102,9 +103,24 @@ function createWindow() {
         if (mainWindow.isVisible()) { setTimeout(() => { checkAndStartBackend_wrapper(); }, 500); }
     });
 
-    // Abrir DevTools en desarrollo
-    if (process.argv.includes('--inspect')) {
+    // Abrir DevTools solo en desarrollo
+    if (!isPackaged && process.argv.includes('--inspect')) {
         mainWindow.webContents.openDevTools();
+    }
+
+    // Bloquear atajos de teclado para abrir DevTools en produccion
+    if (isPackaged) {
+        mainWindow.webContents.on('before-input-event', (event, input) => {
+            // Bloquear F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
+            if (
+                input.key === 'F12' ||
+                (input.control && input.shift && input.key === 'I') ||
+                (input.control && input.shift && input.key === 'J') ||
+                (input.control && input.shift && input.key === 'C')
+            ) {
+                event.preventDefault();
+            }
+        });
     }
 
     mainWindow.on('closed', () => {
@@ -173,7 +189,7 @@ app.on('before-quit', () => {
 function createProgressNotifier() {
     let lastNotifiedPercent = 0;
     const minNotificationGap = 8;  // Minimo incremento para notificar
-    
+
     return (eventId, message, percent) => {
         // Si es error (0%), notificar siempre
         if (percent === 0) {
@@ -181,17 +197,17 @@ function createProgressNotifier() {
             notifyInstallationProgress(eventId, message, percent);
             return;
         }
-        
+
         // Si baja, silenciar (no notificar)
         if (percent <= lastNotifiedPercent) {
             return;
         }
-        
+
         // Si el incremento es pequeño (<8%), silenciar
         if (percent - lastNotifiedPercent < minNotificationGap) {
             return;
         }
-        
+
         // Notificar solo cuando hay incremento significativo
         lastNotifiedPercent = percent;
         notifyInstallationProgress(eventId, message, percent);
@@ -203,7 +219,7 @@ async function initializeAppWithProgress() {
     try {
         // Crear notificador de progreso ordenado
         const progressNotifier = createProgressNotifier();
-        
+
         // PASO 1: Verificar/Instalar Python (0-15%)
         progressNotifier('python-check', 'Verificando Python...', 5);
         const devMode = !isPackaged;
