@@ -42,14 +42,31 @@ if (Test-Path $markerFile) {
     }
     
     Write-Host ""
-    $reinstall = Read-Host "Deseas reinstalar todos los paquetes? (s/n)"
+    Write-Host "Opciones:" -ForegroundColor Cyan
+    Write-Host "  1. Verificar y actualizar paquetes desactualizados (recomendado)" -ForegroundColor White
+    Write-Host "  2. Reinstalar todos los paquetes desde cero" -ForegroundColor White
+    Write-Host "  3. Salir (usar paquetes existentes)" -ForegroundColor White
+    Write-Host ""
+    $option = Read-Host "Selecciona una opcion (1/2/3)"
     
-    if ($reinstall -ne 's') {
+    if ($option -eq '3') {
         Write-Host "`n✅ Usando paquetes existentes" -ForegroundColor Green
         exit 0
     }
     
-    Write-Host "`n⚙️  Reinstalando paquetes..." -ForegroundColor Yellow
+    if ($option -eq '1') {
+        Write-Host "`n⚙️  Verificando y actualizando paquetes..." -ForegroundColor Yellow
+        # Continua con la verificacion normal
+    }
+    elseif ($option -eq '2') {
+        Write-Host "`n⚙️  Reinstalando todos los paquetes..." -ForegroundColor Yellow
+        # Borrar el marcador para forzar instalacion completa
+        Remove-Item $markerFile -Force -ErrorAction SilentlyContinue
+    }
+    else {
+        Write-Host "`n❌ Opcion invalida" -ForegroundColor Red
+        exit 1
+    }
 }
 
 Write-Host "🔍 Informacion del entorno:" -ForegroundColor Cyan
@@ -74,21 +91,108 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "✅ pip actualizado" -ForegroundColor Green
 Write-Host ""
 
-# Instalar paquetes desde requirements.txt
-Write-Host "📦 Instalando paquetes desde requirements.txt..." -ForegroundColor Cyan
+# Verificar paquetes instalados vs requirements.txt
+Write-Host "🔍 Verificando paquetes instalados..." -ForegroundColor Cyan
+
+$installedPackages = @{}
+try {
+    $pipFreezeOutput = & $pythonPortableExe -m pip freeze 2>&1
+    foreach ($line in $pipFreezeOutput) {
+        if ($line -match '^([a-zA-Z0-9_.-]+)==(.+)$') {
+            $pkgName = $matches[1].ToLower().Replace('-', '_').Replace('.', '_')
+            $pkgVersion = $matches[2]
+            $installedPackages[$pkgName] = $pkgVersion
+        }
+    }
+    Write-Host "   Paquetes instalados actualmente: $($installedPackages.Count)" -ForegroundColor Gray
+} catch {
+    Write-Host "   No hay paquetes instalados todavia" -ForegroundColor Gray
+}
+
+# Leer requirements.txt y extraer paquetes requeridos
+$requiredPackages = @{}
+$requirementsContent = Get-Content $requirementsFile | Where-Object { 
+    $_.Trim() -and -not $_.Trim().StartsWith('#') 
+}
+
+foreach ($line in $requirementsContent) {
+    if ($line -match '^([a-zA-Z0-9_.-]+)==([0-9a-zA-Z._-]+)') {
+        $pkgName = $matches[1].ToLower().Replace('-', '_').Replace('.', '_')
+        $pkgVersion = $matches[2]
+        $requiredPackages[$pkgName] = @{
+            spec = $line.Trim()
+            version = $pkgVersion
+        }
+    }
+}
+
+Write-Host "   Paquetes requeridos en requirements.txt: $($requiredPackages.Count)" -ForegroundColor Gray
+Write-Host ""
+
+# Comparar versiones y determinar que instalar/actualizar
+$toInstall = @()
+$toUpdate = @()
+$upToDate = 0
+
+foreach ($pkg in $requiredPackages.Keys) {
+    $requiredVersion = $requiredPackages[$pkg].version
+    $requiredSpec = $requiredPackages[$pkg].spec
+    
+    if ($installedPackages.ContainsKey($pkg)) {
+        $installedVersion = $installedPackages[$pkg]
+        if ($installedVersion -eq $requiredVersion) {
+            $upToDate++
+        } else {
+            Write-Host "   ⚠️  $pkg : $installedVersion → $requiredVersion (desactualizado)" -ForegroundColor Yellow
+            $toUpdate += $requiredSpec
+        }
+    } else {
+        Write-Host "   ➕ $pkg : $requiredVersion (faltante)" -ForegroundColor Cyan
+        $toInstall += $requiredSpec
+    }
+}
+
+Write-Host ""
+Write-Host "� Resumen de verificacion:" -ForegroundColor Cyan
+Write-Host "   ✅ Actualizados: $upToDate paquetes" -ForegroundColor Green
+Write-Host "   ⚠️  Desactualizados: $($toUpdate.Count) paquetes" -ForegroundColor Yellow
+Write-Host "   ➕ Faltantes: $($toInstall.Count) paquetes" -ForegroundColor Cyan
+Write-Host ""
+
+# Combinar todos los paquetes que necesitan instalacion/actualizacion
+$packagesToProcess = $toInstall + $toUpdate
+
+if ($packagesToProcess.Count -eq 0) {
+    Write-Host "✅ Todos los paquetes estan instalados con las versiones correctas" -ForegroundColor Green
+    # Actualizar archivo marcador de todas formas
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $markerContent = @"
+Verificacion completada: $timestamp
+Paquetes verificados: $($requiredPackages.Count)
+Estado: Todos actualizados
+Python version: $pythonVersion
+"@
+    Set-Content -Path $markerFile -Value $markerContent -Force
+    Write-Host ""
+    exit 0
+}
+
+# Instalar/Actualizar paquetes
+Write-Host "📦 Instalando/actualizando $($packagesToProcess.Count) paquetes..." -ForegroundColor Cyan
 Write-Host "   Esto puede tardar 10-15 minutos..." -ForegroundColor Gray
 Write-Host "   Por favor espera..." -ForegroundColor Gray
 Write-Host ""
 
 $startTime = Get-Date
 
-& $pythonPortableExe -m pip install -r $requirementsFile
+# Instalar con --force-reinstall para asegurar versiones correctas
+& $pythonPortableExe -m pip install --force-reinstall --no-cache-dir -r $requirementsFile
 
 $endTime = Get-Date
 $duration = ($endTime - $startTime).TotalMinutes
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "`n❌ Error al instalar paquetes" -ForegroundColor Red
+    Write-Host "`n❌ Error al instalar/actualizar paquetes" -ForegroundColor Red
     exit 1
 }
 

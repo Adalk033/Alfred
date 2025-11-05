@@ -1,8 +1,9 @@
 # ============================================
 # ALFRED BACKEND - REQUIREMENTS
 # ============================================
-# Total: ~186 paquetes (sin PyTorch)
-# PyTorch se instala automáticamente según GPU detectada
+# Total: ~185 paquetes (sin PyTorch)
+# PyTorch se instala automaticamente segun GPU detectada
+# Nota: kubernetes removido por conflicto con urllib3
 
 # === Core Dependencies ===
 accelerate==1.10.1
@@ -83,9 +84,6 @@ jsonschema-specifications==2024.10.1
 
 # === Math & Scientific ===
 kiwisolver==1.4.9
-
-# === Kubernetes (Opcional) ===
-kubernetes==34.1.0
 
 # === LangChain Ecosystem ===
 langchain==0.3.27

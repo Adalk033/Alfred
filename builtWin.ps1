@@ -188,37 +188,31 @@ if (-not (Test-Path $markerFile)) {
     Write-Host "   ✓ Build empaqueta: Python base + todos los paquetes instalados" -ForegroundColor Green
     Write-Host "   ✓ Usuario recibe: App completa lista para usar (~500 MB)" -ForegroundColor Green
     Write-Host ""
-    Write-Host "   Instalando 167 paquetes (~414 MB)..." -ForegroundColor White
+    Write-Host "   Instalando ~185 paquetes (~414 MB)..." -ForegroundColor White
     Write-Host "   Tiempo estimado: 10-15 minutos" -ForegroundColor Gray
     Write-Host ""
+} else {
+    Write-Host "⚙️  VERIFICACION DE PAQUETES" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "   ℹ️  Se verificaran las versiones instaladas" -ForegroundColor Cyan
+    Write-Host "   ✓ Detecta: Paquetes faltantes o desactualizados" -ForegroundColor Yellow
+    Write-Host "   ✓ Actualiza: Solo los paquetes necesarios" -ForegroundColor Green
+    Write-Host "   ✓ Mantiene: Las versiones correctas de requirements.txt" -ForegroundColor Green
+    Write-Host ""
+}
+
+if (Test-Path ".\install-python-packages.ps1") {
+    & ".\install-python-packages.ps1"
     
-    if (Test-Path ".\install-python-packages.ps1") {
-        & ".\install-python-packages.ps1"
-        
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "`n❌ ERROR: Fallo la instalacion de paquetes Python" -ForegroundColor Red
-            pause
-            exit 1
-        }
-    } else {
-        Write-Host "❌ ERROR: install-python-packages.ps1 no encontrado" -ForegroundColor Red
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "`n❌ ERROR: Fallo la instalacion/verificacion de paquetes Python" -ForegroundColor Red
         pause
         exit 1
     }
 } else {
-    Write-Host "✅ Paquetes Python ya instalados" -ForegroundColor Green
-    
-    $markerContent = Get-Content $markerFile -Raw -ErrorAction SilentlyContinue
-    if ($markerContent) {
-        Write-Host ""
-        Write-Host $markerContent -ForegroundColor Gray
-    }
-    
-    Write-Host ""
-    Write-Host "   ℹ️  ESTRATEGIA BUILD:" -ForegroundColor Cyan
-    Write-Host "   ✓ Git ignora: site-packages/ (no crece el repositorio)" -ForegroundColor Yellow
-    Write-Host "   ✓ Build empaqueta: Todos los paquetes instalados" -ForegroundColor Green
-    Write-Host "   ✓ Usuario recibe: App lista, sin instalaciones adicionales" -ForegroundColor Green
+    Write-Host "❌ ERROR: install-python-packages.ps1 no encontrado" -ForegroundColor Red
+    pause
+    exit 1
 }
 
 # ============================================
@@ -252,7 +246,7 @@ Write-Host "╚═════════════════════�
 Write-Host "🔨 Empaquetando aplicacion..." -ForegroundColor Cyan
 Write-Host ""
 Write-Host "   Tiempo estimado: 10-15 minutos" -ForegroundColor Gray
-Write-Host "   Tamano final: ~500 MB (Python + 167 paquetes pre-instalados)" -ForegroundColor Gray
+Write-Host "   Tamano final: ~500 MB (Python + 185 paquetes pre-instalados)" -ForegroundColor Gray
 Write-Host "   Por favor espera..." -ForegroundColor Gray
 Write-Host ""
 
@@ -293,7 +287,7 @@ if ($setupExe) {
     
     Write-Host "🚀 Build COMPLETO con dependencias pre-instaladas" -ForegroundColor Green
     Write-Host "   - Python base: ~25 MB" -ForegroundColor White
-    Write-Host "   - Paquetes incluidos: 167 (~414 MB)" -ForegroundColor Green
+    Write-Host "   - Paquetes incluidos: 185 (~414 MB)" -ForegroundColor Green
     Write-Host "   - Usuario final: App lista para usar, SIN instalaciones adicionales" -ForegroundColor Green
     Write-Host "   - Repositorio Git: Solo Python base (paquetes ignorados)" -ForegroundColor Yellow
     Write-Host ""
