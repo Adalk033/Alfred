@@ -252,7 +252,7 @@ Write-Host ""
 
 $buildStartTime = Get-Date
 
-yarn app:dist
+yarn run build:win
 
 $buildEndTime = Get-Date
 $buildDuration = ($buildEndTime - $buildStartTime).TotalMinutes
