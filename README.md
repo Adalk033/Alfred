@@ -6,7 +6,7 @@
 ![Electron](https://img.shields.io/badge/Electron-38.2.2-blue)
 ![Python](https://img.shields.io/badge/Python-3.12+-green)
 ![Node.js](https://img.shields.io/badge/Node.js-22.20.0+-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 
 ---
 
@@ -730,7 +730,7 @@ Ver [ESTRUCTURA_ESTANDARIZADA.md](./ESTRUCTURA_ESTANDARIZADA.md) para más detal
 
 ## Licencia
 
-MIT License - Ver [backend/docs/LICENSE](backend/docs/LICENSE)
+Apache License 2.0 - Ver [LICENSE.txt](LICENSE.txt)
 
 ---
 
