@@ -60,7 +60,6 @@
           "!**/*.md",
           "!**/*.gitignore",
           "!**/*.gitattributes",
-          "!**/*.txt",
           "!**/*.json",
           "!**/*.logs"
         ]
