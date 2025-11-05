@@ -64,7 +64,7 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
-            devTools: !isPackaged // Deshabilitar DevTools en produccion
+            // devTools: !isPackaged // Deshabilitar DevTools en produccion
         },
         backgroundColor: '#1e1e1e',
         icon: path.join(__dirname, 'assets', 'icon.png'),
@@ -118,7 +118,7 @@ function createWindow() {
                 (input.control && input.shift && input.key === 'J') ||
                 (input.control && input.shift && input.key === 'C')
             ) {
-                event.preventDefault();
+                // event.preventDefault();
             }
         });
     }

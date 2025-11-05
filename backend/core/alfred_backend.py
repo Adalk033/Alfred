@@ -17,6 +17,43 @@ sys.path.insert(0, str(backend_root / "gpu"))
 sys.path.insert(0, str(backend_root / "utils"))
 
 from utils.logger import get_logger
+
+# ============================================
+# AUTO-REPARACION DE DEPENDENCIAS
+# ============================================
+try:
+    from utils.auto_repair import run_auto_repair, get_repair_status
+    
+    logger_temp = get_logger("auto_repair")
+    logger_temp.info("[STARTUP] Verificando integridad del sistema...")
+    
+    # Verificar estado antes de continuar
+    repair_status = get_repair_status()
+    
+    if repair_status['overall'] == 'needs_repair':
+        logger_temp.warning("[STARTUP] Detectados problemas - Aplicando correcciones automaticas...")
+        
+        # Ejecutar reparacion
+        success = run_auto_repair()
+        
+        if not success:
+            logger_temp.error("[STARTUP] Correcciones aplicadas - REINICIA LA APLICACION")
+            print("\n" + "="*60)
+            print("ATENCION: Se corrigieron problemas criticos")
+            print("Por favor REINICIA Alfred para aplicar los cambios")
+            print("="*60 + "\n")
+            sys.exit(3)  # Codigo 3 = necesita reinicio
+    else:
+        logger_temp.info("[STARTUP] Sistema OK - Continuando inicio...")
+        
+except Exception as e:
+    # Si falla la auto-reparacion, continuar con advertencia
+    print(f"[STARTUP WARNING] No se pudo ejecutar auto-reparacion: {e}")
+
+# ============================================
+# CONTINUACION DEL INICIO NORMAL
+# ============================================
+
 from db_manager import init_db
 import db_manager
 

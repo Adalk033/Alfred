@@ -1,6 +1,6 @@
 {
   "name": "alfred",
-  "version": "0.0.13",
+  "version": "0.0.16",
   "description": "Alfred - Asistente Personal Inteligente con interfaz gráfica",
   "main": "main.js",
   "scripts": {
@@ -23,7 +23,7 @@
   "author": "Adalk033",
   "license": "MIT",
   "devDependencies": {
-    "electron": "38.2.2",
+    "electron": "^39.1.0",
     "electron-builder": "26.0.12"
   },
   "build": {
@@ -73,7 +73,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icon.icns",
@@ -84,7 +87,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.png",

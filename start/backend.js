@@ -374,6 +374,42 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
 
         console.log(`[BACKEND] Proceso finalizado con codigo ${code}`);
 
+        // Codigo 3 = Auto-reparacion aplicada, reiniciar automaticamente
+        if (code === 3) {
+            console.log('[BACKEND] Auto-reparacion completada. Reiniciando backend automaticamente...');
+            logStream.write(`Auto-reparacion detectada, reiniciando...\n`);
+            
+            // Limpiar estado del proceso actual
+            if (processState) {
+                processState.process = null;
+                processState.isStartedByElectron = false;
+            }
+            
+            // Esperar 2 segundos antes de reiniciar
+            setTimeout(() => {
+                console.log('[BACKEND] Iniciando backend despues de auto-reparacion...');
+                if (notifyProgress) {
+                    notifyProgress('Reiniciando backend despues de reparacion automatica...');
+                }
+                
+                // Reiniciar el backend con la misma configuracion
+                startBackend({
+                    path: cwd,
+                    port: 8000,
+                    host: '127.0.0.1',
+                    startupTimeout: 30000
+                }, pythonPath, require('electron').app.getPath('userData'), notifyProgress, processState).then(success => {
+                    if (success) {
+                        console.log('[BACKEND] Backend reiniciado exitosamente despues de auto-reparacion');
+                    } else {
+                        console.error('[BACKEND] Error al reiniciar backend despues de auto-reparacion');
+                    }
+                });
+            }, 2000);
+            
+            return; // No procesar como error
+        }
+
         if (code !== 0) {
             console.error('[BACKEND] El backend termino con error');
             console.error('[BACKEND] Ultimos logs STDOUT:', stdoutBuffer.split('\n').slice(-10).join('\n'));
