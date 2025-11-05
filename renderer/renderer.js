@@ -39,17 +39,64 @@ window.alfredAPI.onBackendReady(() => {
     updateConnectionStatus(true);
 });
 
+// Variables para el log de actividad
+let activityLogMessages = [];
+const MAX_ACTIVITY_LOG_ITEMS = 20;
+
 // Actualizar UI del loader con progreso detallado
 function updateLoadingUI(stage, message, progress) {
     const statusText = document.getElementById('loadingStatusText');
     const progressBar = document.getElementById('loadingProgressBar');
+    const activityLogContainer = document.getElementById('activityLogMessages');
 
+    // Actualizar texto principal
     if (statusText) {
         statusText.textContent = message || 'Iniciando Alfred...';
     }
 
+    // Actualizar barra de progreso
     if (progressBar && typeof progress === 'number') {
         progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+    }
+
+    // Agregar al log de actividad
+    if (activityLogContainer && message) {
+        // Determinar si es un mensaje importante (PyTorch, errores, completado)
+        const isImportant = 
+            message.includes('PyTorch') || 
+            message.includes('Descargando') || 
+            message.includes('instalado') ||
+            message.includes('Error') ||
+            message.includes('listo') ||
+            progress >= 95;
+
+        // Crear elemento de log
+        const logItem = document.createElement('div');
+        logItem.className = `activity-log-item ${isImportant ? 'important' : ''}`;
+        logItem.innerHTML = `
+            <div class="activity-icon"></div>
+            <div class="activity-text">
+                ${message}
+                ${typeof progress === 'number' ? `<span class="activity-progress">(${progress}%)</span>` : ''}
+            </div>
+        `;
+
+        // Agregar al principio (mensajes más recientes arriba)
+        activityLogContainer.insertBefore(logItem, activityLogContainer.firstChild);
+
+        // Mantener solo los últimos N mensajes
+        activityLogMessages.push({ stage, message, progress, timestamp: Date.now() });
+        if (activityLogMessages.length > MAX_ACTIVITY_LOG_ITEMS) {
+            activityLogMessages.shift();
+            // Eliminar el último elemento del DOM
+            const lastChild = activityLogContainer.lastChild;
+            if (lastChild) {
+                activityLogContainer.removeChild(lastChild);
+            }
+        }
+
+        // Auto-scroll al mensaje más reciente (que está arriba)
+        activityLogContainer.scrollTop = 0;
     }
 
     console.log(`[INSTALLATION] ${stage}: ${message} (${progress}%)`);

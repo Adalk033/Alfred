@@ -103,3 +103,105 @@
     }
 }
 
+/* Log de actividad durante la carga */
+.loading-activity-log {
+    margin-top: 25px;
+    text-align: left;
+    max-height: 200px;
+    overflow: hidden;
+}
+
+.activity-log-title {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    opacity: 0.7;
+}
+
+.activity-log-messages {
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.activity-log-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.activity-log-messages::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.activity-log-messages::-webkit-scrollbar-thumb {
+    background: rgba(74, 158, 255, 0.3);
+    border-radius: 3px;
+}
+
+.activity-log-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(74, 158, 255, 0.5);
+}
+
+.activity-log-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+    animation: slideInLeft 0.3s ease;
+    line-height: 1.4;
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.activity-log-item .activity-icon {
+    flex-shrink: 0;
+    width: 4px;
+    height: 4px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    margin-top: 6px;
+}
+
+.activity-log-item .activity-text {
+    flex: 1;
+    word-break: break-word;
+}
+
+.activity-log-item.important {
+    background: rgba(74, 158, 255, 0.08);
+    border-left: 2px solid var(--primary-color);
+}
+
+.activity-log-item.important .activity-icon {
+    background: var(--primary-color);
+    width: 6px;
+    height: 6px;
+}
+
+.activity-log-item .activity-progress {
+    color: var(--primary-color);
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+
