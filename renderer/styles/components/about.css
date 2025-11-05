@@ -1,0 +1,183 @@
+/* ============================================
+   SECCION ACERCA DE - CONFIGURACION
+   ============================================ */
+
+.about-container {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.about-header {
+    text-align: center;
+    padding: 2rem 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+.about-icon {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.about-header h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0.5rem 0;
+}
+
+.about-subtitle {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Informacion de version */
+.about-info {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.info-row:first-child {
+    padding-top: 0;
+}
+
+.info-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.info-value {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.9rem;
+    background: var(--bg-primary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+}
+
+/* Descripcion */
+.about-description {
+    margin-bottom: 2rem;
+}
+
+.about-description p {
+    color: var(--text-primary);
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+/* Caracteristicas */
+.about-features {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.about-features h4 {
+    margin: 0 0 1rem 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.about-features ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.about-features li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.about-features li svg {
+    flex-shrink: 0;
+    color: var(--mode-primary);
+}
+
+/* Enlaces */
+.about-links {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+
+.about-links .button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.about-links .button svg {
+    flex-shrink: 0;
+}
+
+/* Footer */
+.about-footer {
+    text-align: center;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.about-footer p {
+    margin: 0.5rem 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.about-footer strong {
+    color: var(--text-primary);
+}
+
+.about-copyright {
+    font-size: 0.85rem !important;
+    color: var(--text-tertiary) !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .about-container {
+        padding: 0 1rem;
+    }
+    
+    .about-header h2 {
+        font-size: 1.5rem;
+    }
+    
+    .about-links {
+        flex-direction: column;
+    }
+    
+    .about-links .button {
+        width: 100%;
+        justify-content: center;
+    }
+}

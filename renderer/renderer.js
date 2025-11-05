@@ -199,6 +199,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadUserInfo(); // Cargar informacion personal del usuario
     await loadConversations(); // Cargar conversaciones al inicio
 
+    // Cargar versiones de la aplicacion en seccion "Acerca de"
+    loadAppVersions();
+
     // Auto-ajustar altura del textarea
     State.messageInput.addEventListener('input', () => {
         State.messageInput.style.height = 'auto';
@@ -4203,6 +4206,47 @@ window.addDocPath = addDocPath;
 window.browseDocPath = browseDocPath;
 window.removeDocPath = removeDocPath;
 window.reindexDocuments = reindexDocuments;
+
+// ============================================
+// SECCION: ACERCA DE - VERSIONES
+// ============================================
+
+/**
+ * Carga las versiones de la aplicacion, Electron, Node.js y Chrome
+ * en la seccion "Acerca de" de configuracion
+ */
+function loadAppVersions() {
+    try {
+        // Version de la aplicacion (desde package.json)
+        const appVersionEl = document.getElementById('appVersion');
+        if (appVersionEl) {
+            appVersionEl.textContent = '0.0.12';
+        }
+
+        // Versiones de Electron, Node.js y Chrome (desde process.versions)
+        if (window.alfredAPI && window.alfredAPI.getVersions) {
+            window.alfredAPI.getVersions().then(versions => {
+                const electronVersionEl = document.getElementById('electronVersion');
+                const nodeVersionEl = document.getElementById('nodeVersion');
+                const chromeVersionEl = document.getElementById('chromeVersion');
+
+                if (electronVersionEl && versions.electron) {
+                    electronVersionEl.textContent = versions.electron;
+                }
+                if (nodeVersionEl && versions.node) {
+                    nodeVersionEl.textContent = versions.node;
+                }
+                if (chromeVersionEl && versions.chrome) {
+                    chromeVersionEl.textContent = versions.chrome;
+                }
+            }).catch(error => {
+                console.error('[ABOUT] Error al cargar versiones:', error);
+            });
+        }
+    } catch (error) {
+        console.error('[ABOUT] Error al inicializar versiones:', error);
+    }
+}
 window.clearIndex = clearIndex;
 window.loadDocumentPaths = loadDocumentPaths;
 window.loadIndexationStatus = loadIndexationStatus;

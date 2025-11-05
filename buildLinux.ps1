@@ -133,9 +133,19 @@ if ($appImage) {
     Write-Host "   Tamano:      $appImageSize MB" -ForegroundColor White
     Write-Host "   Duracion:    $([math]::Round($buildDuration, 2)) minutos" -ForegroundColor White
     Write-Host "   Plataforma:  Linux x64" -ForegroundColor White
-    Write-Host "   Formato:     AppImage" -ForegroundColor White
+    Write-Host "   Formato:     AppImage (portable)" -ForegroundColor White
     Write-Host "   Ruta:        $($appImage.FullName)" -ForegroundColor Gray
     Write-Host ""
+    
+    # Validar que el AppImage no sea corrupto (tamaño mínimo razonable)
+    if ($appImageSize -lt 50) {
+        Write-Host "⚠️  ADVERTENCIA: El AppImage parece muy pequeño ($appImageSize MB)" -ForegroundColor Yellow
+        Write-Host "   Tamano esperado: 150-300 MB con todas las dependencias" -ForegroundColor Gray
+        Write-Host ""
+    } else {
+        Write-Host "✅ Tamano del AppImage valido ($appImageSize MB)" -ForegroundColor Green
+        Write-Host ""
+    }
     
     Write-Host "📝 INSTRUCCIONES DE USO EN LINUX:" -ForegroundColor Cyan
     Write-Host "   1. Transferir el archivo a una maquina Linux" -ForegroundColor White

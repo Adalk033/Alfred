@@ -58,6 +58,11 @@ contextBridge.exposeInMainWorld('alfredAPI', {
   getEncryptionKey: () => ipcRenderer.invoke('get-encryption-key'),
   getSensitiveFields: () => ipcRenderer.invoke('get-sensitive-fields'),
   encryptFernet: (plainData) => ipcRenderer.invoke('encrypt-fernet', plainData),
-  decryptFernet: (encryptedData) => ipcRenderer.invoke('decrypt-fernet', encryptedData)
-});
+  decryptFernet: (encryptedData) => ipcRenderer.invoke('decrypt-fernet', encryptedData),
 
+  // API de versiones
+  getVersions: () => ipcRenderer.invoke('get-versions'),
+
+  // API para abrir enlaces externos
+  openExternal: (url) => ipcRenderer.invoke('open-external', url)
+});

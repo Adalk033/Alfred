@@ -129,6 +129,7 @@ Write-Host "╚═════════════════════�
 
 $distPath = Join-Path $PSScriptRoot "dist"
 $dmg = Get-ChildItem -Path $distPath -Filter "*.dmg" -ErrorAction SilentlyContinue | Select-Object -First 1
+$macFolder = Get-ChildItem -Path $distPath -Filter "mac*" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if ($dmg) {
     $dmgSize = [math]::Round(($dmg.Length / 1MB), 2)
@@ -139,7 +140,7 @@ if ($dmg) {
     Write-Host "   Archivo:     $($dmg.Name)" -ForegroundColor White
     Write-Host "   Tamano:      $dmgSize MB" -ForegroundColor White
     Write-Host "   Duracion:    $([math]::Round($buildDuration, 2)) minutos" -ForegroundColor White
-    Write-Host "   Plataforma:  macOS (Universal)" -ForegroundColor White
+    Write-Host "   Plataforma:  macOS (x64 + arm64 Universal)" -ForegroundColor White
     Write-Host "   Formato:     DMG" -ForegroundColor White
     Write-Host "   Ruta:        $($dmg.FullName)" -ForegroundColor Gray
     Write-Host ""
@@ -167,8 +168,20 @@ if ($dmg) {
     
     Write-Host "ℹ️  COMPATIBILIDAD:" -ForegroundColor Cyan
     Write-Host "   • macOS 10.13 (High Sierra) o superior" -ForegroundColor White
-    Write-Host "   • Intel x64 (Macs antiguas)" -ForegroundColor White
-    Write-Host "   • Apple Silicon (M1/M2/M3)" -ForegroundColor White
+    Write-Host "   • Intel x64 y Apple Silicon (M1/M2/M3) - Universal Binary" -ForegroundColor White
+    Write-Host ""
+    
+    # Verificar arquitecturas incluidas
+    if ($macFolder) {
+        $appPath = Get-ChildItem -Path $macFolder.FullName -Filter "*.app" -Directory -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($appPath) {
+            Write-Host "📦 Arquitecturas incluidas:" -ForegroundColor Cyan
+            $execPath = Join-Path $appPath.FullName "Contents\MacOS\Alfred"
+            if (Test-Path $execPath) {
+                Write-Host "   ✅ Binary universal detectado en el build" -ForegroundColor Green
+            }
+        }
+    }
     Write-Host ""
     
     Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Green

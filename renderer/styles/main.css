@@ -16,6 +16,7 @@
 @import './components/security.css';
 @import './components/dialog.css';
 @import './components/history-search.css';
+@import './components/about.css';
 
 .container {
     flex: 1;

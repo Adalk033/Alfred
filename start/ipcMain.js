@@ -741,6 +741,30 @@ function registerIPCHandlers(dependencies) {
         }
     });
 
+    // ============================================================================
+    // HANDLERS DE VERSIONES Y SISTEMA
+    // ============================================================================
+
+    ipcMain.handle('get-versions', async () => {
+        return {
+            electron: process.versions.electron,
+            node: process.versions.node,
+            chrome: process.versions.chrome,
+            v8: process.versions.v8
+        };
+    });
+
+    ipcMain.handle('open-external', async (event, url) => {
+        const { shell } = require('electron');
+        try {
+            await shell.openExternal(url);
+            return { success: true };
+        } catch (error) {
+            console.error('[MAIN] Error abriendo URL externa:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
     console.log('[IPC] Todos los handlers registrados correctamente');
 }
 
