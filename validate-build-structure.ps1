@@ -166,18 +166,29 @@ if (Test-Path $MARKER_FILE) {
     # Leer información del marcador
     $markerContent = Get-Content $MARKER_FILE -Raw
     $packagesMatch = $markerContent -match "Paquetes instalados: (\d+)"
-    $packagesCount = if ($packagesMatch) { $Matches[1] } else { "?" }
+    $packagesCount = if ($packagesMatch) { $Matches[1] } else { "0" }
     
     $sizeMatch = $markerContent -match "Tamano total: ([\d.]+) MB"
-    $pythonSize = if ($sizeMatch) { $Matches[1] } else { "?" }
+    $pythonSize = if ($sizeMatch) { $Matches[1] } else { "0" }
     
-    if ([int]$packagesCount -ge 140) {
-        Write-Check-Pass "Python portable tiene dependencias pre-instaladas ✨"
-        Write-Check-Pass "$packagesCount paquetes ($pythonSize MB) - Instalacion rapida"
-        Write-Check-Info "PyTorch y paquetes GPU se instalan en primera ejecucion segun hardware"
-    } else {
-        Write-Check-Warn "Python portable tiene pocas dependencias ($packagesCount paquetes, esperado: ~165)"
-        Write-Host "  💡 Recomendacion: .\create-venv-base.ps1 -Force" -ForegroundColor Yellow
+    # Validar que packagesCount sea un número válido
+    try {
+        $packagesCountInt = [int]$packagesCount
+        
+        if ($packagesCountInt -ge 140) {
+            Write-Check-Pass "Python portable tiene dependencias pre-instaladas ✨"
+            Write-Check-Pass "$packagesCount paquetes ($pythonSize MB) - Instalacion rapida"
+            Write-Check-Info "PyTorch y paquetes GPU se instalan en primera ejecucion segun hardware"
+        } elseif ($packagesCountInt -gt 0) {
+            Write-Check-Warn "Python portable tiene pocas dependencias ($packagesCount paquetes, esperado: ~165)"
+            Write-Host "  💡 Recomendacion: .\create-venv-base.ps1 -Force" -ForegroundColor Yellow
+        } else {
+            Write-Check-Warn "No se pudo leer el numero de paquetes instalados"
+            Write-Host "  💡 Recomendacion: .\create-venv-base.ps1" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Check-Warn "Error al procesar informacion de paquetes: $_"
+        Write-Host "  💡 Recomendacion: .\create-venv-base.ps1" -ForegroundColor Yellow
     }
 } else {
     Write-Check-Warn "Python portable SIN dependencias pre-instaladas"
