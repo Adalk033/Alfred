@@ -555,74 +555,99 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
 
             // Si existe python-portable/, usar directamente
             if (fs.existsSync(portablePythonPath)) {
+                console.log('[ENV] Python portable encontrado en:', portablePythonPath);
                 console.log('[portable-ready] Usando Python portable optimizado...');
+                
                 // Verificar que funciona
+                console.log('[ENV] Paso 1/5: Verificando Python portable...');
                 try {
-                    execSync(`"${portablePythonPath}" --version`, {
+                    const versionOutput = execSync(`"${portablePythonPath}" --version`, {
                         encoding: 'utf8',
-                        stdio: 'pipe'
+                        stdio: 'pipe',
+                        timeout: 10000 // 10 segundos timeout
                     });
-                    // No actualizar aqui, main.js maneja el porcentaje final
+                    console.log('[ENV] Python portable version:', versionOutput.trim());
                 } catch (error) {
-                    console.log('[portable-error] Error con Python portable, reintentando...');
+                    console.error('[portable-error] Error con Python portable:', error.message);
                     throw new Error(`Python portable no funciona: ${error.message}`);
                 }
 
                 // Verificar pip en Python portable
+                console.log('[ENV] Paso 2/5: Verificando pip...');
                 try {
-                    execSync(`"${portablePythonPath}" -m pip --version`, {
+                    const pipOutput = execSync(`"${portablePythonPath}" -m pip --version`, {
                         encoding: 'utf8',
-                        stdio: 'pipe'
+                        stdio: 'pipe',
+                        timeout: 10000
                     });
+                    console.log('[ENV] pip version:', pipOutput.trim());
                 } catch (pipError) {
+                    console.log('[ENV] pip no encontrado, instalando...');
                     execSync(`"${portablePythonPath}" -m ensurepip --upgrade`, {
                         encoding: 'utf8',
-                        stdio: 'inherit'
+                        stdio: 'inherit',
+                        timeout: 60000 // 60 segundos para instalacion
                     });
                 }
 
                 // Verificar dependencias instaladas en Python portable
-                // No notificar aqui, main.js maneja 70-75%
-                console.log('[ENV] Verificando dependencias de Python...');
-
+                console.log('[ENV] Paso 3/5: Listando dependencias instaladas...');
                 let installedPkgs = '';
                 try {
                     installedPkgs = execSync(`"${portablePythonPath}" -m pip freeze`, {
                         encoding: "utf8",
-                        stdio: 'pipe'
+                        stdio: 'pipe',
+                        timeout: 30000 // 30 segundos timeout
                     }).toLowerCase();
+                    const pkgCount = installedPkgs.split('\n').filter(line => line.trim()).length;
+                    console.log(`[ENV] Paquetes instalados: ${pkgCount}`);
                 }
                 catch (err) {
                     console.error('[ENV] Error al listar dependencias:', err.message);
                 }
 
                 // Usar funcion comun para verificar dependencias
+                console.log('[ENV] Paso 4/5: Verificando dependencias requeridas...');
                 const { missing } = checkInstalledDependencies(installedPkgs, requirementsPath, notifyProgress);
 
                 console.log(`[ENV] Dependencias faltantes: ${missing.length}`);
+                if (missing.length > 0) {
+                    console.log('[ENV] Paquetes faltantes:', missing.slice(0, 10).join(', '));
+                }
 
                 // Usar funcion comun para instalar o verificar dependencias si hay faltantes
                 if (missing.length > 0) {
-                    console.log('[ENV] Instalando dependencias...');
+                    console.log('[ENV] Paso 5/5: Instalando dependencias faltantes...');
+                    console.log('[ENV] ADVERTENCIA: Esto puede tardar varios minutos en la primera ejecucion');
                     await installOrVerifyDependencies(portablePythonPath, backendPath, requirementsPath, missing, isPackaged, notifyProgress);
+                    console.log('[ENV] Dependencias instaladas exitosamente');
+                } else {
+                    console.log('[ENV] Paso 5/5: Todas las dependencias ya estan instaladas');
                 }
 
-                // No actualizar aqui, main.js maneja el porcentaje final
+                console.log('[ENV] Python portable listo para usar');
                 // Guardar en caché antes de devolver
                 envCached = portablePythonPath;
                 return portablePythonPath;
             }
             else {
+                // Python portable no existe - ERROR CRITICO
+                console.error('[ENV] ERROR CRITICO: Python portable no encontrado');
+                console.error(`[ENV] Ruta esperada: ${portablePythonPath}`);
+                console.error(`[ENV] Backend path: ${backendPath}`);
+                
                 // Listar contenido del backend para diagnostico
                 if (fs.existsSync(backendPath)) {
+                    console.error('[ENV] Contenido del directorio backend:');
                     try {
                         const files = fs.readdirSync(backendPath);
                         files.forEach(file => console.error(`  - ${file}`));
                     } catch (e) {
-                        notifyProgress('dir-error', `No se pudo listar directorio del backend: ${e.message}`, 50);
-                        throw new Error(`No se pudo listar directorio del backend: ${e.message}`);
+                        console.error(`[ENV] No se pudo listar directorio: ${e.message}`);
                     }
                 }
+                
+                throw new Error(`Python portable no encontrado en: ${portablePythonPath}. La aplicacion no puede ejecutarse sin Python portable.`);
             }
         } else {
             console.log('========================================================');

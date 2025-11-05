@@ -269,20 +269,34 @@ async function initializeAppWithProgress() {
         console.log('[INIT] Ollama confirmado y funcional');
         progressNotifier('ollama-verify-complete', 'Ollama verificado', 45);
 
-        // PASO 3: Verificar/Descargar modelos de Ollama (45-65%)
+        // PASO 3: Verificar/Descargar modelos de Ollama (45-55%)
         progressNotifier('models-check', 'Verificando modelos...', 50);
         await ensureOllamaModels(REQUIRED_OLLAMA_MODELS, progressNotifier);
-        progressNotifier('models-ready', 'Modelos listos', 65);
+        progressNotifier('models-ready', 'Modelos listos', 55);
 
-        // PASO 4: Configurar entorno Python y dependencias (65-75%)
-        progressNotifier('python-env', 'Configurando Python...', 70);
+        // PASO 4: Configurar entorno Python y dependencias (55-75%)
+        // NOTA: Este paso incluye descarga de PyTorch que puede tardar 10-30 minutos
+        progressNotifier('python-env', 'Configurando Python...', 60);
+
+        console.log('[INIT] Iniciando configuracion de Python...');
+        const pythonStartTime = Date.now();
+
         try {
-            await ensurePythonEnv(BACKEND_CONFIG.path, isPackaged, progressNotifier);
+            const pythonPath = await ensurePythonEnv(BACKEND_CONFIG.path, isPackaged, progressNotifier);
+
+            const pythonDuration = ((Date.now() - pythonStartTime) / 1000).toFixed(2);
+            console.log(`[INIT] Python configurado exitosamente en ${pythonDuration}s`);
+            console.log(`[INIT] Python path: ${pythonPath}`);
+
+            progressNotifier('python-env-ready', 'Python configurado', 75);
         }
         catch (error) {
-            progressNotifier('python-env-error', `Error configurando Python, ${error.message}`, 0);
+            const pythonDuration = ((Date.now() - pythonStartTime) / 1000).toFixed(2);
+            console.error(`[INIT] Error critico al configurar Python despues de ${pythonDuration}s:`, error);
+            console.error('[INIT] Stack trace:', error.stack);
+            progressNotifier('python-env-error', `Error configurando Python: ${error.message}`, 0);
+            return false; // DETENER inicializacion si Python falla
         }
-        progressNotifier('python-env-ready', 'Python configurado', 75);
 
         // PASO 5: Iniciar backend y ESPERAR a que responda (75-95%)
         progressNotifier('backend-start', 'Iniciando backend...', 80);

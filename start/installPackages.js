@@ -229,7 +229,8 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, no
     if (indexUrl) {
         console.log(`[GPU-INSTALL] Index URL: ${indexUrl}`);
     }
-    notifyProgress('gpu-install', `Instalando PyTorch (${label})...`, 43);
+    console.log(`[GPU-INSTALL] NOTA: PyTorch son archivos grandes (hasta 2.5GB), esto puede tardar 10-30 minutos`);
+    notifyProgress('gpu-install-start', `Descargando PyTorch (${label})... Esto puede tardar varios minutos`, 43);
 
     let installed = 0;
     let failed = [];
@@ -237,9 +238,13 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, no
 
     for (const pkg of packagesToInstall) {
         installed++;
-        const progress = 43 + Math.min(2, (installed / total) * 2);
+        // Expandir rango de progreso: 43% -> 65% (22% total para PyTorch)
+        const progress = 43 + Math.floor((installed / total) * 22);
+        const pkgName = pkg.split('==')[0];
+        
         console.log(`[GPU-INSTALL] ${installed}/${total}: Instalando ${pkg}...`);
-        notifyProgress('gpu-install', `Instalando ${pkg}... (${installed}/${total})`, progress);
+        console.log(`[GPU-INSTALL] Descargando ${pkgName}... (archivos grandes, puede tardar varios minutos)`);
+        notifyProgress('gpu-install-pkg', `Descargando ${pkgName}... (${installed}/${total}) - Por favor espere`, progress);
 
         try {
             const success = await installSinglePackage(
@@ -253,7 +258,11 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, no
             );
 
             if (!success) {
-                failed.push(pkg.split('==')[0]);
+                console.error(`[GPU-INSTALL] Fallo al instalar ${pkgName}`);
+                failed.push(pkgName);
+            } else {
+                console.log(`[GPU-INSTALL] ${pkgName} instalado exitosamente`);
+                notifyProgress('gpu-install-pkg-done', `${pkgName} instalado (${installed}/${total})`, progress + 1);
             }
 
             await new Promise(resolve => setTimeout(resolve, 1500));
@@ -270,7 +279,7 @@ async function installGPUPackages(pythonCmd, backendPath, gpuConfig, tempDir, no
         console.log(`[GPU-INSTALL] PyTorch instalado correctamente para ${label}`);
     }
 
-    notifyProgress('gpu-ready', 'PyTorch instalado', 45);
+    notifyProgress('gpu-ready', 'PyTorch instalado correctamente', 65);
     return failed;
 }
 
