@@ -2,6 +2,16 @@
 # .gitignore para Alfred - Asistente Personal Inteligente
 # ============================================================================
 
+# === Directorios del Sistema ===
+**/%AppData%/
+**/.alfred/
+
+# === Modelos de Machine Learning ===
+*.bin
+*.pt
+*.gguf
+*.onnx
+
 # === Configuración Local ===
 .env
 .env.local
