@@ -204,15 +204,28 @@ async function waitForBackend(config, notifyProgress, notifyStatus, getBackendPr
  * @returns {Promise<boolean>} true si el backend se inicio correctamente
  */
 async function startBackend(config, pythonPath, userDataPath, notifyProgress, processState) {
-    if (processState.process) {
-        console.log('[BACKEND] El backend ya esta iniciado');
+    // Log detallado para debugging
+    console.log('[BACKEND] startBackend() llamado');
+    console.log('[BACKEND] processState.process existe:', !!processState.process);
+    console.log('[BACKEND] processState.process PID:', processState.process?.pid);
+    console.log('[BACKEND] processState.process exitCode:', processState.process?.exitCode);
+    
+    if (processState.process && processState.process.exitCode === null) {
+        console.log('[BACKEND] El backend ya esta iniciado y corriendo, PID:', processState.process.pid);
         // No notificar aqui, dejar que main.js maneje el progreso
         return true;
+    }
+    
+    // Si el proceso anterior termino, limpiarlo
+    if (processState.process && processState.process.exitCode !== null) {
+        console.log('[BACKEND] Proceso anterior termino con exitCode:', processState.process.exitCode);
+        processState.process = null;
+        processState.isStartedByElectron = false;
     }
 
     // No notificar aqui tampoco, main.js ya notifico en 80%
     // Solo log para debugging
-    console.log('[BACKEND] Iniciando backend...');
+    console.log('[BACKEND] Iniciando nuevo proceso de backend...');
 
     // Verificar directorios y script
     if (!fs.existsSync(config.path)) {
@@ -259,8 +272,10 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
         }
 
         // Ejecutar backend
-        console.log('[BACKEND] Ejecutando comando:', pythonPath, ['-u', scriptPath]);
+        console.log('[BACKEND] ===== SPAWNING PROCESO PYTHON =====');
+        console.log('[BACKEND] Comando:', pythonPath, ['-u', scriptPath]);
         console.log('[BACKEND] Working directory:', config.path);
+        console.log('[BACKEND] Timestamp:', new Date().toISOString());
 
         // Determinar modo: DESARROLLO = 1 (siempre en Electron), PRODUCCION = 0 (cuando está empaquetada)
         const devMode = app && app.isPackaged ? '0' : '1';
@@ -279,8 +294,8 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
 
         console.log('[BACKEND] Proceso spawn creado, PID:', processState.process.pid);
 
-        // Configurar logging
-        setupBackendLogging(processState.process, backendLogPath, pythonPath, scriptPath, config.path, notifyProgress);
+        // Configurar logging (pasar processState para reinicio automatico)
+        setupBackendLogging(processState.process, backendLogPath, pythonPath, scriptPath, config.path, notifyProgress, processState);
 
         // Marcar que nosotros iniciamos el backend
         processState.isStartedByElectron = true;
@@ -305,8 +320,9 @@ async function startBackend(config, pythonPath, userDataPath, notifyProgress, pr
  * @param {string} scriptPath - Ruta al script
  * @param {string} cwd - Directorio de trabajo
  * @param {Function} notifyProgress - Callback para notificar progreso
+ * @param {Object} processState - Estado del proceso (para reinicio automatico)
  */
-function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, notifyProgress) {
+function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, notifyProgress, processState) {
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
     logStream.write(`\n\n=== INICIO DEL BACKEND ${new Date().toISOString()} ===\n`);
     logStream.write(`Python: ${pythonPath}\n`);
@@ -317,6 +333,11 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
     let stderrBuffer = '';
     let hasModuleError = false;
     let hasOutput = false;
+    
+    // Inicializar contador de reintentos si no existe
+    if (!processState.autoRepairRetries) {
+        processState.autoRepairRetries = 0;
+    }
 
     // Captura stdout
     process.stdout.on('data', (data) => {
@@ -369,15 +390,33 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
     // Manejar cierre del proceso
     process.on('close', (code) => {
         clearTimeout(outputTimeout);
-        logStream.write(`\n=== PROCESO FINALIZADO codigo: ${code} ===\n`);
-        logStream.end();
-
+        
         console.log(`[BACKEND] Proceso finalizado con codigo ${code}`);
 
         // Codigo 3 = Auto-reparacion aplicada, reiniciar automaticamente
         if (code === 3) {
-            console.log('[BACKEND] Auto-reparacion completada. Reiniciando backend automaticamente...');
+            // Verificar limite de reintentos (maximo 2 intentos)
+            processState.autoRepairRetries = (processState.autoRepairRetries || 0) + 1;
+            
+            if (processState.autoRepairRetries > 2) {
+                console.error('[BACKEND] Auto-reparacion fallo despues de 2 intentos. Abortando reinicio automatico.');
+                logStream.write(`\n=== AUTO-REPARACION FALLO DESPUES DE ${processState.autoRepairRetries - 1} INTENTOS ===\n`);
+                logStream.write(`No se puede reiniciar automaticamente. El usuario debe reiniciar manualmente.\n`);
+                logStream.end();
+                
+                if (notifyProgress) {
+                    notifyProgress('backend-auto-repair-failed', 'Error: Auto-reparacion fallo. Por favor reinicie la aplicacion.', 0);
+                }
+                
+                return; // No procesar como error ni reintentar
+            }
+            
+            console.log(`[BACKEND] Auto-reparacion completada. Reiniciando backend automaticamente... (intento ${processState.autoRepairRetries}/2)`);
+            
+            // Escribir ANTES de cerrar el stream
+            logStream.write(`\n=== PROCESO FINALIZADO codigo: ${code} (AUTO-REPARACION) ===\n`);
             logStream.write(`Auto-reparacion detectada, reiniciando...\n`);
+            logStream.end();
             
             // Limpiar estado del proceso actual
             if (processState) {
@@ -386,29 +425,61 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
             }
             
             // Esperar 2 segundos antes de reiniciar
-            setTimeout(() => {
+            setTimeout(async () => {
                 console.log('[BACKEND] Iniciando backend despues de auto-reparacion...');
                 if (notifyProgress) {
-                    notifyProgress('Reiniciando backend despues de reparacion automatica...');
+                    notifyProgress('backend-auto-repair', 'Reiniciando backend despues de reparacion automatica...', 85);
                 }
                 
-                // Reiniciar el backend con la misma configuracion
-                startBackend({
+                // Configuracion para el reinicio
+                const restartConfig = {
                     path: cwd,
                     port: 8000,
                     host: '127.0.0.1',
                     startupTimeout: 30000
-                }, pythonPath, require('electron').app.getPath('userData'), notifyProgress, processState).then(success => {
-                    if (success) {
+                };
+                
+                // Reiniciar el backend
+                const started = await startBackend(
+                    restartConfig,
+                    pythonPath,
+                    require('electron').app.getPath('userData'),
+                    notifyProgress,
+                    processState
+                );
+                
+                if (started) {
+                    console.log('[BACKEND] Proceso reiniciado, esperando que responda...');
+                    
+                    // Esperar que el backend este listo (sin notifyStatus porque no esta disponible en este scope)
+                    const ready = await waitForBackend(
+                        restartConfig,
+                        notifyProgress,
+                        (status) => { console.log('[BACKEND] Estado del backend:', status); },
+                        () => processState.process
+                    );
+                    
+                    if (ready) {
                         console.log('[BACKEND] Backend reiniciado exitosamente despues de auto-reparacion');
+                        // Resetear contador de reintentos porque el reinicio fue exitoso
+                        processState.autoRepairRetries = 0;
+                        if (notifyProgress) {
+                            notifyProgress('backend-ready', 'Backend reiniciado y listo', 100);
+                        }
                     } else {
-                        console.error('[BACKEND] Error al reiniciar backend despues de auto-reparacion');
+                        console.error('[BACKEND] Backend reiniciado pero no respondio a tiempo');
                     }
-                });
+                } else {
+                    console.error('[BACKEND] Error al reiniciar backend despues de auto-reparacion');
+                }
             }, 2000);
             
             return; // No procesar como error
         }
+
+        // Cerrar el stream normalmente para otros casos
+        logStream.write(`\n=== PROCESO FINALIZADO codigo: ${code} ===\n`);
+        logStream.end();
 
         if (code !== 0) {
             console.error('[BACKEND] El backend termino con error');
@@ -424,8 +495,12 @@ function setupBackendLogging(process, logPath, pythonPath, scriptPath, cwd, noti
 
     process.on('error', (err) => {
         clearTimeout(outputTimeout);
-        logStream.write(`\n=== ERROR DEL PROCESO: ${err.message} ===\n`);
-        logStream.end();
+        
+        // Solo escribir si el stream no esta cerrado
+        if (!logStream.closed && !logStream.destroyed) {
+            logStream.write(`\n=== ERROR DEL PROCESO: ${err.message} ===\n`);
+            logStream.end();
+        }
 
         console.error(`[BACKEND] Error del proceso: ${err.message}`);
         console.error(`[BACKEND] Error completo:`, err);
@@ -462,6 +537,8 @@ async function startBackendAndWait(config, pythonPath, userDataPath, notifyProgr
     }
 
     console.log('[BACKEND] Backend iniciado correctamente y respondiendo.');
+    // Resetear contador de auto-reparacion cuando inicia correctamente
+    processState.autoRepairRetries = 0;
     return true;
 }
 

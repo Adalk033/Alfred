@@ -37,12 +37,10 @@ try:
         success = run_auto_repair()
         
         if not success:
-            logger_temp.error("[STARTUP] Correcciones aplicadas - REINICIA LA APLICACION")
-            print("\n" + "="*60)
-            print("ATENCION: Se corrigieron problemas criticos")
-            print("Por favor REINICIA Alfred para aplicar los cambios")
-            print("="*60 + "\n")
-            sys.exit(3)  # Codigo 3 = necesita reinicio
+            logger_temp.warning("[STARTUP] Correcciones aplicadas - Reiniciando automaticamente...")
+            # NO imprimir mensaje visible al usuario en produccion
+            # Electron detectara el exit code 3 y reiniciara automaticamente
+            sys.exit(3)  # Codigo 3 = auto-reparacion completada, reinicio automatico
     else:
         logger_temp.info("[STARTUP] Sistema OK - Continuando inicio...")
         

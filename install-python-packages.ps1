@@ -140,7 +140,12 @@ foreach ($pkg in $requiredPackages.Keys) {
     
     if ($installedPackages.ContainsKey($pkg)) {
         $installedVersion = $installedPackages[$pkg]
-        if ($installedVersion -eq $requiredVersion) {
+        
+        # Extraer solo version principal (sin sufijos +local, .post, etc)
+        $installedMainVersion = $installedVersion -replace '\+.*$', '' -replace '\.post.*$', ''
+        $requiredMainVersion = $requiredVersion -replace '\+.*$', '' -replace '\.post.*$', ''
+        
+        if ($installedMainVersion -eq $requiredMainVersion) {
             $upToDate++
         } else {
             Write-Host "   ⚠️  $pkg : $installedVersion → $requiredVersion (desactualizado)" -ForegroundColor Yellow
@@ -185,8 +190,20 @@ Write-Host ""
 
 $startTime = Get-Date
 
-# Instalar con --force-reinstall para asegurar versiones correctas
-& $pythonPortableExe -m pip install --force-reinstall --no-cache-dir -r $requirementsFile
+# Instalar solo los paquetes que necesitan actualizacion (no todos)
+if ($packagesToProcess.Count -gt 0) {
+    # Crear archivo temporal con solo los paquetes a instalar
+    $tempRequirementsFile = Join-Path $PSScriptRoot "backend\.temp_requirements.txt"
+    $packagesToProcess | Out-File -FilePath $tempRequirementsFile -Encoding UTF8
+    
+    Write-Host "   Instalando solo paquetes necesarios ($($packagesToProcess.Count) de $($requiredPackages.Count))..." -ForegroundColor Gray
+    & $pythonPortableExe -m pip install --no-cache-dir -r $tempRequirementsFile
+    
+    # Limpiar archivo temporal
+    Remove-Item $tempRequirementsFile -Force -ErrorAction SilentlyContinue
+} else {
+    Write-Host "   No hay paquetes para instalar" -ForegroundColor Green
+}
 
 $endTime = Get-Date
 $duration = ($endTime - $startTime).TotalMinutes

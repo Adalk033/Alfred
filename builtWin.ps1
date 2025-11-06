@@ -17,21 +17,13 @@ Write-Host "║     Alfred Electron - Build Optimizado Windows      ║" -Foregr
 Write-Host "╚══════════════════════════════════════════════════════╝`n" -ForegroundColor Cyan
 
 # Verificar que el usuario quiera continuar
-if (-not $Force) {
-    Write-Host "Este script realizara:" -ForegroundColor Yellow
-    Write-Host "  1. Limpieza de archivos temporales" -ForegroundColor White
-    Write-Host "  2. Validacion de estructura" -ForegroundColor White
-    Write-Host "  3. Verificacion de Python portable" -ForegroundColor White
-    Write-Host "  4. Instalacion de dependencias npm" -ForegroundColor White
-    Write-Host "  5. Build con Electron Builder" -ForegroundColor White
-    Write-Host ""
-    
-    $confirmation = Read-Host "Deseas continuar? (s/n)"
-    if ($confirmation -ne 's') {
-        Write-Host "`n❌ Operacion cancelada por el usuario." -ForegroundColor Red
-        exit 0
-    }
-}
+Write-Host "Este script realizara:" -ForegroundColor Yellow
+Write-Host "  1. Limpieza de archivos temporales" -ForegroundColor White
+Write-Host "  2. Validacion de estructura" -ForegroundColor White
+Write-Host "  3. Verificacion de Python portable" -ForegroundColor White
+Write-Host "  4. Instalacion de dependencias npm" -ForegroundColor White
+Write-Host "  5. Build con Electron Builder" -ForegroundColor White
+Write-Host ""
 
 # ============================================
 # FASE 1: LIMPIEZA COMPLETA

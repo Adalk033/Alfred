@@ -8,9 +8,52 @@
 import sys
 import subprocess
 import logging
+import os
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Lock file para evitar reparaciones simultaneas
+REPAIR_LOCK_FILE = Path(os.environ.get('TEMP', '/tmp')) / 'alfred_repair.lock'
+REPAIR_TIMEOUT = 120  # 2 minutos
+
+
+def acquire_repair_lock():
+    """
+    Intenta adquirir el lock de reparacion
+    Returns:
+        bool: True si adquirio el lock, False si ya esta bloqueado
+    """
+    try:
+        # Si el lock existe y es reciente (menos de REPAIR_TIMEOUT), otro proceso esta reparando
+        if REPAIR_LOCK_FILE.exists():
+            age = time.time() - REPAIR_LOCK_FILE.stat().st_mtime
+            if age < REPAIR_TIMEOUT:
+                logger.info(f"[AUTO-REPAIR] Otro proceso esta reparando (lock age: {age:.1f}s)")
+                return False
+            else:
+                logger.warning(f"[AUTO-REPAIR] Lock antiguo encontrado ({age:.1f}s), eliminando...")
+                REPAIR_LOCK_FILE.unlink()
+        
+        # Crear lock file
+        REPAIR_LOCK_FILE.touch()
+        logger.info("[AUTO-REPAIR] Lock adquirido")
+        return True
+    except Exception as e:
+        logger.error(f"[AUTO-REPAIR] Error al adquirir lock: {e}")
+        return False
+
+
+def release_repair_lock():
+    """Libera el lock de reparacion"""
+    try:
+        if REPAIR_LOCK_FILE.exists():
+            REPAIR_LOCK_FILE.unlink()
+            logger.info("[AUTO-REPAIR] Lock liberado")
+    except Exception as e:
+        logger.error(f"[AUTO-REPAIR] Error al liberar lock: {e}")
+
 
 def fix_jsonschema_error():
     """
@@ -22,7 +65,33 @@ def fix_jsonschema_error():
     try:
         logger.info("[AUTO-REPAIR] Verificando compatibilidad de jsonschema...")
         
-        # Intentar importar y verificar si hay error
+        # PRIMERO: Verificar version instalada con pip (no importar)
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "show", "jsonschema"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                # Extraer version
+                for line in result.stdout.split('\n'):
+                    if line.startswith('Version:'):
+                        version = line.split(':')[1].strip()
+                        logger.info(f"[AUTO-REPAIR] jsonschema version instalada: {version}")
+                        
+                        # Si es version 4.17.3 o compatible, asumimos que esta OK
+                        if version.startswith('4.17') or version.startswith('4.16') or version.startswith('4.18'):
+                            logger.info("[AUTO-REPAIR] jsonschema version compatible detectada")
+                            return True
+                        else:
+                            logger.warning(f"[AUTO-REPAIR] jsonschema version {version} puede causar problemas")
+                            # Continuar a intentar importar para confirmar
+        except Exception as check_error:
+            logger.warning(f"[AUTO-REPAIR] No se pudo verificar version: {check_error}")
+        
+        # SEGUNDO: Intentar importar y verificar si hay error
         try:
             import jsonschema
             from jsonschema import validators
@@ -36,7 +105,7 @@ def fix_jsonschema_error():
                 
                 # Downgrade a version compatible
                 result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "jsonschema==4.17.3", "--quiet"],
+                    [sys.executable, "-m", "pip", "install", "jsonschema==4.17.3", "--quiet", "--force-reinstall"],
                     capture_output=True,
                     text=True,
                     timeout=60
@@ -102,23 +171,45 @@ def run_auto_repair():
     """
     logger.info("[AUTO-REPAIR] Iniciando verificacion de sistema...")
     
-    needs_restart = False
-    
-    # Fix 1: jsonschema
-    if not fix_jsonschema_error():
-        needs_restart = True
-    
-    # Fix 2: ChromaDB (solo si jsonschema esta OK)
-    if not needs_restart:
-        if not fix_chromadb_compatibility():
-            needs_restart = True
-    
-    if needs_restart:
-        logger.warning("[AUTO-REPAIR] Se aplicaron correcciones. Reinicia la aplicacion.")
+    # Intentar adquirir lock
+    if not acquire_repair_lock():
+        logger.info("[AUTO-REPAIR] Otro proceso esta realizando reparaciones, esperando...")
+        # Esperar a que el otro proceso termine (hasta 60 segundos)
+        for i in range(60):
+            time.sleep(1)
+            if not REPAIR_LOCK_FILE.exists():
+                logger.info("[AUTO-REPAIR] Reparacion completada por otro proceso")
+                # Verificar si ahora esta OK
+                if fix_jsonschema_error() and fix_chromadb_compatibility():
+                    return True
+                else:
+                    return False  # Aun necesita reinicio
+        
+        logger.warning("[AUTO-REPAIR] Timeout esperando a otro proceso")
         return False
     
-    logger.info("[AUTO-REPAIR] Sistema verificado - Todo OK")
-    return True
+    try:
+        needs_restart = False
+        
+        # Fix 1: jsonschema
+        if not fix_jsonschema_error():
+            needs_restart = True
+        
+        # Fix 2: ChromaDB (solo si jsonschema esta OK)
+        if not needs_restart:
+            if not fix_chromadb_compatibility():
+                needs_restart = True
+        
+        if needs_restart:
+            logger.info("[AUTO-REPAIR] Correcciones aplicadas. Reinicio automatico en progreso...")
+            return False
+        
+        logger.info("[AUTO-REPAIR] Sistema verificado - Todo OK")
+        return True
+    
+    finally:
+        # Siempre liberar el lock
+        release_repair_lock()
 
 
 def get_repair_status():
@@ -175,5 +266,6 @@ if __name__ == '__main__':
         print("\nSistema verificado - Sin problemas detectados")
         sys.exit(0)
     else:
-        print("\nSe aplicaron correcciones - Por favor reinicia la aplicacion")
+        # NO imprimir mensaje al usuario - Electron maneja el reinicio automatico
+        logger.info("Correcciones aplicadas - Exit code 3 para reinicio automatico")
         sys.exit(1)
