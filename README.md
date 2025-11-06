@@ -2,7 +2,7 @@
 
 **Alfred** es un asistente de escritorio con inteligencia artificial que procesa tus documentos personales usando RAG (Retrieval-Augmented Generation). Toda la IA se ejecuta localmente en tu dispositivo - sin enviar datos a servicios externos.
 
-![Version](https://img.shields.io/badge/version-0.0.1-blue)
+![Version](https://img.shields.io/badge/version-0.0.23-blue)
 ![Electron](https://img.shields.io/badge/Electron-39.1.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.12+-green)
 ![Node.js](https://img.shields.io/badge/Node.js-22.20.0+-green)
