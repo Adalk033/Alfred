@@ -3179,13 +3179,16 @@ async def reindex_documents_endpoint(background_tasks: BackgroundTasks):
                 backend_logger.info(f"Ruta procesada exitosamente: {path_str}")
                 
             except Exception as e:
-                error_msg = f"Error en {path_data.get('path', 'ruta desconocida')}: {str(e)}"
-                backend_logger.error(error_msg, exc_info=True)
-                errors.append(error_msg)
+                backend_logger.error(
+                    f"Error en {path_data.get('path', 'ruta desconocida')}: {str(e)}",
+                    exc_info=True
+                )
+                user_error_msg = f"Error procesando la ruta '{path_data.get('path', 'ruta desconocida')}'. Consulta los registros del sistema para más detalles."
+                errors.append(user_error_msg)
                 
                 await send_progress_event({
                     'type': 'error',
-                    'message': f'Error procesando ruta: {str(e)[:50]}',
+                    'message': "Error procesando ruta.",
                     'progress': int(base_progress)
                 })
         
