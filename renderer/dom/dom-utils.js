@@ -122,6 +122,14 @@ export function markdownToHtml(text) {
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
+    // Blockquotes (citas en bloque con >)
+    html = html.replace(/^>\s*(.+)$/gm, '<blockquote>$1</blockquote>');
+    // Unir blockquotes consecutivos
+    html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+    // Separadores horizontales (---, ***, ___)
+    html = html.replace(/^[-*_]{3,}$/gm, '<hr>');
+
     // Separar contenido en lineas para procesamiento de listas
     let lines = html.split('\n');
     let inUnorderedList = false;

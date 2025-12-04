@@ -629,6 +629,31 @@
     color: #6a9fff;
 }
 
+.message.assistant .message-bubble blockquote {
+    border-left: 3px solid var(--primary-color);
+    background-color: rgba(74, 144, 226, 0.08);
+    padding: 10px 16px;
+    margin: 8px 0;
+    border-radius: 0 6px 6px 0;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.message.assistant .message-bubble blockquote:first-child {
+    margin-top: 0;
+}
+
+.message.assistant .message-bubble blockquote:last-child {
+    margin-bottom: 0;
+}
+
+.message.assistant .message-bubble hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+    margin: 16px 0;
+}
+
 .message.assistant .message-bubble br {
     line-height: 1.8;
 }
