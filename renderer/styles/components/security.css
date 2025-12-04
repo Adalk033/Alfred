@@ -152,6 +152,7 @@ body[data-theme="light"] .modal-overlay {
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -162,6 +163,7 @@ body[data-theme="light"] .modal-overlay {
         opacity: 0;
         transform: translateY(30px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -272,7 +274,6 @@ body[data-theme="light"] .modal-overlay {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-primary);
-    font-family: 'Courier New', monospace;
     font-size: 0.85rem;
     letter-spacing: 1px;
 }

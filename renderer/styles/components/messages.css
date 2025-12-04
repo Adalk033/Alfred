@@ -1,4 +1,3 @@
-
 /* Área de mensajes */
 .messages {
     flex: 1;
@@ -61,10 +60,12 @@
 }
 
 @keyframes float {
+
     0%,
     100% {
         transform: translateY(0);
     }
+
     50% {
         transform: translateY(-10px);
     }
@@ -426,6 +427,7 @@
         opacity: 0;
         transform: translateY(-10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -683,7 +685,6 @@
 .message.assistant .message-bubble table.markdown-table td:nth-child(3),
 .message.assistant .message-bubble table.markdown-table td:nth-child(4) {
     text-align: right;
-    font-family: 'Courier New', monospace;
 }
 
 /* Drag and Drop Overlay */
@@ -733,5 +734,3 @@
     font-size: 16px;
     color: var(--mode-primary-light);
 }
-
-
