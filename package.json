@@ -1,6 +1,6 @@
 {
   "name": "alfred",
-  "version": "0.0.23",
+  "version": "0.0.24",
   "description": "Alfred - Asistente Personal Inteligente con interfaz gráfica",
   "main": "main.js",
   "scripts": {
