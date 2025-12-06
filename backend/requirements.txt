@@ -309,7 +309,7 @@ unstructured-inference==1.0.5
 unstructured.pytesseract==0.3.15
 
 # === HTTP Client ===
-urllib3==2.5.0
+urllib3==2.6.0
 
 # === ASGI Server ===
 uvicorn==0.37.0
