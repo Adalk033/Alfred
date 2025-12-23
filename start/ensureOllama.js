@@ -74,8 +74,12 @@ async function startOllamaService() {
                 detached: true,
                 stdio: 'ignore'
             }).unref();
-        } else {
-            execSync('ollama serve &', { stdio: 'ignore' });
+        } else if (process.platform === 'linux' || process.platform === 'darwin') {
+            // En Linux/macOS, iniciar Ollama en background
+            spawn('bash', ['-c', 'nohup ollama serve > /dev/null 2>&1 &'], {
+                detached: true,
+                stdio: 'ignore'
+            }).unref();
         }
 
         // Esperar a que Ollama este disponible
@@ -138,8 +142,18 @@ async function ensureOllama(notifyProgress) {
             const result = await downloadAndInstallOllamaWindows(notifyProgress);
             console.log('[OLLAMA] Resultado de instalacion:', result);
             return result;
+        } else if (process.platform === 'linux') {
+            console.log('[OLLAMA] Llamando a downloadAndInstallOllamaLinux()...');
+            const result = await downloadAndInstallOllamaLinux(notifyProgress);
+            console.log('[OLLAMA] Resultado de instalacion:', result);
+            return result;
+        } else if (process.platform === 'darwin') {
+            console.log('[OLLAMA] Llamando a downloadAndInstallOllamaMac()...');
+            const result = await downloadAndInstallOllamaMac(notifyProgress);
+            console.log('[OLLAMA] Resultado de instalacion:', result);
+            return result;
         } else {
-            console.error('[OLLAMA] Instalacion automatica no soportada en esta plataforma');
+            console.error('[OLLAMA] Instalacion automatica no soportada en esta plataforma:', process.platform);
             return false;
         }
     } catch (installError) {
@@ -239,6 +253,192 @@ async function downloadAndInstallOllamaWindows(notifyProgress) {
         return false;
     } finally {
         // Siempre liberar el flag
+        isDownloadingOllama = false;
+        console.log('[OLLAMA] Flag de descarga liberado');
+    }
+}
+
+/**
+ * Descargar e instalar Ollama en Linux
+ * @param {Function} notifyProgress - Callback para notificar progreso
+ * @returns {Promise<boolean>} true si instalacion exitosa
+ */
+async function downloadAndInstallOllamaLinux(notifyProgress) {
+    if (isDownloadingOllama) {
+        console.log('[OLLAMA] Ya hay una descarga en progreso, esperando...');
+        return false;
+    }
+
+    isDownloadingOllama = true;
+    console.log('[OLLAMA] Iniciando instalacion en Linux...');
+
+    try {
+        // Usar el script oficial de instalacion de Ollama
+        notifyProgress('ollama-download', 'Descargando e instalando Ollama...', 30);
+        
+        await new Promise((resolve, reject) => {
+            const installProcess = spawn('bash', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+                env: {
+                    ...process.env,
+                    DEBIAN_FRONTEND: 'noninteractive'
+                }
+            });
+
+            installProcess.stdout.on('data', (data) => {
+                const output = data.toString().trim();
+                console.log(`[OLLAMA] ${output}`);
+                
+                if (output.includes('Downloading')) {
+                    notifyProgress('ollama-download', 'Descargando Ollama...', 35);
+                } else if (output.includes('Installing')) {
+                    notifyProgress('ollama-install', 'Instalando Ollama...', 45);
+                }
+            });
+
+            installProcess.stderr.on('data', (data) => {
+                const error = data.toString().trim();
+                console.log(`[OLLAMA] ${error}`);
+            });
+
+            installProcess.on('close', (code) => {
+                console.log(`[OLLAMA] Instalador termino con codigo: ${code}`);
+                if (code === 0) {
+                    resolve();
+                } else {
+                    reject(new Error(`Instalador termino con codigo ${code}`));
+                }
+            });
+
+            installProcess.on('error', (err) => {
+                console.error('[OLLAMA] Error al ejecutar instalador:', err);
+                reject(err);
+            });
+        });
+
+        console.log('[OLLAMA] Esperando a que Ollama inicie...');
+        notifyProgress('ollama-wait', 'Esperando Ollama...', 55);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // Verificar con reintentos
+        for (let i = 0; i < 12; i++) {
+            console.log(`[OLLAMA] Intento ${i + 1}/12 de verificacion...`);
+
+            if (await checkOllama()) {
+                console.log('[OLLAMA] Ollama instalado e iniciado correctamente');
+                notifyProgress('ollama-ready', 'Ollama listo', 60);
+                return true;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+
+        console.warn('[OLLAMA] Ollama instalado pero no responde, intentando iniciar...');
+
+        if (await startOllamaService()) {
+            console.log('[OLLAMA] Ollama iniciado manualmente con exito');
+            notifyProgress('ollama-ready', 'Ollama listo', 60);
+            return true;
+        }
+
+        return false;
+
+    } catch (error) {
+        console.error('[OLLAMA] Error critico durante instalacion en Linux:', error);
+        return false;
+    } finally {
+        isDownloadingOllama = false;
+        console.log('[OLLAMA] Flag de descarga liberado');
+    }
+}
+
+/**
+ * Descargar e instalar Ollama en macOS
+ * @param {Function} notifyProgress - Callback para notificar progreso
+ * @returns {Promise<boolean>} true si instalacion exitosa
+ */
+async function downloadAndInstallOllamaMac(notifyProgress) {
+    if (isDownloadingOllama) {
+        console.log('[OLLAMA] Ya hay una descarga en progreso, esperando...');
+        return false;
+    }
+
+    isDownloadingOllama = true;
+    const installerPath = path.join(app.getPath('temp'), 'Ollama.zip');
+    const downloadUrl = 'https://ollama.com/download/Ollama-darwin.zip';
+
+    console.log('[OLLAMA] Iniciando descarga desde:', downloadUrl);
+
+    try {
+        // Descargar el instalador
+        const { downloadFile } = require('./downloadUtils');
+        await downloadFile(downloadUrl, installerPath, notifyProgress, 'ollama-download', 28, 35);
+
+        console.log('[OLLAMA] Descarga completada, extrayendo...');
+        notifyProgress('ollama-install', 'Instalando Ollama...', 40);
+
+        // Extraer y mover a /Applications
+        await new Promise((resolve, reject) => {
+            const extractProcess = spawn('unzip', ['-o', installerPath, '-d', '/Applications'], {
+                stdio: 'pipe'
+            });
+
+            extractProcess.on('close', (code) => {
+                console.log(`[OLLAMA] Extraccion termino con codigo: ${code}`);
+                if (code === 0 || code === null) {
+                    resolve();
+                } else {
+                    reject(new Error(`Extraccion termino con codigo ${code}`));
+                }
+            });
+
+            extractProcess.on('error', (err) => {
+                console.error('[OLLAMA] Error al extraer:', err);
+                reject(err);
+            });
+        });
+
+        // Limpiar el instalador
+        try {
+            if (fs.existsSync(installerPath)) {
+                fs.unlinkSync(installerPath);
+                console.log('[OLLAMA] Instalador eliminado');
+            }
+        } catch (cleanError) {
+            console.warn('[OLLAMA] No se pudo limpiar instalador:', cleanError.message);
+        }
+
+        console.log('[OLLAMA] Esperando a que Ollama inicie...');
+        notifyProgress('ollama-wait', 'Esperando Ollama...', 55);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // Verificar con reintentos
+        for (let i = 0; i < 12; i++) {
+            console.log(`[OLLAMA] Intento ${i + 1}/12 de verificacion...`);
+
+            if (await checkOllama()) {
+                console.log('[OLLAMA] Ollama instalado e iniciado correctamente');
+                notifyProgress('ollama-ready', 'Ollama listo', 60);
+                return true;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+
+        console.warn('[OLLAMA] Ollama instalado pero no responde, intentando iniciar...');
+
+        if (await startOllamaService()) {
+            console.log('[OLLAMA] Ollama iniciado manualmente con exito');
+            notifyProgress('ollama-ready', 'Ollama listo', 60);
+            return true;
+        }
+
+        return false;
+
+    } catch (error) {
+        console.error('[OLLAMA] Error critico durante instalacion en macOS:', error);
+        return false;
+    } finally {
         isDownloadingOllama = false;
         console.log('[OLLAMA] Flag de descarga liberado');
     }
@@ -394,5 +594,7 @@ module.exports = {
     ensureOllamaModels,
     downloadOllamaModel,
     downloadAndInstallOllamaWindows,
+    downloadAndInstallOllamaLinux,
+    downloadAndInstallOllamaMac,
     DEFAULT_REQUIRED_MODELS
 };

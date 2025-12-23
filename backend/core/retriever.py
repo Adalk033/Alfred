@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import EmbeddingsFilter
 
 from utils.logger import get_logger
 

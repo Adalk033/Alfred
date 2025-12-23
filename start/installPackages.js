@@ -85,15 +85,25 @@ function loadGPUPackages(backendPath) {
 async function detectGPUType() {
     console.log('[GPU] Detectando hardware GPU...');
 
-    // Verificar NVIDIA
+    // Verificar NVIDIA (Windows y Linux)
     try {
-        if (process.platform === 'win32') {
-            execSync('nvidia-smi', { stdio: 'pipe' });
+        if (process.platform === 'win32' || process.platform === 'linux') {
+            const output = execSync('nvidia-smi', { stdio: 'pipe', encoding: 'utf8' });
             console.log('[GPU] GPU NVIDIA detectada');
+            
+            // Mostrar informacion de la GPU detectada
+            const gpuMatch = output.match(/NVIDIA.*?(GTX|RTX|Tesla|Quadro|GeForce).*?\d+/i);
+            if (gpuMatch) {
+                console.log('[GPU] Modelo:', gpuMatch[0]);
+            }
+            
             return 'nvidia_cuda';
         }
-    } catch {
-        // No hay NVIDIA GPU
+    } catch (error) {
+        // No hay NVIDIA GPU o nvidia-smi no esta instalado
+        if (process.platform === 'linux') {
+            console.log('[GPU] nvidia-smi no disponible. Si tienes GPU NVIDIA, instala: sudo apt install nvidia-utils');
+        }
     }
 
     // Verificar Apple Silicon
@@ -400,6 +410,8 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
     return new Promise((resolve) => {
         const proc = spawn(pythonCmd, [
             '-m', 'pip', 'install',
+            '--upgrade',
+            '--upgrade-strategy', 'only-if-needed',
             '--prefer-binary',
             '--no-cache-dir',
             '--no-color',
@@ -407,7 +419,6 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
             '--disable-pip-version-check',
             '--retries', '3',
             '--timeout', '300',
-            '--force-reinstall',
             ...specsToInstall
         ], {
             cwd: backendPath,
@@ -435,14 +446,15 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
         proc.on('close', (code) => {
             if (code !== 0) {
                 console.error(`[BULK-INSTALL] Instalacion en bloque fallo con codigo ${code}`);
+                console.log('[BULK-INSTALL] Error output:', errorOutput.substring(0, 500));
 
                 // Detectar paquetes fallidos del output
-                const failedMatches = errorOutput.match(/ERROR:.*?([\w-]+)/g);
-                if (failedMatches) {
-                    failedMatches.forEach(match => {
-                        const pkgMatch = match.match(/([\w-]+)/);
-                        if (pkgMatch) failedPackages.push(pkgMatch[1]);
-                    });
+                // Buscar patrones como "ERROR: Could not find a version that satisfies the requirement <package>"
+                const requirementMatches = errorOutput.matchAll(/requirement\s+([\w-]+[=<>!][\d.]+)/g);
+                for (const match of requirementMatches) {
+                    if (match[1] && !match[1].startsWith('ERROR')) {
+                        failedPackages.push(match[1]);
+                    }
                 }
 
                 // Si no podemos detectar especificos, marcar todos como fallidos

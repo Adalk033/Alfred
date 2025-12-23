@@ -86,11 +86,11 @@ jsonschema-specifications==2024.10.1
 kiwisolver==1.4.9
 
 # === LangChain Ecosystem ===
-langchain==0.3.27
-langchain-community==0.3.30
-langchain-core==0.3.27
-langchain-ollama==0.3.10
-langchain-text-splitters==0.3.11
+langchain==1.2.0
+langchain-community==0.4.1
+langchain-core==1.2.5
+langchain-ollama==1.0.1
+langchain-text-splitters==1.1.0
 
 # === NLP & Language Detection ===
 langdetect==1.0.7

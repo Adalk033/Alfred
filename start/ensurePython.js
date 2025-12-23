@@ -31,29 +31,36 @@ let envCached = null; // Almacena el resultado de ensurePythonEnv para esta sesi
  * @returns {Promise<boolean>} true si Python esta instalado con version correcta
  */
 async function checkPython() {
-    try {
-        const version = execSync('python --version', {
-            encoding: 'utf8',
-            stdio: 'pipe'
-        }).trim();
+    // Intentar con 'python' primero (Windows), luego 'python3' (Linux/macOS)
+    const commands = process.platform === 'win32' ? ['python'] : ['python3', 'python'];
+    
+    for (const cmd of commands) {
+        try {
+            const version = execSync(`${cmd} --version`, {
+                encoding: 'utf8',
+                stdio: 'pipe'
+            }).trim();
 
-        const match = version.match(/Python (\d+)\.(\d+)/);
-        if (match) {
-            const major = parseInt(match[1]);
-            const minor = parseInt(match[2]);
-            if (major >= 3 && minor >= 12) {
-                console.log('[PYTHON] Version valida:', `${major}.${minor}`);
-                return true;
-            } else {
-                console.error('[PYTHON] Version muy antigua:', version);
-                return false;
+            const match = version.match(/Python (\d+)\.(\d+)/);
+            if (match) {
+                const major = parseInt(match[1]);
+                const minor = parseInt(match[2]);
+                if (major >= 3 && minor >= 12) {
+                    console.log(`[PYTHON] Version valida encontrada con '${cmd}':`, `${major}.${minor}`);
+                    return true;
+                } else {
+                    console.error(`[PYTHON] Version muy antigua con '${cmd}':`, version);
+                    continue; // Intentar siguiente comando
+                }
             }
+        } catch (error) {
+            // Este comando no funciono, intentar el siguiente
+            continue;
         }
-        return true;
-    } catch (error) {
-        console.error('[PYTHON] Python no esta instalado o no esta en PATH');
-        return false;
     }
+    
+    console.error('[PYTHON] Python no esta instalado o no esta en PATH');
+    return false;
 }
 
 /**
@@ -65,18 +72,26 @@ async function checkPython() {
 function findPythonExecutable(backendPath = null, isDevelopment = false) {
     // MODO PRODUCCION: Usar python-portable incluido
     if (!isDevelopment && backendPath) {
-        const pythonPortablePath = path.join(backendPath, 'python-portable', 'python.exe');
+        const pythonExt = process.platform === 'win32' ? 'python.exe' : 'python';
+        const pythonPortablePath = path.join(backendPath, 'python-portable', pythonExt);
         if (fs.existsSync(pythonPortablePath)) { return pythonPortablePath; }
         else { throw new Error('Python portable no encontrado en produccion'); }
     }
 
     // MODO DESARROLLO: Usar Python del sistema
-    try {
-        execSync('python --version', { stdio: 'pipe' });
-        return 'python';
-    } catch {
-        throw new Error('Python no encontrado en el sistema');
+    const commands = process.platform === 'win32' ? ['python'] : ['python3', 'python'];
+    
+    for (const cmd of commands) {
+        try {
+            execSync(`${cmd} --version`, { stdio: 'pipe' });
+            console.log(`[PYTHON] Usando comando: ${cmd}`);
+            return cmd;
+        } catch {
+            continue;
+        }
     }
+    
+    throw new Error('Python no encontrado en el sistema');
 }
 
 // ============================================================================
@@ -669,15 +684,38 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 console.log('[ENV] Verificando entorno virtual...');
                 // No notificar aqui
 
-                // Intentar ejecutar python del venv para verificar si funciona
+                let venvIsCorrupted = false;
+
+                // Verificar 1: Python ejecutable funciona
                 try {
                     execSync(`"${basePython}" --version`, {
                         encoding: 'utf8',
                         stdio: 'pipe',
                         timeout: 5000
                     });
-                    console.log("[ENV] Entorno virtual existente funciona correctamente");
+                    console.log("[ENV] Python del venv funciona");
                 } catch (venvError) {
+                    console.log("[ENV] Python del venv no funciona");
+                    venvIsCorrupted = true;
+                }
+
+                // Verificar 2: pip está disponible
+                if (!venvIsCorrupted) {
+                    try {
+                        execSync(`"${pythonCmd}" -m pip --version`, {
+                            encoding: 'utf8',
+                            stdio: 'pipe',
+                            timeout: 5000
+                        });
+                        console.log("[ENV] pip del venv funciona");
+                    } catch (pipError) {
+                        console.log("[ENV] pip del venv no esta disponible");
+                        venvIsCorrupted = true;
+                    }
+                }
+
+                // Si está corrupto, eliminarlo
+                if (venvIsCorrupted) {
                     console.log("[ENV] Entorno virtual corrupto detectado. Eliminando...");
                     // No notificar aqui, main.js maneja progreso
                     // Eliminar venv corrupto recursivamente
@@ -704,6 +742,8 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                             throw new Error(`No se pudo eliminar el entorno virtual corrupto: ${fsError.message}`);
                         }
                     }
+                } else {
+                    console.log("[ENV] Entorno virtual existente funciona correctamente");
                 }
             }
 
@@ -716,12 +756,72 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 const createVenvCmd = `"${basePython}" -m venv venv`;
                 console.log('Ejecutando:', createVenvCmd);
 
-                execSync(createVenvCmd, {
-                    cwd: backendPath,
-                    encoding: 'utf8',
-                    stdio: 'pipe'
-                });
-                console.log("Entorno virtual creado correctamente");
+                try {
+                    execSync(createVenvCmd, {
+                        cwd: backendPath,
+                        encoding: 'utf8',
+                        stdio: 'pipe'
+                    });
+                    console.log("Entorno virtual creado correctamente");
+                } catch (venvCreateError) {
+                    console.error("Error al crear venv:", venvCreateError.message);
+                    
+                    // En Linux, intentar instalar python3-venv si falla
+                    if (process.platform === 'linux') {
+                        console.log('[venv-install] Instalando python3-venv del sistema...');
+                        console.log('Se requiere instalar python3-venv. Intentando instalacion automatica...');
+                        
+                        try {
+                            // Detectar gestor de paquetes
+                            let installCmd = null;
+                            
+                            // Probar apt (Debian/Ubuntu/Zorin)
+                            try {
+                                execSync('which apt-get', { stdio: 'pipe' });
+                                installCmd = 'sudo apt-get update && sudo apt-get install -y python3-venv python3-pip';
+                            } catch {}
+                            
+                            // Probar dnf (Fedora/RHEL)
+                            if (!installCmd) {
+                                try {
+                                    execSync('which dnf', { stdio: 'pipe' });
+                                    installCmd = 'sudo dnf install -y python3-venv python3-pip';
+                                } catch {}
+                            }
+                            
+                            // Probar yum (CentOS)
+                            if (!installCmd) {
+                                try {
+                                    execSync('which yum', { stdio: 'pipe' });
+                                    installCmd = 'sudo yum install -y python3-venv python3-pip';
+                                } catch {}
+                            }
+                            
+                            if (installCmd) {
+                                console.log('Ejecutando:', installCmd);
+                                execSync(installCmd, {
+                                    encoding: 'utf8',
+                                    stdio: 'inherit', // Mostrar output para que usuario vea progreso
+                                    timeout: 120000 // 2 minutos
+                                });
+                                
+                                // Reintentar creacion de venv
+                                execSync(createVenvCmd, {
+                                    cwd: backendPath,
+                                    encoding: 'utf8',
+                                    stdio: 'pipe'
+                                });
+                                console.log("Entorno virtual creado correctamente despues de instalar python3-venv");
+                            } else {
+                                throw new Error('No se pudo detectar el gestor de paquetes. Instala manualmente: sudo apt install python3-venv');
+                            }
+                        } catch (installError) {
+                            throw new Error(`No se pudo instalar python3-venv: ${installError.message}\nInstala manualmente: sudo apt install python3-venv python3-pip`);
+                        }
+                    } else {
+                        throw venvCreateError;
+                    }
+                }
             }
 
             // Verificar y actualizar pip
