@@ -1,7 +1,5 @@
 """
 Alfred Backend API - FastAPI Server
-Asistente personal inteligente con acceso a documentos locales
-Diseñado para ser consumido por aplicaciones C# y otros clientes
 """
 
 import sys
@@ -3747,11 +3745,6 @@ async def setup_encryption(request: EncryptionSetupRequest):
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-class EncryptionToggleRequest(BaseModel):
-    """Modelo para cambiar estado de cifrado"""
-    enable_encryption: bool = Field(..., description="True para habilitar, False para deshabilitar")
-
-
 @app.get("/security/encryption-key", tags=["Seguridad"])
 async def get_encryption_key_for_frontend():
     """
@@ -3789,57 +3782,6 @@ async def get_encryption_key_for_frontend():
         
     except Exception as e:
         backend_logger.error(f"Error obteniendo clave de cifrado para frontend: {e}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-
-
-@app.post("/settings/encryption/toggle")
-async def toggle_encryption(request: EncryptionToggleRequest):
-    """
-    Cambia el estado del cifrado (despues de la configuracion inicial)
-    
-    ADVERTENCIA: Cambiar el cifrado no re-cifra/descifra datos existentes
-    Solo afecta nuevos datos guardados
-    
-    Args:
-        enable_encryption: True para habilitar, False para deshabilitar
-    
-    Returns:
-        - encryption_enabled: Nuevo estado
-    """
-    try:
-        from utils.security import generate_key, get_encryption_key_display
-        
-        # Verificar que ya se hizo la configuracion inicial
-        needs_setup = db_manager.get_user_setting('needs_encryption_setup', 'false', 'bool')
-        
-        if needs_setup:
-            raise HTTPException(
-                status_code=400,
-                detail="Debes configurar el cifrado primero usando /settings/encryption/setup"
-            )
-        
-        # Actualizar configuracion
-        db_manager.set_user_setting('encryption_enabled', request.enable_encryption, 'bool')
-        
-        response = {
-            "success": True,
-            "encryption_enabled": request.enable_encryption,
-            "message": "Cifrado habilitado" if request.enable_encryption else "Cifrado deshabilitado",
-            "warning": "Los datos existentes no se re-cifran. Solo afecta nuevos datos."
-        }
-        
-        # Si se habilito, asegurar que existe la clave
-        if request.enable_encryption:
-            generate_key()
-            response["key"] = get_encryption_key_display()
-        
-        backend_logger.info(f"Cifrado {'habilitado' if request.enable_encryption else 'deshabilitado'}")
-        return response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        backend_logger.error(f"Error cambiando estado de cifrado: {e}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 

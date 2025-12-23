@@ -217,7 +217,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
 
 # === Language Codes ===
-python-iso639==2025.2.18
+python-iso639==2025.11.16
 
 # === File Type Detection ===
 python-magic==0.4.27

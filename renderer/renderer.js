@@ -2333,46 +2333,6 @@ async function enableEncryption() {
     }
 }
 
-// Toggle cifrado (despues de primera configuracion)
-async function toggleEncryptionStatus(enabled) {
-    const message = enabled
-        ? 'Los nuevos datos se cifraran.'
-        : 'Los nuevos datos NO se cifraran.';
-
-    const title = enabled ? 'Habilitar cifrado?' : 'Deshabilitar cifrado?';
-
-    const confirmed = await showConfirm(
-        message,
-        title,
-        { type: 'warning', confirmText: 'Confirmar', cancelText: 'Cancelar' }
-    );
-
-    if (!confirmed) {
-        return;
-    }
-
-    try {
-        const response = await fetch('http://localhost:8000/settings/encryption/toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enable_encryption: enabled })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            const msgType = enabled ? 'success' : 'warning';
-            showNotification(msgType, data.message);
-            await loadEncryptionStatus();
-        } else {
-            showNotification('error', data.message || 'Error al cambiar estado de cifrado');
-        }
-    } catch (error) {
-        console.error('Error al cambiar estado de cifrado:', error);
-        showNotification('error', 'Error al cambiar estado de cifrado');
-    }
-}
-
 // ===============================================
 // FUNCIONES DE OLLAMA KEEP ALIVE
 // ===============================================
