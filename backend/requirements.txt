@@ -49,15 +49,15 @@ frozenlist==1.7.0
 fsspec==2024.10.0
 
 # === Google Cloud Services ===
-google-api-core==2.25.2
-google-auth==2.41.1
-google-cloud-vision==3.10.2
-googleapis-common-protos==1.70.0
+google-api-core==2.28.1
+google-auth==2.45.0
+google-cloud-vision==3.11.0
+googleapis-common-protos==1.72.0
 
 # === Async & Concurrency ===
 greenlet==3.2.4
-grpcio==1.75.1
-grpcio-status==1.75.1
+grpcio==1.76.0
+grpcio-status==1.76.0
 
 # === HTTP & Networking ===
 h11==0.16.0
@@ -65,10 +65,10 @@ html5lib==1.1
 httpcore==1.0.9
 httptools==0.6.4
 httpx==0.28.1
-httpx-sse==0.4.1
+httpx-sse==0.4.3
 
 # === Hugging Face & ML ===
-huggingface-hub==0.35.3
+huggingface-hub==1.2.3
 humanfriendly==10.0
 idna==3.10
 importlib_metadata==8.7.0
@@ -80,7 +80,7 @@ joblib==1.5.2
 jsonpatch==1.33
 jsonpointer==3.0.0
 jsonschema==4.25.1
-jsonschema-specifications==2024.10.1
+jsonschema-specifications==2025.9.1
 
 # === Math & Scientific ===
 kiwisolver==1.4.9
@@ -138,12 +138,12 @@ onnxruntime==1.23.0
 opencv-python==4.12.0.88
 
 # === OpenTelemetry (Observability) ===
-opentelemetry-api==1.37.0
-opentelemetry-exporter-otlp-proto-common==1.37.0
-opentelemetry-exporter-otlp-proto-grpc==1.37.0
-opentelemetry-proto==1.37.0
-opentelemetry-sdk==1.37.0
-opentelemetry-semantic-conventions==0.58b0
+opentelemetry-api==1.39.1
+opentelemetry-exporter-otlp-proto-common==1.39.1
+opentelemetry-exporter-otlp-proto-grpc==1.39.1
+opentelemetry-proto==1.39.1
+opentelemetry-sdk==1.39.1
+opentelemetry-semantic-conventions==0.60b1
 
 # === JSON & Serialization ===
 orjson==3.11.3
@@ -157,7 +157,7 @@ pandas==2.2.3
 
 # === PDF Processing ===
 pdf2image==1.17.0
-pdfminer.six==20250506
+pdfminer.six==20251107
 pikepdf==9.11.0
 pypdf==6.4.0
 
@@ -170,7 +170,7 @@ posthog==5.4.0
 propcache==0.4.1
 
 # === Protocol Buffers ===
-proto-plus==1.26.1
+proto-plus==1.27.0
 protobuf==6.31.1
 
 # === System Monitoring ===
@@ -189,7 +189,7 @@ pycparser==2.23
 
 # === Validation & Settings ===
 pydantic==2.11.10
-pydantic-settings==2.11.0
+pydantic-settings==2.12.0
 pydantic_core==2.33.2
 
 # === Syntax Highlighting ===
@@ -214,7 +214,7 @@ pyreadline3==3.5.4
 python-dateutil==2.9.0.post0
 
 # === Environment Variables ===
-python-dotenv==1.1.1
+python-dotenv==1.2.1
 
 # === Language Codes ===
 python-iso639==2025.2.18
@@ -223,7 +223,7 @@ python-iso639==2025.2.18
 python-magic==0.4.27
 
 # === Multipart Forms ===
-python-multipart==0.0.20
+python-multipart==0.0.21
 
 # === Outlook MSG Files ===
 python-oxmsg==0.0.2
@@ -252,7 +252,7 @@ requests-toolbelt==1.0.0
 rich==13.9.4
 
 # === Python Data Structures ===
-rpds-py==0.27.1
+rpds-py==0.30.0
 
 # === Cryptography ===
 rsa==4.9.1
@@ -321,7 +321,7 @@ watchfiles==1.1.0
 webencodings==0.5.1
 
 # === WebSocket ===
-websocket-client==1.8.0
+websocket-client==1.9.0
 websockets==14.1
 
 # === Decorators ===
@@ -339,6 +339,6 @@ zstandard==0.23.0
 # ============================================
 # DOCUMENT FORMAT PROCESSORS
 # ============================================
-python-docx==1.1.2
+python-docx==1.2.0
 openpyxl==3.1.5
 python-pptx==1.0.2
