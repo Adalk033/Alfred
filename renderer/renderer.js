@@ -2047,7 +2047,7 @@ async function completeWelcomeSetup() {
         const data = await response.json();
 
         if (data.success) {
-            console.log('✅ Configuracion de bienvenida completada');
+            console.log('Configuracion de bienvenida completada');
 
             // Actualizar estado local si hay foto de perfil
             if (welcomeProfilePictureData) {
@@ -2121,7 +2121,7 @@ async function setupEncryptionFirstTime(enableEncryption) {
             if (enableEncryption && data.key) {
                 // IMPORTANTE: Guardar la clave en la variable global
                 actualEncryptionKey = data.key;
-                console.log('✅ Clave guardada en memoria:', actualEncryptionKey.substring(0, 20) + '...');
+                console.log('Clave guardada en memoria:', actualEncryptionKey.substring(0, 20) + '...');
 
                 // Mostrar notificacion con la clave
                 showNotification('success', 'Cifrado habilitado correctamente');
@@ -2203,7 +2203,7 @@ async function loadEncryptionKey() {
         const response = await fetch('http://127.0.0.1:8000/settings/encryption/key');
 
         if (!response.ok) {
-            console.error('❌ Error HTTP:', response.status, response.statusText);
+            console.error('Error HTTP:', response.status, response.statusText);
             const errorText = await response.text();
             console.error('Respuesta del servidor:', errorText);
             showNotification('error', 'Error al cargar clave: ' + response.status);
@@ -2215,25 +2215,25 @@ async function loadEncryptionKey() {
 
         if (data.success && data.key) {
             actualEncryptionKey = data.key;
-            console.log('✅ Clave de cifrado cargada correctamente');
-            console.log('📏 Longitud de la clave:', actualEncryptionKey.length);
-            console.log('🔍 Primeros 20 caracteres:', actualEncryptionKey.substring(0, 20) + '...');
+            console.log('Clave de cifrado cargada correctamente');
+            console.log('Longitud de la clave:', actualEncryptionKey.length);
+            console.log('Primeros 20 caracteres:', actualEncryptionKey.substring(0, 20) + '...');
 
             // Mostrar puntos por defecto
             const keyField = document.getElementById('encryptionKeyField');
             if (keyField) {
                 keyField.value = '••••••••••••••••••••••••••••••••';
                 encryptionKeyVisible = false;
-                console.log('✅ Campo de clave actualizado con puntos');
+                console.log('Campo de clave actualizado con puntos');
             } else {
-                console.error('❌ No se encontro el campo encryptionKeyField');
+                console.error('No se encontro el campo encryptionKeyField');
             }
         } else {
-            console.error('❌ Respuesta invalida del servidor:', data);
+            console.error('Respuesta invalida del servidor:', data);
             showNotification('error', 'La respuesta del servidor no contiene la clave');
         }
     } catch (error) {
-        console.error('❌ Error al cargar clave de cifrado:', error);
+        console.error('Error al cargar clave de cifrado:', error);
         console.error('Detalles:', error.message, error.stack);
         showNotification('error', 'Error al cargar la clave: ' + error.message);
     }
@@ -2245,7 +2245,7 @@ function toggleEncryptionKey() {
     const eyeIcon = document.getElementById('eyeIcon');
 
     if (!keyField || !eyeIcon) {
-        console.error('❌ No se encontraron los elementos necesarios');
+        console.error('No se encontraron los elementos necesarios');
         console.error('keyField:', keyField);
         console.error('eyeIcon:', eyeIcon);
         return;
@@ -2253,12 +2253,12 @@ function toggleEncryptionKey() {
 
     if (!actualEncryptionKey) {
         showNotification('error', 'Clave no disponible. Haz clic en el boton de recargar (↻)');
-        console.error('❌ actualEncryptionKey esta vacio');
+        console.error('actualEncryptionKey esta vacio');
         return;
     }
 
-    console.log('🔄 Toggle clave - Estado actual:', encryptionKeyVisible);
-    console.log('🔑 Clave disponible (primeros 20 chars):', actualEncryptionKey.substring(0, 20) + '...');
+    console.log('Toggle clave - Estado actual:', encryptionKeyVisible);
+    console.log('Clave disponible (primeros 20 chars):', actualEncryptionKey.substring(0, 20) + '...');
 
     if (encryptionKeyVisible) {
         // Ocultar
@@ -2269,7 +2269,7 @@ function toggleEncryptionKey() {
             <circle cx="12" cy="12" r="3"></circle>
         `;
         encryptionKeyVisible = false;
-        console.log('✅ Clave ocultada');
+        console.log('Clave ocultada');
     } else {
         // Mostrar
         keyField.type = 'text';  // Cambiar a text para mostrar la clave completa
@@ -2279,7 +2279,7 @@ function toggleEncryptionKey() {
             <line x1="1" y1="1" x2="23" y2="23"></line>
         `;
         encryptionKeyVisible = true;
-        console.log('✅ Clave mostrada:', keyField.value);
+        console.log('Clave mostrada:', keyField.value);
     }
 }
 
