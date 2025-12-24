@@ -277,14 +277,6 @@ export function getCurrentMode() {
     return currentMode;
 }
 
-/**
- * Obtiene el tema actual
- * @returns {string} Tema actual
- */
-export function getCurrentTheme() {
-    return currentTheme;
-}
-
 // Expose globally for HTML onclick handlers
 window.setMode = setMode;
 window.setTheme = setTheme;

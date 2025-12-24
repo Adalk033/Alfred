@@ -16,10 +16,6 @@ export function getCurrentConversationId() {
     return State.currentConversationId;
 }
 
-export function getConversationHistory() {
-    return State.conversationHistory;
-}
-
 // Crear una nueva conversacion
 export async function createNewConversation(title = null, showWelcome = true) {
     try {

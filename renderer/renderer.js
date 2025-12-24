@@ -1,21 +1,20 @@
 import { showNotification } from './core/notifications.js';
-import { showAlert, showConfirm } from './core/dialogs.js';
-import { addMessage, scrollToBottom, markdownToHtml, updateStatus } from './dom/dom-utils.js';
-import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory, autoRenameConversationIfDefault } from './core/conversations.js';
+import { addMessage, updateStatus } from './dom/dom-utils.js';
+import { createNewConversation, loadConversations, loadConversation, deleteConversationById } from './core/conversations.js';
 import * as State from './state/state.js';
 import { getCryptoManager } from './crypto/crypto.js';
-import { initializeSidebar, toggleLeftSidebar, closeSidebarOnMobile, showLeftSidebarContent, hideLeftSidebarContent, setActiveNavItem, getActiveNavItem } from './dom/sidebar.js';
+import { initializeSidebar, toggleLeftSidebar, closeSidebarOnMobile, hideLeftSidebarContent, setActiveNavItem } from './dom/sidebar.js';
 import { sendMessage } from './core/messages.js';
 import { setupBackendListeners } from './features/backend/backend-listeners.js';
-import { handleFileAttach, removeAttachedFile, setupDragAndDrop, getAttachedFile } from './features/attachments/file-handler.js';
+import { handleFileAttach, removeAttachedFile, setupDragAndDrop } from './features/attachments/file-handler.js';
 import { showHistory } from './features/history/history-manager.js';
 import { loadIndexationStatus, loadDocumentPaths, addDocPath, browseDocPath, toggleDocPath, removeDocPath, reindexDocuments, clearIndex } from './features/documents/documents-manager.js';
-import { loadProfilePicture, updateProfilePictureDisplay, changeProfilePicture, updateProfileHistory, restoreProfilePicture, deleteProfilePicture, loadUserInfo, loadPersonalization, saveUserInfo, savePersonalization } from './features/user/profile-manager.js';
-import { initializeOllamaElements, loadOllamaKeepAlive, updateKeepAliveDisplay, saveOllamaKeepAlive, loadModelsIntoSelector, loadOllamaModels, downloadOllamaModel, selectModel, deleteModel, loadCurrentModel, changeModel } from './features/models/ollama-manager.js';
-import { checkAndShowWelcomeModal, completeWelcomeSetup, checkAndShowFirstTimeEncryptionModal, setupEncryptionFirstTime, loadEncryptionStatus, loadEncryptionKey, toggleEncryptionKey, copyEncryptionKey, enableEncryption } from './features/security/encryption-manager.js';
+import { loadProfilePicture, changeProfilePicture, loadUserInfo, loadPersonalization, saveUserInfo, savePersonalization } from './features/user/profile-manager.js';
+import { initializeOllamaElements, loadOllamaKeepAlive, updateKeepAliveDisplay, loadModelsIntoSelector, loadOllamaModels, downloadOllamaModel, selectModel, deleteModel, loadCurrentModel, changeModel } from './features/models/ollama-manager.js';
+import { checkAndShowWelcomeModal, checkAndShowFirstTimeEncryptionModal, loadEncryptionStatus, loadEncryptionKey, toggleEncryptionKey, copyEncryptionKey, enableEncryption } from './features/security/encryption-manager.js';
 import { loadSettings, saveSettingsHandler } from './features/settings/settings-manager.js';
-import { showConversations, conversationsState } from './features/conversations/conversations-manager.js';
-import { MODES, MODE_NAMES, THEMES, updateModeIndicator, setMode, loadMode, setTheme, loadTheme, getCurrentMode, getCurrentTheme } from './features/appearance/themes-manager.js';
+import { showConversations } from './features/conversations/conversations-manager.js';
+import { MODES, THEMES, setMode, loadMode, setTheme, loadTheme, getCurrentMode } from './features/appearance/themes-manager.js';
 
 // Setup backend listeners
 setupBackendListeners(updateConnectionStatus);
@@ -586,14 +585,6 @@ async function checkServerStatus() {
     }
 }
 
-// File attachments now handled in ./features/attachments/file-handler.js
-// History management now handled in ./features/history/history-manager.js
-// Conversations management now handled in ./features/conversations/conversations-manager.js
-
-// ===============================================
-// FUNCIONES DE TEMA Y MODO
-// ===============================================
-
 // Funcion para reiniciar backend manualmente
 async function restartBackend() {
     try {
@@ -662,10 +653,6 @@ function updateConnectionStatus(connected) {
         updateStatus('error', 'Desconectado', State.statusElement);
     }
 }
-
-// Profile and user management now handled in ./features/user/profile-manager.js
-// Themes and modes now handled in ./features/appearance/themes-manager.js
-// Documents management now handled in ./features/documents/documents-manager.js
 
 // ===============================================
 // EXPONER FUNCIONES GLOBALMENTE PARA onclick
