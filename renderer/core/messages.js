@@ -9,6 +9,7 @@ import { showNotification } from './notifications.js';
 import { getCryptoManager } from '../crypto/crypto.js';
 import { getCurrentConversationId, createNewConversation, loadConversations, autoRenameConversationIfDefault } from './conversations.js';
 import { scrollToBottom, addMessage, markdownToHtml } from '../dom/dom-utils.js';
+import { getAttachedFile, removeAttachedFile } from '../features/attachments/file-handler.js';
 
 /**
  * Send a message to the backend with optional file attachment
@@ -65,8 +66,8 @@ export async function sendMessage() {
         // Enviar consulta a Alfred con el modo de busqueda seleccionado y el ID de conversacion
         const searchDocuments = State.searchMode === 'documents';
 
-        // Obtener archivo adjunto del scope global si existe
-        const attachedFile = window.attachedFile;
+        // Obtener archivo adjunto usando la funcion exportada
+        const attachedFile = getAttachedFile();
 
         // Preparar datos con archivo adjunto si existe
         const queryData = {
@@ -90,8 +91,8 @@ export async function sendMessage() {
         const result = await window.alfredAPI.sendQueryWithAttachment(queryData);
 
         // Limpiar archivo adjunto despues de enviar
-        if (attachedFile && window.removeAttachedFile) {
-            window.removeAttachedFile();
+        if (attachedFile) {
+            removeAttachedFile();
         }
 
         // Capturar tiempo de fin y calcular duracion
