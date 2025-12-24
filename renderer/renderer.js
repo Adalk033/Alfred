@@ -4,6 +4,7 @@ import { addMessage, scrollToBottom, markdownToHtml, updateStatus } from './dom/
 import { createNewConversation, loadConversations, updateConversationsList, loadConversation, deleteConversationById, getCurrentConversationId, getConversationHistory, autoRenameConversationIfDefault } from './core/conversations.js';
 import * as State from './state/state.js';
 import { getCryptoManager } from './crypto/crypto.js';
+import { initializeSidebar, toggleLeftSidebar, closeSidebarOnMobile, showLeftSidebarContent, hideLeftSidebarContent, setActiveNavItem, getActiveNavItem } from './dom/sidebar.js';
 
 // Import message handling functions
 import { sendMessage, addMessageWithTyping, createSaveButton, saveConversation } from './core/messages.js';
@@ -138,7 +139,6 @@ let leftSidebarContent;
 let newChatBtn;
 let conversationsBtn;
 let profilePictureTopbar;
-let activeNavItem = null;
 
 // Indicador de modo en topbar
 let modeIndicator;
@@ -212,6 +212,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Indicador de modo en topbar
     modeIndicator = document.getElementById('modeIndicator');
     modeIndicatorName = modeIndicator ? modeIndicator.querySelector('.mode-name') : null;
+
+    // Inicializar sidebar con referencias DOM
+    initializeSidebar({
+        leftSidebar,
+        leftSidebarContent,
+        menuToggle
+    });
 
     // Esperar a que el backend este listo antes de habilitar el chat
     await waitForBackendReady();
@@ -922,52 +929,8 @@ function formatFileSize(bytes) {
 // Message handling functions (sendMessage, addMessageWithTyping, createSaveButton, saveConversation)
 // are now imported from ./core/messages.js
 
-// Toggle del sidebar izquierdo
-function toggleLeftSidebar() {
-    if (leftSidebar) {
-        leftSidebar.classList.toggle('collapsed');
-
-        // Rotar el icono del menu
-        if (menuToggle) {
-            menuToggle.classList.toggle('active');
-        }
-    }
-}
-
-// Cerrar sidebar en mobile cuando se hace clic en una opcion
-function closeSidebarOnMobile() {
-    if (window.innerWidth <= 768 && leftSidebar) {
-        leftSidebar.classList.add('collapsed');
-    }
-}
-
-// Mostrar contenido en el sidebar izquierdo
-function showLeftSidebarContent() {
-    if (leftSidebarContent) {
-        leftSidebarContent.classList.add('active');
-    }
-}
-
-// Ocultar contenido del sidebar izquierdo
-function hideLeftSidebarContent() {
-    if (leftSidebarContent) {
-        leftSidebarContent.classList.remove('active');
-    }
-}
-
-// Marcar item de navegacion como activo
-function setActiveNavItem(button) {
-    // Remover clase activa de todos los botones
-    document.querySelectorAll('.nav-item').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    // Agregar clase activa al boton actual
-    if (button) {
-        button.classList.add('active');
-        activeNavItem = button;
-    }
-}
+// Sidebar functions (toggleLeftSidebar, closeSidebarOnMobile, showLeftSidebarContent, 
+// hideLeftSidebarContent, setActiveNavItem) are now imported from ./dom/sidebar.js
 
 // Estado global para el historial
 let historyState = {
@@ -998,7 +961,7 @@ window.conversationsState = conversationsState;
 // Mostrar historial con busqueda y paginacion
 async function showHistory() {
     // Si ya esta activo, ocultarlo
-    if (activeNavItem === historyBtn && leftSidebarContent.classList.contains('active')) {
+    if (getActiveNavItem() === historyBtn && leftSidebarContent.classList.contains('active')) {
         hideLeftSidebarContent();
         setActiveNavItem(null);
         return;
@@ -1249,7 +1212,7 @@ function loadHistoryItem(item) {
 // Mostrar conversaciones
 async function showConversations() {
     // Si ya esta activo, ocultarlo
-    if (activeNavItem === conversationsBtn && leftSidebarContent.classList.contains('active')) {
+    if (getActiveNavItem() === conversationsBtn && leftSidebarContent.classList.contains('active')) {
         hideLeftSidebarContent();
         setActiveNavItem(null);
         return;
