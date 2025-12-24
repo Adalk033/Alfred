@@ -1965,7 +1965,7 @@ let welcomeProfilePictureData = null;
 // Verificar y mostrar modal de bienvenida inicial
 async function checkAndShowWelcomeModal() {
     try {
-        const response = await fetch('http://localhost:8000/settings/welcome/status');
+        const response = await fetch('http://127.0.0.1:8000/settings/welcome/status');
         const data = await response.json();
 
         if (data.success && data.needs_welcome) {
@@ -2038,7 +2038,7 @@ async function completeWelcomeSetup() {
             requestData.profile_picture = welcomeProfilePictureData;
         }
 
-        const response = await fetch('http://localhost:8000/settings/welcome/complete', {
+        const response = await fetch('http://127.0.0.1:8000/settings/welcome/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData)
@@ -2081,7 +2081,7 @@ async function completeWelcomeSetup() {
 // Verificar y mostrar modal de primera instalacion
 async function checkAndShowFirstTimeEncryptionModal() {
     try {
-        const response = await fetch('http://localhost:8000/settings/encryption/status');
+        const response = await fetch('http://127.0.0.1:8000/settings/encryption/status');
         const data = await response.json();
 
         if (data.success && data.needs_setup) {
@@ -2109,7 +2109,7 @@ async function checkAndShowFirstTimeEncryptionModal() {
 // Configurar cifrado por primera vez desde el modal inicial
 async function setupEncryptionFirstTime(enableEncryption) {
     try {
-        const response = await fetch('http://localhost:8000/settings/encryption/setup', {
+        const response = await fetch('http://127.0.0.1:8000/settings/encryption/setup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enable_encryption: enableEncryption })
@@ -2153,7 +2153,7 @@ async function setupEncryptionFirstTime(enableEncryption) {
 // Cargar estado de cifrado
 async function loadEncryptionStatus() {
     try {
-        const response = await fetch('http://localhost:8000/settings/encryption/status');
+        const response = await fetch('http://127.0.0.1:8000/settings/encryption/status');
         const data = await response.json();
 
         if (data.success) {
@@ -2200,7 +2200,7 @@ async function loadEncryptionStatus() {
 async function loadEncryptionKey() {
     try {
         console.log('🔑 Intentando cargar clave de cifrado...');
-        const response = await fetch('http://localhost:8000/settings/encryption/key');
+        const response = await fetch('http://127.0.0.1:8000/settings/encryption/key');
 
         if (!response.ok) {
             console.error('❌ Error HTTP:', response.status, response.statusText);
@@ -2303,7 +2303,7 @@ async function copyEncryptionKey() {
 // Habilitar cifrado (primera vez)
 async function enableEncryption() {
     try {
-        const response = await fetch('http://localhost:8000/settings/encryption/setup', {
+        const response = await fetch('http://127.0.0.1:8000/settings/encryption/setup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enable_encryption: true })
@@ -3660,7 +3660,7 @@ async function loadTheme() {
 // Cargar estado de indexacion
 async function loadIndexationStatus() {
     try {
-        const response = await fetch('http://localhost:8000/documents/stats');
+        const response = await fetch('http://127.0.0.1:8000/documents/stats');
         const result = await response.json();
 
         if (result.success && result.stats) {
@@ -3707,7 +3707,7 @@ async function loadDocumentPaths() {
     const pathsList = document.getElementById('docPathsList');
 
     try {
-        const response = await fetch('http://localhost:8000/documents/paths?enabled_only=false');
+        const response = await fetch('http://127.0.0.1:8000/documents/paths?enabled_only=false');
         const data = await response.json();
 
         if (!data.success) {
@@ -3793,7 +3793,7 @@ async function addDocPath() {
         const result = await window.alfredAPI.selectFolder();
 
         if (result.success && result.path) {
-            const response = await fetch('http://localhost:8000/documents/paths', {
+            const response = await fetch('http://127.0.0.1:8000/documents/paths', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ path: result.path })
@@ -3826,7 +3826,7 @@ async function browseDocPath(pathId) {
         const result = await window.alfredAPI.selectFolder();
 
         if (result.success && result.path) {
-            const response = await fetch(`http://localhost:8000/documents/paths/${pathId}`, {
+            const response = await fetch(`http://127.0.0.1:8000/documents/paths/${pathId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ new_path: result.path })
@@ -3871,7 +3871,7 @@ async function toggleDocPath(pathId, enabled) {
             }
         }
 
-        const response = await fetch(`http://localhost:8000/documents/paths/${pathId}`, {
+        const response = await fetch(`http://127.0.0.1:8000/documents/paths/${pathId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled: enabled })
@@ -3915,7 +3915,7 @@ async function removeDocPath(pathId) {
     if (!confirmed) return;
 
     try {
-        const response = await fetch(`http://localhost:8000/documents/paths/${pathId}`, {
+        const response = await fetch(`http://127.0.0.1:8000/documents/paths/${pathId}`, {
             method: 'DELETE'
         });
 
@@ -3983,7 +3983,7 @@ async function reindexDocuments() {
     document.body.appendChild(progressContainer);
 
     // Conectar a SSE para recibir progreso
-    const eventSource = new EventSource('http://localhost:8000/documents/reindex/progress');
+    const eventSource = new EventSource('http://127.0.0.1:8000/documents/reindex/progress');
     let reindexStarted = false;
 
     eventSource.onmessage = (event) => {
@@ -3996,7 +3996,7 @@ async function reindexDocuments() {
                 // Ahora que estamos conectados, iniciar la reindexacion
                 if (!reindexStarted) {
                     reindexStarted = true;
-                    fetch('http://localhost:8000/documents/reindex', {
+                    fetch('http://127.0.0.1:8000/documents/reindex', {
                         method: 'POST'
                     }).catch(error => {
                         console.error('Error en POST reindex:', error);
@@ -4140,7 +4140,7 @@ async function clearIndex() {
     try {
         showNotification('info', 'Eliminando indice completo...');
 
-        const response = await fetch('http://localhost:8000/documents/index', {
+        const response = await fetch('http://127.0.0.1:8000/documents/index', {
             method: 'DELETE'
         });
 

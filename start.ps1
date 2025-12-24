@@ -75,7 +75,7 @@ Write-Host ""
 # Verificar servidor de Alfred
 Write-Host "🔍 Verificando servidor de Alfred..." -ForegroundColor Yellow
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:8000/health" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+    $response = Invoke-WebRequest -Uri "http://127.0.0.1:8000/health" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
     Write-Host "✅ Servidor de Alfred está activo" -ForegroundColor Green
 } catch {
     Write-Host "⚠️  Servidor no detectado" -ForegroundColor Yellow

@@ -671,7 +671,7 @@ if __name__ == "__main__":
     import uvicorn
     
     # Configuracion del servidor (hardcoded)
-    host = "127.0.0.1"  # Solo localhost por seguridad
+    host = "127.0.0.1"  # Solo 127.0.0.1 por seguridad
     port = 8000  # Puerto por defecto
     # Auto-reload deshabilitado - usar modo desarrollo de uvicorn manualmente si es necesario
     reload = False

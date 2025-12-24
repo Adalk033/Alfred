@@ -78,7 +78,7 @@ echo ""
 
 # Verificar servidor de Alfred
 echo -e "\033[0;33m🔍 Verificando servidor de Alfred...\033[0m"
-if curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "http://localhost:8000/health" | grep -q "200"; then
+if curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "http://127.0.0.1:8000/health" | grep -q "200"; then
     echo -e "\033[0;32m✅ Servidor de Alfred esta activo\033[0m"
 else
     echo -e "\033[0;33m⚠️  Servidor no detectado\033[0m"
