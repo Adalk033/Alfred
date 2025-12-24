@@ -68,7 +68,7 @@ httpx==0.28.1
 httpx-sse==0.4.3
 
 # === Hugging Face & ML ===
-huggingface-hub==1.2.3
+huggingface-hub==0.36.0
 humanfriendly==10.0
 idna==3.10
 importlib_metadata==8.7.0
@@ -289,7 +289,7 @@ tokenizers==0.22.1
 tqdm==4.67.1
 
 # === Transformers (Hugging Face) ===
-transformers==4.57.1
+transformers==4.57.3
 
 # === CLI Framework ===
 typer==0.19.2

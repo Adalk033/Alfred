@@ -406,7 +406,7 @@ async function installPackagesInBulk(pythonCmd, backendPath, requirementsPath, p
     }
 
     console.log(`[BULK-INSTALL] Instalando ${specsToInstall.length} paquetes en bloque...`);
-
+    console.log(`[PYTHON-CMD] ${pythonCmd}`);
     return new Promise((resolve) => {
         const proc = spawn(pythonCmd, [
             '-m', 'pip', 'install',
