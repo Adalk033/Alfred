@@ -55,9 +55,6 @@ let ollamaKeepAliveSlider;
 let ollamaKeepAliveValue;
 let ollamaKeepAlivePresets;
 
-// Archivo adjunto temporal
-let attachedFile = null;
-
 // Inicializacion
 document.addEventListener('DOMContentLoaded', async () => {
     // Inicializar elementos del DOM en State

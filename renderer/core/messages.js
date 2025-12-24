@@ -54,13 +54,7 @@ export async function sendMessage() {
         // Cifrar el mensaje antes de enviarlo al backend
         let encryptedMessage = message;
         if (cryptoManager.isEncryptionEnabled()) {
-            console.log('🔒 Cifrando mensaje antes de enviar...');
             encryptedMessage = await cryptoManager.encrypt(message);
-            console.log('✅ Mensaje cifrado:', {
-                originalLength: message.length,
-                encryptedLength: encryptedMessage.length,
-                isEncrypted: encryptedMessage.startsWith('gAAAAAB')
-            });
         }
         
         // Enviar consulta a Alfred con el modo de busqueda seleccionado y el ID de conversacion
@@ -80,7 +74,7 @@ export async function sendMessage() {
             } : null
         };
 
-        console.log('📤 Enviando consulta:', {
+        console.log('Enviando consulta:', {
             conversationId: queryData.conversationId,
             searchDocuments: queryData.searchDocuments,
             hasAttachment: !!queryData.attachedFile,
@@ -88,19 +82,14 @@ export async function sendMessage() {
             isEncrypted: queryData.message.startsWith('gAAAAAB')
         });
 
-        const result = await window.alfredAPI.sendQueryWithAttachment(queryData);
-
         // Limpiar archivo adjunto despues de enviar
-        if (attachedFile) {
-            removeAttachedFile();
-        }
+        if (attachedFile) { removeAttachedFile(); }
+
+        const result = await window.alfredAPI.sendQueryWithAttachment(queryData);
 
         // Capturar tiempo de fin y calcular duracion
         const endTime = performance.now();
         const responseTime = ((endTime - startTime) / 1000).toFixed(2); // Convertir a segundos
-
-        console.log('📥 Respuesta recibida:', result);
-        console.log('⏱️ Tiempo de respuesta:', responseTime + 's');
 
         if (result.success) {
             const response = result.data;
