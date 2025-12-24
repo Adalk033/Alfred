@@ -8,7 +8,6 @@ import os
 import asyncio
 from pathlib import Path
 from typing import Dict, Optional, Any, List
-from dotenv import load_dotenv
 from datetime import datetime
 
 from langchain_ollama import OllamaLLM
@@ -72,13 +71,15 @@ class AlfredCore:
     
     def __init__(self):
         """Inicializar Alfred Core con lazy loading"""
-        load_dotenv()
+        # NOTA: NO se usa archivo .env - toda la configuracion viene de:
+        # 1. Base de datos SQLite (db_manager.py) - preferencia del usuario
+        # 2. Valores por defecto en codigo - fallback si no hay BD
+        # 3. Variables de entorno del sistema - solo ALFRED_DEV_MODE (establecido por Electron)
         
-        # Configuracion desde variables de entorno (valores por defecto)
-        # Las rutas de documentos ahora se gestionan desde la base de datos
+        # Configuracion de rutas (calculadas automaticamente, NO desde .env)
         from utils.paths import get_chroma_path
-        self.chroma_db_path = os.getenv('ALFRED_CHROMA_PATH', get_chroma_path())
-        self.force_reload = os.getenv('ALFRED_FORCE_RELOAD', 'false').lower() == 'true'
+        self.chroma_db_path = get_chroma_path()  # Calcula ruta segun modo dev/produccion
+        self.force_reload = False  # Por defecto no forzar recarga
         # qa_history_file OBSOLETO - ahora se usa SQLite (db_manager.py)
         
         # Obtener nombre y edad del usuario desde BD
@@ -94,8 +95,8 @@ class AlfredCore:
         self.user_name = get_user_setting('user_name', default='Usuario')
         self.user_age = get_user_setting('user_age', default='No especificada')
         
-        # Modelo LLM: Prioridad BD > .env
-        # Cargar desde base de datos si existe, sino desde .env
+        # Modelo LLM: Prioridad BD > valor por defecto
+        # Cargar desde base de datos si existe, sino usar default hardcoded
         from db_manager import get_model_setting, set_model_setting
         
         # Asegurar que BD este inicializada (por si acaso)
@@ -104,33 +105,33 @@ class AlfredCore:
         except:
             pass  # BD ya existe
         
-        env_model = os.getenv('ALFRED_MODEL', 'gemma2:9b')
+        default_model = 'gemma2:9b'  # Valor por defecto hardcoded
         db_model = get_model_setting('last_used_model')
         
         if db_model:
             logger.info(f"Cargando modelo desde BD: {db_model}")
             self.model_name = db_model
         else:
-            logger.info(f"No hay modelo en BD, usando .env: {env_model}")
-            self.model_name = env_model
+            logger.info(f"No hay modelo en BD, usando default: {default_model}")
+            self.model_name = default_model
             # Guardar en BD para proximas ejecuciones
-            set_model_setting('last_used_model', env_model)
+            set_model_setting('last_used_model', default_model)
         
-        self.embedding_model = os.getenv('ALFRED_EMBEDDING_MODEL', 'nomic-embed-text:v1.5')
+        self.embedding_model = 'nomic-embed-text:v1.5'  # Hardcoded, no configurable
         
-        # Cargar keep_alive desde BD (prioridad: BD > .env > default 30)
+        # Cargar keep_alive desde BD (prioridad: BD > default 30)
         from db_manager import get_user_setting
         db_keep_alive = get_user_setting('ollama_keep_alive', default=None, setting_type='int')
         if db_keep_alive:
             logger.info(f"Usando keep_alive desde BD: {db_keep_alive}s")
             self.ollama_keep_alive = db_keep_alive
         else:
-            env_keep_alive = int(os.getenv('ALFRED_OLLAMA_KEEP_ALIVE', '30'))
-            logger.info(f"No hay keep_alive en BD, usando .env: {env_keep_alive}s")
-            self.ollama_keep_alive = env_keep_alive
+            default_keep_alive = 30  # Valor por defecto hardcoded
+            logger.info(f"No hay keep_alive en BD, usando default: {default_keep_alive}s")
+            self.ollama_keep_alive = default_keep_alive
             # Guardar en BD para proximas ejecuciones
             from db_manager import set_user_setting
-            set_user_setting('ollama_keep_alive', env_keep_alive, 'int')
+            set_user_setting('ollama_keep_alive', default_keep_alive, 'int')
         
         logger.info("Sistema configurado para usar rutas de documentos gestionadas desde la base de datos")
         
@@ -140,11 +141,11 @@ class AlfredCore:
         self._retriever = None
         self._gpu_manager = None
         
-        # Cache LRU simple para queries frecuentes
+        # Cache LRU simple para queries frecuentes (configuracion hardcoded)
         self._query_cache = {}
-        self._cache_max_size = int(os.getenv('ALFRED_CACHE_MAX_SIZE', '50'))
-        self._cache_ttl_seconds = int(os.getenv('ALFRED_CACHE_TTL', '300'))  # 5 minutos
-        self._cache_enabled = os.getenv('ALFRED_CACHE_ENABLED', 'true').lower() == 'true'
+        self._cache_max_size = 50  # Maximo 50 queries en cache
+        self._cache_ttl_seconds = 300  # TTL de 5 minutos
+        self._cache_enabled = True  # Cache siempre habilitado
         
         # Estado interno
         self._initialized = False

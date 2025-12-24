@@ -423,10 +423,6 @@ backend_logger = get_logger("server")
 rag_logger = get_logger("rag")
 security_logger = get_logger("security")
 
-# Log de inicio
-backend_logger.info(f"Iniciando backend Alfred en {os.getenv('ALFRED_IP', 'Not found')}:{os.getenv('ALFRED_PORT', 'Not found')}")
-rag_logger.info(f"Iniciando RAG en {os.getenv('ALFRED_RAG_IP', 'Not found')}:{os.getenv('ALFRED_RAG_PORT', 'Not found')}")
-security_logger.info(f"Iniciando seguridad en {os.getenv('ALFRED_SECURITY_IP', 'Not found')}:{os.getenv('ALFRED_SECURITY_PORT', 'Not found')}")
 
 # Inicio de la base de datos
 init_db()
@@ -674,9 +670,9 @@ async def global_exception_handler(request, exc):
 if __name__ == "__main__":
     import uvicorn
     
-    # Obtener configuración desde variables de entorno
-    host = os.getenv("ALFRED_HOST", "127.0.0.1")
-    port = int(os.getenv("ALFRED_PORT", "8000"))
+    # Configuracion del servidor (hardcoded)
+    host = "127.0.0.1"  # Solo localhost por seguridad
+    port = 8000  # Puerto por defecto
     # Auto-reload deshabilitado - usar modo desarrollo de uvicorn manualmente si es necesario
     reload = False
     

@@ -892,7 +892,6 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
             try {
                 // Verificar multiples paquetes criticos (con sus imports reales)
                 const checks = [
-                    { module: 'dotenv', package: 'python-dotenv' },
                     { module: 'fastapi', package: 'fastapi' },
                     { module: 'langchain', package: 'langchain' },
                     { module: 'chromadb', package: 'chromadb' },

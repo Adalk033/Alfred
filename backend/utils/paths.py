@@ -1,8 +1,5 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv()
 
 def is_development_mode():
     """
@@ -35,14 +32,12 @@ def get_data_path():
         # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
         base = Path(__file__).parent.parent.parent / "data"
     else:
-        # PRODUCCION: Usar AppData del usuario Windows
-        env_path = os.getenv("ALFRED_DATA_PATH")
-        if env_path:
-            # Si se define variable de entorno, usarla (con expansión de %AppData%, etc.)
-            base = Path(os.path.expandvars(env_path))
-        else:
-            # Ruta por defecto: C:\Users\{USER}\AppData\Roaming\Alfred\data
+        # PRODUCCION: Usar AppData del usuario
+        # Ruta: ~/.local/share/Alfred/data (Linux) o C:\Users\{USER}\AppData\Roaming\Alfred\data (Windows)
+        if os.name == 'nt':  # Windows
             base = Path.home() / "AppData" / "Roaming" / "Alfred" / "data"
+        else:  # Linux/Mac
+            base = Path.home() / ".local" / "share" / "Alfred" / "data"
     
     base.mkdir(parents=True, exist_ok=True)
     return base
@@ -57,14 +52,11 @@ def get_log_path():
         # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
         path = Path(__file__).parent.parent.parent / "logs"
     else:
-        # PRODUCCION: Usar AppData del usuario Windows
-        env_path = os.getenv("ALFRED_LOG_PATH")
-        if env_path:
-            # Si se define variable de entorno, usarla
-            path = Path(os.path.expandvars(env_path))
-        else:
-            # Ruta por defecto: C:\Users\{USER}\AppData\Roaming\Alfred\logs
+        # PRODUCCION: Usar directorio de logs del usuario
+        if os.name == 'nt':  # Windows
             path = Path.home() / "AppData" / "Roaming" / "Alfred" / "logs"
+        else:  # Linux/Mac
+            path = Path.home() / ".local" / "share" / "Alfred" / "logs"
     
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -81,14 +73,11 @@ def get_db_path():
         # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
         path = Path(__file__).parent.parent.parent / "db"
     else:
-        # PRODUCCION: Usar AppData del usuario Windows
-        env_path = os.getenv("ALFRED_DB_PATH")
-        if env_path:
-            # Si se define variable de entorno, usarla
-            path = Path(os.path.expandvars(env_path))
-        else:
-            # Ruta por defecto: C:\Users\{USER}\AppData\Roaming\Alfred\db
+        # PRODUCCION: Usar directorio de BD del usuario
+        if os.name == 'nt':  # Windows
             path = Path.home() / "AppData" / "Roaming" / "Alfred" / "db"
+        else:  # Linux/Mac
+            path = Path.home() / ".local" / "share" / "Alfred" / "db"
     
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -105,15 +94,9 @@ def get_chroma_path():
         # DESARROLLO: Usar carpeta local en raiz del proyecto (un nivel arriba de backend/)
         path = Path(__file__).parent.parent.parent / "chroma_db"
     else:
-        # PRODUCCION: Usar AppData del usuario Windows
-        env_path = os.getenv("ALFRED_CHROMA_PATH")
-        if env_path:
-            # Si se define variable de entorno, usarla
-            path = Path(os.path.expandvars(env_path))
-        else:
-            # Ruta por defecto: C:\Users\{USER}\AppData\Roaming\Alfred\data\chroma_store
-            data_path = get_data_path()
-            path = data_path / "chroma_store"
+        # PRODUCCION: Usar directorio de ChromaDB dentro de data
+        data_path = get_data_path()
+        path = data_path / "chroma_store"
     
     path.mkdir(parents=True, exist_ok=True)
     return str(path)
