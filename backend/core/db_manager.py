@@ -79,7 +79,8 @@ def init_db():
         title TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        message_count INTEGER DEFAULT 0
+        message_count INTEGER DEFAULT 0,
+        metadata TEXT
     );
     """)
 
@@ -202,6 +203,22 @@ def init_db():
     cursor.execute("""
     CREATE INDEX IF NOT EXISTS idx_document_paths_enabled ON document_paths(enabled);
     """)
+
+    # Migracion: Agregar columna metadata a conversation_threads si no existe
+    # Verificar si la columna ya existe
+    cursor.execute("PRAGMA table_info(conversation_threads)")
+    columns = [row[1] for row in cursor.fetchall()]
+    
+    if 'metadata' not in columns:
+        db_logger.info("Migracion: Agregando columna metadata a conversation_threads")
+        try:
+            cursor.execute("""
+            ALTER TABLE conversation_threads ADD COLUMN metadata TEXT;
+            """)
+            conn.commit()
+            db_logger.info("Migracion completada: columna metadata agregada exitosamente")
+        except Exception as e:
+            db_logger.error(f"Error en migracion de metadata: {e}")
 
     conn.commit()
     
@@ -1104,13 +1121,14 @@ def delete_integration(service: str):
 
 # --- Funciones para Conversations (con cifrado completo) ---
 
-def create_conversation(conversation_id: str, title: str):
+def create_conversation(conversation_id: str, title: str, metadata: dict = None):
     """
     Crea una nueva conversacion cifrada
     
     Args:
         conversation_id: ID unico de la conversacion
         title: Titulo de la conversacion (se cifra)
+        metadata: Metadata adicional (se cifra) - dict opcional
     
     Returns:
         conversation_id si se creo exitosamente, None en caso contrario
@@ -1120,15 +1138,22 @@ def create_conversation(conversation_id: str, title: str):
     
     try:
         from datetime import datetime
+        import json
         now = datetime.now().isoformat()
         
         # CIFRAR titulo
         title_encrypted = encrypt_data(title)
         
+        # CIFRAR metadata si existe
+        metadata_encrypted = None
+        if metadata:
+            metadata_json = json.dumps(metadata, ensure_ascii=False)
+            metadata_encrypted = encrypt_data(metadata_json)
+        
         cursor.execute(
-            """INSERT INTO conversation_threads (id, title, created_at, updated_at, message_count)
-               VALUES (?, ?, ?, ?, 0)""",
-            (conversation_id, title_encrypted, now, now)
+            """INSERT INTO conversation_threads (id, title, created_at, updated_at, message_count, metadata)
+               VALUES (?, ?, ?, ?, 0, ?)""",
+            (conversation_id, title_encrypted, now, now, metadata_encrypted)
         )
         conn.commit()
         db_logger.info(f"Conversacion creada (cifrada): {conversation_id}")
@@ -1198,6 +1223,83 @@ def add_message_to_conversation(conversation_id: str, role: str, content: str,
     finally:
         conn.close()
 
+def get_conversation_metadata(conversation_id: str):
+    """
+    Obtiene la metadata de una conversacion (descifrada)
+    
+    Args:
+        conversation_id: ID de la conversacion
+    
+    Returns:
+        Diccionario con metadata descifrada o None si no existe o esta vacia
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        import json
+        
+        cursor.execute(
+            "SELECT metadata FROM conversation_threads WHERE id = ?",
+            (conversation_id,)
+        )
+        row = cursor.fetchone()
+        
+        if not row or not row["metadata"]:
+            return None
+        
+        # DESCIFRAR metadata
+        metadata_json = decrypt_data(row["metadata"])
+        return json.loads(metadata_json)
+    except Exception as e:
+        db_logger.error(f"Error al obtener metadata de conversacion: {e}")
+        return None
+    finally:
+        conn.close()
+
+def update_conversation_metadata(conversation_id: str, metadata: dict):
+    """
+    Actualiza la metadata de una conversacion (cifrada)
+    
+    Args:
+        conversation_id: ID de la conversacion
+        metadata: Diccionario con metadata (se cifra)
+    
+    Returns:
+        True si se actualizo exitosamente, False en caso contrario
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        import json
+        from datetime import datetime
+        
+        # CIFRAR metadata
+        metadata_json = json.dumps(metadata, ensure_ascii=False)
+        metadata_encrypted = encrypt_data(metadata_json)
+        
+        cursor.execute(
+            """UPDATE conversation_threads 
+               SET metadata = ?, updated_at = ?
+               WHERE id = ?""",
+            (metadata_encrypted, datetime.now().isoformat(), conversation_id)
+        )
+        conn.commit()
+        updated = cursor.rowcount > 0
+        
+        if updated:
+            db_logger.info(f"Metadata de conversacion actualizada (cifrada): {conversation_id}")
+        else:
+            db_logger.warning(f"No se encontro conversacion para actualizar metadata: {conversation_id}")
+        
+        return updated
+    except Exception as e:
+        db_logger.error(f"Error al actualizar metadata de conversacion: {e}")
+        return False
+    finally:
+        conn.close()
+
 def get_conversation(conversation_id: str):
     """
     Obtiene una conversacion completa con todos sus mensajes descifrados
@@ -1216,7 +1318,7 @@ def get_conversation(conversation_id: str):
         
         # Obtener thread
         cursor.execute(
-            "SELECT id, title, created_at, updated_at, message_count FROM conversation_threads WHERE id = ?",
+            "SELECT id, title, created_at, updated_at, message_count, metadata FROM conversation_threads WHERE id = ?",
             (conversation_id,)
         )
         thread_row = cursor.fetchone()
@@ -1227,12 +1329,22 @@ def get_conversation(conversation_id: str):
         # DESCIFRAR titulo
         title_decrypted = decrypt_data(thread_row["title"])
         
+        # DESCIFRAR metadata si existe
+        metadata_decrypted = {}
+        if thread_row["metadata"]:
+            try:
+                metadata_json = decrypt_data(thread_row["metadata"])
+                metadata_decrypted = json.loads(metadata_json)
+            except Exception as e:
+                db_logger.error(f"Error al descifrar metadata de conversacion: {e}")
+        
         conversation = {
             "id": thread_row["id"],
             "title": title_decrypted,
             "created_at": thread_row["created_at"],
             "updated_at": thread_row["updated_at"],
             "message_count": thread_row["message_count"],
+            "metadata": metadata_decrypted,
             "messages": []
         }
         
@@ -1460,37 +1572,6 @@ def search_conversations(query: str):
     except Exception as e:
         db_logger.error(f"Error al buscar conversaciones: {e}")
         return []
-
-def get_conversation_stats():
-    """
-    Obtiene estadisticas de conversaciones
-    
-    Returns:
-        Diccionario con estadisticas
-    """
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute("SELECT COUNT(*) as total FROM conversation_threads")
-        total_conversations = cursor.fetchone()["total"]
-        
-        cursor.execute("SELECT COUNT(*) as total FROM conversation_messages")
-        total_messages = cursor.fetchone()["total"]
-        
-        cursor.execute("SELECT AVG(message_count) as avg FROM conversation_threads")
-        avg_messages = cursor.fetchone()["avg"] or 0
-        
-        return {
-            "total_conversations": total_conversations,
-            "total_messages": total_messages,
-            "avg_messages_per_conversation": round(avg_messages, 2)
-        }
-    except Exception as e:
-        db_logger.error(f"Error al obtener estadisticas de conversaciones: {e}")
-        return {"total_conversations": 0, "total_messages": 0, "avg_messages_per_conversation": 0}
-    finally:
-        conn.close()
 
 
 # --- Funciones para Document Metadata (indexacion incremental) ---

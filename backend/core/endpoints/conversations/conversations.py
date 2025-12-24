@@ -387,12 +387,32 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 for msg in messages
             ]
         
-        # Si hay documento temporal adjunto, agregarlo al contexto de la pregunta
+        # Si hay documento temporal adjunto, guardarlo en metadata de la conversacion
+        # Si no hay documento adjunto, intentar recuperarlo de la metadata
+        temp_document = request.temp_document
+        
+        if request.conversation_id:
+            conv_mgr = get_conversation_manager()
+            
+            if temp_document:
+                # Guardar documento en metadata de conversacion
+                metadata = conv_mgr.get_conversation_metadata(request.conversation_id) or {}
+                metadata['temp_document'] = temp_document
+                conv_mgr.update_conversation_metadata(request.conversation_id, metadata)
+                print(f"📎 Documento temporal guardado en conversacion: {temp_document['name']}")
+            else:
+                # Intentar recuperar documento de metadata
+                metadata = conv_mgr.get_conversation_metadata(request.conversation_id)
+                if metadata and 'temp_document' in metadata:
+                    temp_document = metadata['temp_document']
+                    print(f"📎 Documento temporal recuperado de conversacion: {temp_document['name']}")
+        
+        # Si hay documento temporal (adjunto o recuperado), agregarlo al contexto de la pregunta
         question_with_context = question  # Usar pregunta descifrada
         force_prompt_only = False
         
-        if request.temp_document:
-            file_name = request.temp_document['name']
+        if temp_document:
+            file_name = temp_document['name']
             print(f"📎 Documento temporal adjunto: {file_name}")
             
             # Obtener funciones de extraccion
@@ -403,19 +423,19 @@ async def query_with_conversation(request: QueryWithConversationRequest):
             
             if file_ext.endswith('.pdf'):
                 print(f"📄 Procesando PDF...")
-                doc_content = extractors['pdf'](request.temp_document['content'], file_name)
+                doc_content = extractors['pdf'](temp_document['content'], file_name)
             elif file_ext.endswith('.docx'):
                 print(f"📄 Procesando Word (DOCX)...")
-                doc_content = extractors['docx'](request.temp_document['content'], file_name)
+                doc_content = extractors['docx'](temp_document['content'], file_name)
             elif file_ext.endswith('.xlsx'):
                 print(f"📊 Procesando Excel (XLSX)...")
-                doc_content = extractors['xlsx'](request.temp_document['content'], file_name)
+                doc_content = extractors['xlsx'](temp_document['content'], file_name)
             elif file_ext.endswith('.pptx'):
                 print(f"📊 Procesando PowerPoint (PPTX)...")
-                doc_content = extractors['pptx'](request.temp_document['content'], file_name)
+                doc_content = extractors['pptx'](temp_document['content'], file_name)
             else:
                 # Archivos de texto plano (txt, md, json, xml, csv, etc)
-                doc_content = request.temp_document['content']
+                doc_content = temp_document['content']
             
             # Obtener tamaño
             doc_size_kb = len(doc_content.encode('utf-8')) / 1024

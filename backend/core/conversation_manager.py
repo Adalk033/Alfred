@@ -22,7 +22,8 @@ from db_manager import (
     delete_conversation as db_delete_conversation,
     clear_conversation_messages as db_clear_messages,
     search_conversations as db_search_conversations,
-    get_conversation_stats
+    get_conversation_metadata as db_get_conversation_metadata,
+    update_conversation_metadata as db_update_conversation_metadata
 )
 
 
@@ -210,6 +211,31 @@ class ConversationManager:
             True si se elimino exitosamente, False en caso contrario
         """
         return db_delete_conversation(conversation_id)
+    
+    def get_conversation_metadata(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Obtener metadata de una conversacion (ahora usa SQLite cifrado)
+        
+        Args:
+            conversation_id: ID de la conversacion
+        
+        Returns:
+            Diccionario con metadata descifrada o None si no existe
+        """
+        return db_get_conversation_metadata(conversation_id)
+    
+    def update_conversation_metadata(self, conversation_id: str, metadata: Dict[str, Any]) -> bool:
+        """
+        Actualizar metadata de una conversacion (ahora usa SQLite cifrado)
+        
+        Args:
+            conversation_id: ID de la conversacion
+            metadata: Diccionario con metadata (se cifra automaticamente)
+        
+        Returns:
+            True si se actualizo exitosamente, False en caso contrario
+        """
+        return db_update_conversation_metadata(conversation_id, metadata)
 
 
 # Instancia global singleton
