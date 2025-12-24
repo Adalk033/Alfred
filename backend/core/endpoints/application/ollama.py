@@ -19,6 +19,15 @@ backend_logger = get_logger("ollama")
 # MODELOS PYDANTIC
 # ============================================================================
 
+class ModelInfo(BaseModel):
+    """Informacion del modelo actual"""
+    model_name: str
+    available_models: list = Field(default_factory=list)
+
+class ChangeModelRequest(BaseModel):
+    """Solicitud para cambiar el modelo"""
+    model_name: str = Field(..., description="Nombre del nuevo modelo a utilizar")
+
 class OllamaKeepAliveRequest(BaseModel):
     """Solicitud para actualizar el keep_alive de Ollama"""
     seconds: int = Field(..., description="Tiempo en segundos (0-3600)", ge=0, le=3600)
@@ -496,3 +505,100 @@ async def set_ollama_keep_alive(request: OllamaKeepAliveRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al actualizar keep_alive: {str(e)}")
+
+@router.get("/model", response_model=ModelInfo, tags=["Configuracion"])
+async def get_available_models():
+    """
+    Obtener el modelo actual y los modelos disponibles
+    """
+    alfred_core = get_alfred_core_instance()
+    
+    if not alfred_core or not alfred_core.is_initialized():
+        raise HTTPException(status_code=503, detail="Alfred Core no esta inicializado")
+    
+    try:
+        current_model = alfred_core.get_current_model()
+        available_models = ["gemma2:9b", "gpt-oss:20b", "gemma3:12b", "gemma3:4b", "gemma3:1b", "gemma3n:e4b"]
+        
+        return ModelInfo(
+            model_name=current_model,
+            available_models=available_models
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener informacion del modelo: {str(e)}")
+
+@router.post("/model", tags=["Configuracion"])
+async def change_model(request: ChangeModelRequest):
+    """
+    Cambiar el modelo LLM actual (lazy loading)
+    
+    El modelo se configura pero NO se carga hasta la proxima consulta.
+    Esto permite cambiar entre modelos instantaneamente sin esperas.
+    
+    - **model_name**: Nombre del nuevo modelo a utilizar
+    """
+    alfred_core = get_alfred_core_instance()
+    
+    if not alfred_core or not alfred_core.is_initialized():
+        raise HTTPException(status_code=503, detail="Alfred Core no esta inicializado")
+    
+    try:
+        backend_logger.info(f"Configurando modelo: {request.model_name}")
+        success = alfred_core.change_model(request.model_name)
+        
+        if success:
+            backend_logger.info(f"Modelo configurado: {request.model_name}")
+            return {
+                "status": "success",
+                "message": f"Modelo configurado como {request.model_name}. Se cargara en la proxima consulta.",
+                "model_name": request.model_name
+            }
+        else:
+            error_msg = f"No se pudo configurar el modelo {request.model_name}"
+            backend_logger.error(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_detail = f"Error al configurar modelo: {str(e)}"
+        backend_logger.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
+
+@router.get("/model/current", tags=["Configuracion"])
+async def get_current_model_info():
+    """
+    Obtener el modelo LLM actualmente configurado
+    
+    Retorna el modelo activo almacenado en base de datos SQLite.
+    Este es el modelo que se usara en la proxima consulta.
+    """
+    alfred_core = get_alfred_core_instance()
+    
+    if not alfred_core or not alfred_core.is_initialized():
+        raise HTTPException(status_code=503, detail="Alfred Core no esta inicializado")
+    
+    try:
+        from db_manager import get_model_setting
+        
+        db_model = get_model_setting('last_used_model')
+        env_model = alfred_core.model_name
+        
+        if db_model:
+            backend_logger.info(f"Modelo activo desde BD: {db_model}")
+            return {
+                "model_name": db_model,
+                "source": "database",
+                "status": "configured"
+            }
+        else:
+            backend_logger.info(f"Modelo desde variable de entorno: {env_model}")
+            return {
+                "model_name": env_model,
+                "source": "environment",
+                "status": "default"
+            }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener modelo actual: {str(e)}")
