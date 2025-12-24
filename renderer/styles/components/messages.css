@@ -362,6 +362,31 @@
     font-weight: 600;
 }
 
+.message-attachment {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 10px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.message-attachment svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.message-attachment span {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .message-sources {
     margin-top: 8px;
     padding: 8px;
