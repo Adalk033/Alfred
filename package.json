@@ -20,7 +20,10 @@
     "electron",
     "chatbot"
   ],
-  "author": "Adalk033",
+  "author": {
+    "name": "Adalk033",
+    "email": "adal_garcia1999@hotmail.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^39.2.5",
@@ -60,7 +63,6 @@
           "!**/*.md",
           "!**/*.gitignore",
           "!**/*.gitattributes",
-          "!**/*.json",
           "!**/*.logs"
         ]
       }
@@ -86,7 +88,7 @@
     "linux": {
       "target": [
         {
-          "target": "AppImage",
+          "target": "deb",
           "arch": [
             "x64"
           ]
@@ -94,6 +96,7 @@
       ],
       "icon": "assets/icon.png",
       "category": "Utility",
+      "maintainer": "Adalk033 <adal_garcia1999@hotmail.com>",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "nsis": {
@@ -125,9 +128,15 @@
         }
       ]
     },
-    "appImage": {
-      "license": "LICENSE.txt",
-      "category": "Utility"
+    "deb": {
+      "depends": [
+        "gconf2",
+        "gconf-service",
+        "libnotify4",
+        "libappindicator1",
+        "libxtst6",
+        "libnss3"
+      ]
     }
   },
   "packageManager": "yarn@4.10.3",

@@ -70,15 +70,14 @@ async function checkPython() {
  * @returns {string} Comando de Python a usar
  */
 function findPythonExecutable(backendPath = null, isDevelopment = false) {
-    // MODO PRODUCCION: Usar python-portable incluido
-    if (!isDevelopment && backendPath) {
-        const pythonExt = process.platform === 'win32' ? 'python.exe' : 'python';
-        const pythonPortablePath = path.join(backendPath, 'python-portable', pythonExt);
+    // MODO PRODUCCION WINDOWS: Usar python-portable incluido
+    if (!isDevelopment && backendPath && process.platform === 'win32') {
+        const pythonPortablePath = path.join(backendPath, 'python-portable', 'python.exe');
         if (fs.existsSync(pythonPortablePath)) { return pythonPortablePath; }
-        else { throw new Error('Python portable no encontrado en produccion'); }
+        else { throw new Error('Python portable no encontrado en produccion Windows'); }
     }
 
-    // MODO DESARROLLO: Usar Python del sistema
+    // MODO PRODUCCION LINUX/MAC o DESARROLLO: Usar Python del sistema
     const commands = process.platform === 'win32' ? ['python'] : ['python3', 'python'];
     
     for (const cmd of commands) {
@@ -540,7 +539,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
 
 /**
  * Asegurar que el entorno Python este listo (venv en desarrollo, portable en produccion)
- * NOTA: Esta funcion usa caché interna para evitar reinicializaciones multiples en la misma sesion
+ * NOTA: Esta funcion usa cache interna para evitar reinicializaciones multiples en la misma sesion
  * @param {string} backendPath - Ruta al directorio backend
  * @param {boolean} isPackaged - Si la app esta empaquetada
  * @param {Function} notifyProgress - Callback para notificar progreso
@@ -548,7 +547,7 @@ async function installOrVerifyDependencies(pythonCmd, backendPath, requirementsP
  * @returns {Promise<string>} Comando de Python a usar
  */
 async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCount = 0) {
-    // Si ya se verificó el entorno en esta sesion, devolver el resultado en cache
+    // Si ya se verifico el entorno en esta sesion, devolver el resultado en cache
     if (envCached !== null && retryCount === 0) {
         console.log('[ENV-CACHE] Reutilizando entorno Python verificado previamente:', envCached);
         return envCached;
@@ -559,14 +558,20 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
     const portablePythonPath = path.join(backendPath, "python-portable", "python.exe");
     const MAX_RETRIES = 2;
 
-    // Detectar modo: Si app esta empaquetada -> PRODUCCION (usa python-portable)
-    //                Si NO esta empaquetada -> DESARROLLO (usa Python del sistema)
+    // Detectar modo:
+    // - PRODUCCION WINDOWS (isPackaged + win32): Usa python-portable
+    // - PRODUCCION LINUX/MAC (isPackaged + !win32): Usa venv (como desarrollo)
+    // - DESARROLLO (!isPackaged): Usa venv
     const isDevelopment = !isPackaged;
-    // No notificar aqui, main.js maneja el progreso 70-75%
+    const usePortable = isPackaged && process.platform === 'win32';
+    const useVenv = !usePortable; // Linux/Mac en produccion o cualquier desarrollo
+
     console.log(`[ENV] MODO ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION'} detectado (retry ${retryCount})`);
+    console.log(`[ENV] Plataforma: ${process.platform}, usePortable: ${usePortable}, useVenv: ${useVenv}`);
+
     try {
-        // MODO PRODUCCION: Usar Python portable con paquetes pre-instalados
-        if (!isDevelopment) {
+        // MODO PRODUCCION WINDOWS: Usar Python portable con paquetes pre-instalados
+        if (usePortable) {
 
             // Si existe python-portable/, usar directamente
             if (fs.existsSync(portablePythonPath)) {
@@ -641,13 +646,13 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 }
 
                 console.log('[ENV] Python portable listo para usar');
-                // Guardar en caché antes de devolver
+                // Guardar en cache antes de devolver
                 envCached = portablePythonPath;
                 return portablePythonPath;
             }
             else {
-                // Python portable no existe - ERROR CRITICO
-                console.error('[ENV] ERROR CRITICO: Python portable no encontrado');
+                // Python portable no existe en Windows - ERROR CRITICO
+                console.error('[ENV] ERROR CRITICO: Python portable no encontrado en Windows');
                 console.error(`[ENV] Ruta esperada: ${portablePythonPath}`);
                 console.error(`[ENV] Backend path: ${backendPath}`);
                 
@@ -662,11 +667,14 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                     }
                 }
                 
-                throw new Error(`Python portable no encontrado en: ${portablePythonPath}. La aplicacion no puede ejecutarse sin Python portable.`);
+                throw new Error(`Python portable no encontrado en: ${portablePythonPath}. La aplicacion no puede ejecutarse sin Python portable en Windows.`);
             }
-        } else {
+        }
+        
+        // MODO DESARROLLO o PRODUCCION LINUX/MAC: Usar venv tradicional
+        if (useVenv) {
             console.log('========================================================');
-            console.log('  MODO DESARROLLO: Usando venv tradicional');
+            console.log(`  MODO ${isDevelopment ? 'DESARROLLO' : 'PRODUCCION LINUX/MAC'}: Usando venv tradicional`);
             console.log('========================================================');
 
             // Detectar rutas del binario Python para venv
@@ -674,10 +682,12 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
                 ? path.join(venvPath, "Scripts", "python.exe")
                 : path.join(venvPath, "bin", "python");
 
-            // Encontrar Python base instalado DEL SISTEMA (portable no tiene venv)
-            const basePython = findPythonExecutable(backendPath, isDevelopment);
-            console.log('[ENV] Configurando entorno de desarrollo...');
-            // No notificar aqui, main.js maneja progreso 70-75%
+            // Encontrar Python base instalado DEL SISTEMA
+            // En produccion Linux/Mac tambien usamos Python del sistema para crear venv
+            const basePython = findPythonExecutable(backendPath, true); // Siempre buscar en sistema para venv
+            console.log('[ENV] Configurando entorno...');
+            console.log(`[ENV] Python base: ${basePython}`);
+            console.log(`[ENV] Venv path: ${venvPath}`);
 
             // Verificar si el venv existe y está corrupto
             if (fs.existsSync(venvPath)) {
@@ -957,10 +967,10 @@ async function ensurePythonEnv(backendPath, isPackaged, notifyProgress, retryCou
             }
 
             console.log(`Entorno Python listo en: ${pythonCmd}`);
-            // Guardar en caché antes de devolver
+            // Guardar en cache antes de devolver
             envCached = pythonCmd;
             return pythonCmd;
-        } // Fin del bloque else (MODO DESARROLLO)
+        } // Fin del bloque useVenv (MODO DESARROLLO o PRODUCCION LINUX/MAC)
     }
     catch (err) {
         console.error("Error en ensurePythonEnv:", err);

@@ -702,7 +702,7 @@ function loadAppVersions() {
         // Version de la aplicacion (desde package.json)
         const appVersionEl = document.getElementById('appVersion');
         if (appVersionEl) {
-            appVersionEl.textContent = '0.0.12';
+            appVersionEl.textContent = '0.0.25';
         }
 
         // Versiones de Electron, Node.js y Chrome (desde process.versions)
