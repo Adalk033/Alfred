@@ -1,5 +1,6 @@
 import { showNotification } from '../../core/notifications.js';
 import { showConfirm } from '../../core/dialogs.js';
+import { createAttachedFileItem } from './components/attached-file-item.js';
 
 // Archivos adjuntos temporales (maximo 5)
 const MAX_ATTACHED_FILES = 5;
@@ -192,31 +193,18 @@ function updateAttachedFilesIndicator() {
         filesListContainer.innerHTML = '';
         
         attachedFiles.forEach((file, index) => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'attached-file-item';
-            fileItem.innerHTML = `
-                <div class="attached-file-info">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6z"/>
-                    </svg>
-                    <span class="file-name" title="${file.name}">${file.name}</span>
-                    <span class="file-size">${formatFileSize(file.size)}</span>
-                </div>
-                <button class="remove-file-btn" data-index="${index}" title="Quitar archivo">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18M6 6l12 12"/>
-                    </svg>
-                </button>
-            `;
+            const fileItem = createAttachedFileItem(file, index, formatFileSize);
+            
+            // Agregar evento de click al boton de remover
+            const removeBtn = fileItem.querySelector('.remove-file-btn');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.dataset.index);
+                    removeAttachedFileByIndex(idx);
+                });
+            }
+            
             filesListContainer.appendChild(fileItem);
-        });
-        
-        // Agregar evento de click a cada boton de remover
-        filesListContainer.querySelectorAll('.remove-file-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const index = parseInt(e.currentTarget.dataset.index);
-                removeAttachedFileByIndex(index);
-            });
         });
         
         indicator.style.display = 'flex';

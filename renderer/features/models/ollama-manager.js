@@ -1,6 +1,6 @@
 import { showNotification } from '../../core/notifications.js';
 import { showConfirm } from '../../core/dialogs.js';
-import { createDownloadProgressItem, getDownloadItemId } from '../../components/download-progress-item.js';
+import { createDownloadProgressItem, getDownloadItemId } from './components/download-progress-item.js';
 
 // Ollama keep-alive configuration elements (initialized from renderer.js)
 let ollamaKeepAliveSlider;
