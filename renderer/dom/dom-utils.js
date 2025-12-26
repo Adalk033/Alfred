@@ -95,11 +95,13 @@ function convertTableToHtml(tableLines) {
 
 // Convertir Markdown a HTML (mejorado)
 export function markdownToHtml(text) {
-    let html = text;
+    // Sanitizar HTML peligroso antes de procesar Markdown
+    // Esto previene XSS al escapar tags HTML crudos excepto los que generamos
+    let html = sanitizeInputForMarkdown(text);
 
     // Codigo en bloque (debe procesarse primero)
     html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-        return `<pre><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre>`;
+        return `<pre><code class="language-${escapeHtml(lang || 'plaintext')}">${escapeHtml(code.trim())}</code></pre>`;
     });
 
     // Tablas (procesarse antes de codigo inline para evitar conflictos con |)
@@ -239,6 +241,41 @@ export function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Sanitizar input antes de procesar Markdown para prevenir XSS
+// Escapa tags HTML peligrosos mientras preserva la sintaxis Markdown
+function sanitizeInputForMarkdown(text) {
+    if (typeof text !== 'string') return '';
+    
+    // Lista de tags HTML peligrosos que deben ser escapados
+    const dangerousTags = [
+        'script', 'iframe', 'object', 'embed', 'form', 'input', 'button',
+        'select', 'textarea', 'style', 'link', 'meta', 'base', 'applet',
+        'frame', 'frameset', 'layer', 'ilayer', 'bgsound', 'title', 'head',
+        'html', 'body', 'xml', 'blink', 'marquee', 'plaintext', 'xmp'
+    ];
+    
+    // Escapar tags peligrosos (apertura y cierre)
+    let sanitized = text;
+    dangerousTags.forEach(tag => {
+        // Escapar tag de apertura <tag ...>
+        const openTagRegex = new RegExp(`<(${tag})(\\s|>|$)`, 'gi');
+        sanitized = sanitized.replace(openTagRegex, '&lt;$1$2');
+        
+        // Escapar tag de cierre </tag>
+        const closeTagRegex = new RegExp(`</(${tag})>`, 'gi');
+        sanitized = sanitized.replace(closeTagRegex, '&lt;/$1&gt;');
+    });
+    
+    // Escapar atributos de eventos (onclick, onerror, onload, etc.)
+    sanitized = sanitized.replace(/\s+on\w+\s*=/gi, ' data-blocked=');
+    
+    // Escapar javascript: y data: en URLs
+    sanitized = sanitized.replace(/javascript\s*:/gi, 'blocked:');
+    sanitized = sanitized.replace(/data\s*:\s*text\/html/gi, 'blocked:');
+    
+    return sanitized;
 }
 
 // Actualizar estado de conexion
