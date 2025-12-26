@@ -11,6 +11,7 @@ import json
 import os
 import gc
 from utils.logger import get_logger
+from utils.security import validate_document_path
 from endpoints.shared_state import get_alfred_core_instance, is_alfred_core_initialized
 
 # Crear router para este modulo
@@ -94,24 +95,23 @@ async def add_document_path_endpoint(request: DocumentPathCreate):
     """
     try:
         from db_manager import add_document_path
-        import os
         
-        path = request.path
+        # Validar ruta de forma segura (previene Path Traversal)
+        is_valid, error_message, safe_path = validate_document_path(request.path)
         
-        # Validar que la ruta exista
-        if not os.path.exists(path):
-            raise HTTPException(status_code=400, detail="La ruta no existe")
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_message)
         
-        if not os.path.isdir(path):
-            raise HTTPException(status_code=400, detail="La ruta no es un directorio")
+        # Usar la ruta segura (resuelta y validada)
+        safe_path_str = str(safe_path)
         
-        success = add_document_path(path)
+        success = add_document_path(safe_path_str)
         
         if success:
             return {
                 "success": True,
                 "message": "Ruta agregada exitosamente",
-                "path": path
+                "path": safe_path_str
             }
         else:
             raise HTTPException(status_code=409, detail="La ruta ya existe")
@@ -140,17 +140,18 @@ async def update_document_path_endpoint(
     try:
         from db_manager import update_document_path, get_document_paths
         from vector_manager import VectorManager
-        import os
         
-        # Si se proporciona nueva ruta, validarla
+        # Si se proporciona nueva ruta, validarla de forma segura
+        safe_new_path = None
         if request.new_path:
-            if not os.path.exists(request.new_path):
-                raise HTTPException(status_code=400, detail="La nueva ruta no existe")
+            is_valid, error_message, validated_path = validate_document_path(request.new_path)
             
-            if not os.path.isdir(request.new_path):
-                raise HTTPException(status_code=400, detail="La nueva ruta no es un directorio")
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=error_message)
+            
+            safe_new_path = str(validated_path)
         
-        # Si se está deshabilitando, eliminar documentos de ChromaDB
+        # Si se esta deshabilitando, eliminar documentos de ChromaDB
         deleted_chunks = 0
         if request.enabled is False:
             backend_logger.info(f"Deshabilitando ruta {path_id}, eliminando documentos de ChromaDB...")
@@ -171,7 +172,7 @@ async def update_document_path_endpoint(
         # Actualizar la ruta en la BD
         success = update_document_path(
             path_id=path_id,
-            new_path=request.new_path,
+            new_path=safe_new_path,
             enabled=request.enabled
         )
         
@@ -379,65 +380,59 @@ async def reindex_documents_endpoint(background_tasks: BackgroundTasks):
         for idx, path_data in enumerate(paths, 1):
             try:
                 path_str = path_data['path']
-                path_obj = Path(path_str)
+                
+                # Validacion defensiva: revalidar rutas de la BD antes de usarlas
+                # Esto previene problemas si la BD fue modificada externamente
+                is_valid, validation_error, path_obj = validate_document_path(path_str)
                 
                 # Calcular progreso base (10-90%, dividido por rutas)
                 base_progress = 10 + (70 * idx / len(paths))
                 
-                backend_logger.info(f"Procesando ruta {idx}/{len(paths)}: {path_str}")
+                if not is_valid:
+                    error_msg = f"Ruta invalida: {validation_error}"
+                    backend_logger.error(f"{error_msg} - {path_str}")
+                    errors.append(error_msg)
+                    
+                    await send_progress_event({
+                        'type': 'error',
+                        'message': f'Error: {validation_error}',
+                        'progress': int(base_progress)
+                    })
+                    continue
+                
+                # Usar la ruta validada
+                safe_path_str = str(path_obj)
+                
+                backend_logger.info(f"Procesando ruta {idx}/{len(paths)}: {safe_path_str}")
                 
                 await send_progress_event({
                     'type': 'processing',
-                    'message': f'Procesando ruta {idx}/{len(paths)}: {Path(path_str).name}',
+                    'message': f'Procesando ruta {idx}/{len(paths)}: {path_obj.name}',
                     'progress': int(base_progress),
-                    'current_path': path_str,
+                    'current_path': safe_path_str,
                     'path_index': idx,
                     'total_paths': len(paths)
                 })
                 
-                if not path_obj.exists():
-                    error_msg = f"Ruta no existe: {path_str}"
-                    backend_logger.error(error_msg)
-                    errors.append(error_msg)
-                    
-                    await send_progress_event({
-                        'type': 'error',
-                        'message': f'Error: Ruta no existe - {Path(path_str).name}',
-                        'progress': int(base_progress)
-                    })
-                    continue
-                
-                if not path_obj.is_dir():
-                    error_msg = f"La ruta no es un directorio: {path_str}"
-                    backend_logger.error(error_msg)
-                    errors.append(error_msg)
-                    
-                    await send_progress_event({
-                        'type': 'error',
-                        'message': f'Error: No es un directorio - {Path(path_str).name}',
-                        'progress': int(base_progress)
-                    })
-                    continue
-                
                 # Cargar documentos (sin hash previo = reindexar todo)
-                backend_logger.info(f"Cargando documentos de: {path_str}")
+                backend_logger.info(f"Cargando documentos de: {safe_path_str}")
                 
                 await send_progress_event({
                     'type': 'loading',
-                    'message': f'Cargando documentos de: {Path(path_str).name}...',
+                    'message': f'Cargando documentos de: {path_obj.name}...',
                     'progress': int(base_progress + 2)
                 })
                 
                 docs, metadata_dict = loader.load_documents(path_obj, existing_hashes=None)
                 
                 if not docs:
-                    warning_msg = f"No se encontraron documentos en: {path_str}"
+                    warning_msg = f"No se encontraron documentos en: {safe_path_str}"
                     backend_logger.warning(warning_msg)
                     warnings.append(warning_msg)
                     
                     await send_progress_event({
                         'type': 'warning',
-                        'message': f'Sin documentos en: {Path(path_str).name}',
+                        'message': f'Sin documentos en: {path_obj.name}',
                         'progress': int(base_progress + 5)
                     })
                     
@@ -454,7 +449,7 @@ async def reindex_documents_endpoint(background_tasks: BackgroundTasks):
                 
                 await send_progress_event({
                     'type': 'loading',
-                    'message': f'Cargados {len(docs)} documentos de {Path(path_str).name}',
+                    'message': f'Cargados {len(docs)} documentos de {path_obj.name}',
                     'progress': int(base_progress + 10),
                     'documents_loaded': len(docs)
                 })
@@ -496,7 +491,7 @@ async def reindex_documents_endpoint(background_tasks: BackgroundTasks):
                 
                 await send_progress_event({
                     'type': 'success',
-                    'message': f'Completado: {Path(path_str).name} ({len(chunks)} chunks)',
+                    'message': f'Completado: {path_obj.name} ({len(chunks)} chunks)',
                     'progress': int(base_progress + 50),
                     'chunks_stored': len(chunks)
                 })
@@ -513,14 +508,14 @@ async def reindex_documents_endpoint(background_tasks: BackgroundTasks):
                 )
                 update_path_scan_time(path_data['id'])
                 
-                backend_logger.info(f"Ruta procesada exitosamente: {path_str}")
+                backend_logger.info(f"Ruta procesada exitosamente: {safe_path_str}")
                 
             except Exception as e:
                 backend_logger.error(
-                    f"Error en {path_data.get('path', 'ruta desconocida')}: {str(e)}",
+                    f"Error procesando ruta: {str(e)}",
                     exc_info=True
                 )
-                user_error_msg = f"Error procesando la ruta '{path_data.get('path', 'ruta desconocida')}'. Consulta los registros del sistema para más detalles."
+                user_error_msg = "Error procesando una ruta. Consulta los registros del sistema para mas detalles."
                 errors.append(user_error_msg)
                 
                 await send_progress_event({

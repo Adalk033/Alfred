@@ -2,8 +2,136 @@ from cryptography.fernet import Fernet
 from utils.paths import get_data_path
 import os
 import base64
+import re
+from pathlib import Path
+from typing import Tuple, Optional
 
 KEY_FILE = get_data_path() / "secret.key"
+
+# ============================================================================
+# PATH VALIDATION - Prevencion de Path Traversal
+# ============================================================================
+
+# Rutas del sistema que nunca deben ser accesibles
+FORBIDDEN_PATHS_UNIX = [
+    '/etc', '/bin', '/sbin', '/usr/bin', '/usr/sbin', '/boot', '/dev',
+    '/proc', '/sys', '/var/log', '/root', '/lib', '/lib64', '/opt',
+    '/run', '/snap', '/srv', '/tmp', '/var/run', '/var/tmp'
+]
+
+FORBIDDEN_PATHS_WINDOWS = [
+    'C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)',
+    'C:\\ProgramData', 'C:\\System Volume Information', 'C:\\$Recycle.Bin',
+    'C:\\Recovery', 'C:\\Users\\Default', 'C:\\Users\\Public',
+    'C:\\PerfLogs', 'C:\\Windows\\System32'
+]
+
+# Patrones peligrosos en rutas
+DANGEROUS_PATTERNS = [
+    r'\.\./',           # Path traversal Unix
+    r'\.\.',            # Path traversal generico
+    r'\.\.\\',          # Path traversal Windows
+    r'^~',              # Home directory expansion
+    r'\$\{',            # Variable expansion
+    r'\$\(',            # Command substitution
+    r'`',               # Command substitution backticks
+    r'\|',              # Pipe
+    r';',               # Command separator
+    r'&',               # Background/AND operator
+    r'>',               # Redirect
+    r'<',               # Redirect
+    r'\0',              # Null byte
+]
+
+
+def validate_document_path(path_input: str) -> Tuple[bool, str, Optional[Path]]:
+    """
+    Valida una ruta de documentos para prevenir ataques de Path Traversal
+    
+    Args:
+        path_input: Ruta proporcionada por el usuario
+        
+    Returns:
+        Tuple de (es_valida, mensaje_error, ruta_segura)
+        - es_valida: True si la ruta es segura
+        - mensaje_error: Descripcion del error si no es valida
+        - ruta_segura: Path object seguro si es valida, None si no
+    """
+    if not path_input or not isinstance(path_input, str):
+        return False, "La ruta no puede estar vacia", None
+    
+    # Limpiar espacios
+    path_input = path_input.strip()
+    
+    if not path_input:
+        return False, "La ruta no puede estar vacia", None
+    
+    # Verificar patrones peligrosos ANTES de resolver la ruta
+    for pattern in DANGEROUS_PATTERNS:
+        if re.search(pattern, path_input):
+            return False, f"La ruta contiene caracteres no permitidos", None
+    
+    try:
+        # Resolver la ruta absoluta de forma segura
+        # Esto resuelve symlinks y normaliza la ruta
+        path_obj = Path(path_input).resolve()
+        resolved_path = str(path_obj)
+        
+        # Verificar que la ruta resuelta no contiene path traversal
+        # (por si acaso resolve() no lo manejo completamente)
+        if '..' in resolved_path:
+            return False, "La ruta contiene secuencias de navegacion no permitidas", None
+        
+        # Verificar rutas del sistema prohibidas
+        forbidden_paths = FORBIDDEN_PATHS_UNIX if os.name != 'nt' else FORBIDDEN_PATHS_WINDOWS
+        
+        resolved_lower = resolved_path.lower()
+        for forbidden in forbidden_paths:
+            forbidden_lower = forbidden.lower()
+            if resolved_lower == forbidden_lower or resolved_lower.startswith(forbidden_lower + os.sep):
+                return False, f"No se permite acceso a rutas del sistema", None
+        
+        # Verificar que la ruta existe
+        if not path_obj.exists():
+            return False, "La ruta especificada no existe", None
+        
+        # Verificar que es un directorio
+        if not path_obj.is_dir():
+            return False, "La ruta especificada no es un directorio", None
+        
+        # Verificar permisos de lectura
+        if not os.access(path_obj, os.R_OK):
+            return False, "No hay permisos de lectura para esta ruta", None
+        
+        return True, "", path_obj
+        
+    except PermissionError:
+        return False, "No hay permisos para acceder a esta ruta", None
+    except OSError as e:
+        return False, f"Error al acceder a la ruta: {str(e)}", None
+    except Exception as e:
+        return False, f"Error al validar la ruta", None
+
+
+def is_path_within_allowed(path: Path, allowed_base: Path) -> bool:
+    """
+    Verifica que una ruta este dentro de un directorio base permitido
+    
+    Args:
+        path: Ruta a verificar
+        allowed_base: Directorio base permitido
+        
+    Returns:
+        True si la ruta esta dentro del directorio base
+    """
+    try:
+        resolved_path = path.resolve()
+        resolved_base = allowed_base.resolve()
+        
+        # Verificar que la ruta resuelta comience con el directorio base
+        return str(resolved_path).startswith(str(resolved_base))
+    except Exception:
+        return False
 
 def generate_key():
     """Genera o carga la clave de cifrado"""
