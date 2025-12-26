@@ -1,5 +1,6 @@
 import { showNotification } from '../../core/notifications.js';
 import { showConfirm } from '../../core/dialogs.js';
+import { createDownloadProgressItem, getDownloadItemId } from '../../components/download-progress-item.js';
 
 // Ollama keep-alive configuration elements (initialized from renderer.js)
 let ollamaKeepAliveSlider;
@@ -301,7 +302,7 @@ function startDownloadPolling(modelName) {
 
                             // Hide progress item after 3 more seconds
                             setTimeout(() => {
-                                const itemId = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                                const itemId = getDownloadItemId(modelName);
                                 const item = document.getElementById(itemId);
                                 if (item) {
                                     item.style.transition = 'opacity 0.5s';
@@ -326,27 +327,13 @@ function startDownloadPolling(modelName) {
 // Add progress item
 function addDownloadProgressItem(modelName) {
     const list = document.getElementById('downloadProgressList');
-
-    const item = document.createElement('div');
-    item.className = 'download-progress-item';
-    item.id = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
-    item.innerHTML = `
-        <div class="download-progress-info">
-            <span class="download-model-name">${modelName}</span>
-            <span class="download-progress-percent">0%</span>
-        </div>
-        <div class="download-progress-bar">
-            <div class="download-progress-fill" style="width: 0%"></div>
-        </div>
-        <div class="download-progress-status">Iniciando descarga...</div>
-    `;
-
+    const item = createDownloadProgressItem(modelName);
     list.appendChild(item);
 }
 
 // Update download progress
 function updateDownloadProgress(modelName, status, progress, message) {
-    const itemId = `download-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    const itemId = getDownloadItemId(modelName);
     const item = document.getElementById(itemId);
 
     if (!item) return;
