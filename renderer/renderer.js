@@ -3,7 +3,7 @@ import { addMessage, updateStatus } from './dom/dom-utils.js';
 import { createNewConversation, loadConversations, loadConversation, deleteConversationById } from './core/conversations.js';
 import * as State from './state/state.js';
 import { getCryptoManager } from './crypto/crypto.js';
-import { initializeSidebar, toggleLeftSidebar, closeSidebarOnMobile, hideLeftSidebarContent, setActiveNavItem } from './dom/sidebar.js';
+import { initializeSidebar, toggleLeftSidebar, closeSidebarOnMobile, hideLeftSidebarContent, setActiveNavItem, loadSidebarState } from './dom/sidebar.js';
 import { sendMessage } from './core/messages.js';
 import { setupBackendListeners } from './features/backend/backend-listeners.js';
 import { handleFileAttach, removeAttachedFile, setupDragAndDrop } from './features/attachments/file-handler.js';
@@ -133,6 +133,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar tema desde BD
     await loadTheme();
+
+    // Cargar estado del sidebar desde BD
+    await loadSidebarState();
 
     // Cargar modelos disponibles en el selector del topbar
     await loadModelsIntoSelector();

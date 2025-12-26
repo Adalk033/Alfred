@@ -171,3 +171,71 @@ async def get_theme():
         error_detail = f"Error al obtener tema: {str(e)}"
         backend_logger.error(error_detail)
         raise HTTPException(status_code=500, detail=error_detail)
+
+# ============================================================================
+# SIDEBAR COLLAPSED STATE
+# ============================================================================
+
+class SidebarRequest(BaseModel):
+    """Solicitud para cambiar el estado del sidebar"""
+    collapsed: bool = Field(..., description="Estado del sidebar: true=colapsado, false=expandido")
+
+class SidebarResponse(BaseModel):
+    """Respuesta con el estado actual del sidebar"""
+    collapsed: bool = Field(..., description="Estado actual del sidebar")
+    updated_at: Optional[str] = Field(None, description="Timestamp de actualizacion")
+
+@router.post("/settings/sidebar", response_model=SidebarResponse, tags=["Configuración"])
+async def set_sidebar_state(request: SidebarRequest):
+    """
+    Guardar el estado del sidebar (colapsado/expandido)
+    
+    El estado se guarda en la base de datos y se carga automaticamente
+    al iniciar la aplicacion.
+    """
+    from db_manager import set_user_setting
+    
+    try:
+        # Guardar en base de datos como string 'true' o 'false'
+        value = 'true' if request.collapsed else 'false'
+        success = set_user_setting('sidebar_collapsed', value, 'string')
+        
+        if not success:
+            raise Exception("No se pudo guardar el estado del sidebar en la base de datos")
+        
+        backend_logger.info(f"Estado del sidebar cambiado a: {'colapsado' if request.collapsed else 'expandido'}")
+        
+        return SidebarResponse(
+            collapsed=request.collapsed,
+            updated_at=datetime.now().isoformat()
+        )
+        
+    except Exception as e:
+        error_detail = f"Error al guardar estado del sidebar: {str(e)}"
+        backend_logger.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
+
+@router.get("/settings/sidebar", response_model=SidebarResponse, tags=["Configuración"])
+async def get_sidebar_state():
+    """
+    Obtener el estado actual del sidebar
+    
+    Retorna el estado guardado en la base de datos.
+    Si no hay estado guardado, retorna false (expandido) como valor por defecto.
+    """
+    from db_manager import get_user_setting
+    
+    try:
+        # Obtener de base de datos (retorna string 'true' o 'false')
+        value = get_user_setting('sidebar_collapsed', default='false')
+        collapsed = value == 'true'
+        
+        return SidebarResponse(
+            collapsed=collapsed,
+            updated_at=None
+        )
+        
+    except Exception as e:
+        error_detail = f"Error al obtener estado del sidebar: {str(e)}"
+        backend_logger.error(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)

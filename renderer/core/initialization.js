@@ -6,7 +6,7 @@
 import * as State from '../state/state.js';
 import { sendMessage } from './messages.js';
 import { getCryptoManager } from '../crypto/crypto.js';
-import { initializeSidebar, toggleLeftSidebar, closeSidebarOnMobile, hideLeftSidebarContent, setActiveNavItem } from '../dom/sidebar.js';
+import { initializeSidebar, toggleLeftSidebar, closeSidebarOnMobile, hideLeftSidebarContent, setActiveNavItem, loadSidebarState } from '../dom/sidebar.js';
 import { showNotification } from './notifications.js';
 
 /**
@@ -108,6 +108,9 @@ export async function initializeApp(refs) {
 
     // Cargar tema desde BD
     await loadTheme();
+
+    // Cargar estado del sidebar desde BD
+    await loadSidebarState();
 
     // Cargar modelos disponibles en el selector del topbar
     await loadModelsIntoSelector();
