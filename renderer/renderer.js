@@ -368,14 +368,14 @@ function setupEventListeners() {
     // Event listeners para archivos adjuntos temporales
     const attachFileBtn = document.getElementById('attachFileBtn');
     const fileInput = document.getElementById('fileInput');
-    const removeFileBtn = document.getElementById('removeFileBtn');
+    const removeAllFilesBtn = document.getElementById('removeAllFilesBtn');
 
     if (attachFileBtn && fileInput) {
         attachFileBtn.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', handleFileAttach);
     }
-    if (removeFileBtn) {
-        removeFileBtn.addEventListener('click', removeAttachedFile);
+    if (removeAllFilesBtn) {
+        removeAllFilesBtn.addEventListener('click', removeAttachedFile);
     }
 
     // Drag and Drop en el area de conversacion

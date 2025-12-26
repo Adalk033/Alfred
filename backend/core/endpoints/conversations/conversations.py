@@ -90,7 +90,7 @@ class QueryWithConversationRequest(BaseModel):
     search_documents: bool = Field(True, description="Buscar en documentos o solo usar el prompt")
     search_kwargs: Optional[Dict[str, Any]] = Field(None, description="Parametros adicionales de busqueda")
     max_context_messages: int = Field(50, description="Numero maximo de mensajes de contexto", ge=1, le=50)
-    temp_document: Optional[Dict[str, str]] = Field(None, description="Documento temporal adjunto (name, content)")
+    temp_documents: Optional[List[Dict[str, str]]] = Field(None, description="Documentos temporales adjuntos (lista de {name, content}), maximo 5")
 
 class QueryResponse(BaseModel):
     """Respuesta del asistente"""
@@ -387,76 +387,95 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 for msg in messages
             ]
         
-        # Si hay documento temporal adjunto, guardarlo en metadata de la conversacion
-        # Si no hay documento adjunto, intentar recuperarlo de la metadata
-        temp_document = request.temp_document
+        # Si hay documentos temporales adjuntos, guardarlos en metadata de la conversacion
+        # Si no hay documentos adjuntos, intentar recuperarlos de la metadata
+        temp_documents = request.temp_documents
+        
+        # Limitar a maximo 5 documentos
+        MAX_TEMP_DOCUMENTS = 5
+        if temp_documents and len(temp_documents) > MAX_TEMP_DOCUMENTS:
+            temp_documents = temp_documents[:MAX_TEMP_DOCUMENTS]
+            print(f"⚠️ Limitando a {MAX_TEMP_DOCUMENTS} documentos temporales")
         
         if request.conversation_id:
             conv_mgr = get_conversation_manager()
             
-            if temp_document:
-                # Guardar documento en metadata de conversacion
+            if temp_documents:
+                # Guardar documentos en metadata de conversacion
                 metadata = conv_mgr.get_conversation_metadata(request.conversation_id) or {}
-                metadata['temp_document'] = temp_document
+                metadata['temp_documents'] = temp_documents
                 conv_mgr.update_conversation_metadata(request.conversation_id, metadata)
-                print(f"📎 Documento temporal guardado en conversacion: {temp_document['name']}")
+                doc_names = [d['name'] for d in temp_documents]
+                print(f"📎 {len(temp_documents)} documento(s) temporal(es) guardado(s) en conversacion: {', '.join(doc_names)}")
             else:
-                # Intentar recuperar documento de metadata
+                # Intentar recuperar documentos de metadata
                 metadata = conv_mgr.get_conversation_metadata(request.conversation_id)
-                if metadata and 'temp_document' in metadata:
-                    temp_document = metadata['temp_document']
-                    print(f"📎 Documento temporal recuperado de conversacion: {temp_document['name']}")
+                if metadata and 'temp_documents' in metadata:
+                    temp_documents = metadata['temp_documents']
+                    doc_names = [d['name'] for d in temp_documents]
+                    print(f"📎 {len(temp_documents)} documento(s) temporal(es) recuperado(s) de conversacion: {', '.join(doc_names)}")
         
-        # Si hay documento temporal (adjunto o recuperado), agregarlo al contexto de la pregunta
+        # Si hay documentos temporales (adjuntos o recuperados), agregarlos al contexto de la pregunta
         question_with_context = question  # Usar pregunta descifrada
         force_prompt_only = False
         
-        if temp_document:
-            file_name = temp_document['name']
-            print(f"📎 Documento temporal adjunto: {file_name}")
-            
+        if temp_documents and len(temp_documents) > 0:
             # Obtener funciones de extraccion
             extractors = get_file_extractors()
             
-            # Detectar formato y procesar segun extension
-            file_ext = file_name.lower()
+            # Procesar cada documento y concatenar al contexto
+            all_documents_context = ""
+            total_chars = 0
+            max_total_chars = 100000  # ~100KB total para todos los documentos
             
-            if file_ext.endswith('.pdf'):
-                print(f"📄 Procesando PDF...")
-                doc_content = extractors['pdf'](temp_document['content'], file_name)
-            elif file_ext.endswith('.docx'):
-                print(f"📄 Procesando Word (DOCX)...")
-                doc_content = extractors['docx'](temp_document['content'], file_name)
-            elif file_ext.endswith('.xlsx'):
-                print(f"📊 Procesando Excel (XLSX)...")
-                doc_content = extractors['xlsx'](temp_document['content'], file_name)
-            elif file_ext.endswith('.pptx'):
-                print(f"📊 Procesando PowerPoint (PPTX)...")
-                doc_content = extractors['pptx'](temp_document['content'], file_name)
-            else:
-                # Archivos de texto plano (txt, md, json, xml, csv, etc)
-                doc_content = temp_document['content']
+            for idx, temp_doc in enumerate(temp_documents):
+                file_name = temp_doc['name']
+                print(f"📎 Procesando documento {idx + 1}/{len(temp_documents)}: {file_name}")
+                
+                # Detectar formato y procesar segun extension
+                file_ext = file_name.lower()
+                
+                if file_ext.endswith('.pdf'):
+                    print(f"📄 Procesando PDF...")
+                    doc_content = extractors['pdf'](temp_doc['content'], file_name)
+                elif file_ext.endswith('.docx'):
+                    print(f"📄 Procesando Word (DOCX)...")
+                    doc_content = extractors['docx'](temp_doc['content'], file_name)
+                elif file_ext.endswith('.xlsx'):
+                    print(f"📊 Procesando Excel (XLSX)...")
+                    doc_content = extractors['xlsx'](temp_doc['content'], file_name)
+                elif file_ext.endswith('.pptx'):
+                    print(f"📊 Procesando PowerPoint (PPTX)...")
+                    doc_content = extractors['pptx'](temp_doc['content'], file_name)
+                else:
+                    # Archivos de texto plano (txt, md, json, xml, csv, etc)
+                    doc_content = temp_doc['content']
+                
+                # Obtener tamanio
+                doc_size_kb = len(doc_content.encode('utf-8')) / 1024
+                print(f"📊 Tamanio del documento: {doc_size_kb:.2f} KB")
+                
+                # Calcular espacio disponible para este documento
+                remaining_chars = max_total_chars - total_chars
+                max_chars_per_doc = remaining_chars // (len(temp_documents) - idx)
+                
+                # Truncar si es necesario
+                if len(doc_content) > max_chars_per_doc:
+                    print(f"⚠️ Documento truncado de {len(doc_content)} a {max_chars_per_doc} chars")
+                    doc_content = doc_content[:max_chars_per_doc] + "\n\n[... documento truncado por tamanio ...]"
+                
+                total_chars += len(doc_content)
+                
+                # Agregar documento al contexto
+                all_documents_context += f"\n\n--- DOCUMENTO ADJUNTO {idx + 1}: {file_name} ---\n"
+                all_documents_context += doc_content
+                all_documents_context += f"\n--- FIN DEL DOCUMENTO {idx + 1} ---\n"
             
-            # Obtener tamaño
-            doc_size_kb = len(doc_content.encode('utf-8')) / 1024
-            
-            print(f"📊 Tamaño del documento: {doc_size_kb:.2f} KB")
-            
-            # Si el documento es muy grande (>100KB), truncar o advertir
-            max_chars = 50000  # ~50KB de texto (aprox 12,500 palabras)
-            if len(doc_content) > max_chars:
-                print(f"⚠️ Documento grande ({len(doc_content)} chars), truncando a {max_chars} chars")
-                doc_content = doc_content[:max_chars] + "\n\n[... documento truncado por tamaño ...]"
-            
-            # Forzar modo prompt-only cuando hay documento adjunto (más rápido)
+            # Forzar modo prompt-only cuando hay documentos adjuntos (mas rapido)
             force_prompt_only = True
-            print(f"🚀 Modo prompt-only forzado para archivo adjunto")
+            print(f"🚀 Modo prompt-only forzado para {len(temp_documents)} archivo(s) adjunto(s)")
             
-            # Agregar documento al contexto
-            document_context = f"\n\n--- DOCUMENTO ADJUNTO: {file_name} ---\n"
-            document_context += doc_content
-            document_context += f"\n--- FIN DEL DOCUMENTO ---\n\n"
-            question_with_context = document_context + question  # Usar pregunta descifrada
+            question_with_context = all_documents_context + "\n\n" + question  # Usar pregunta descifrada
         
         # Ejecutar consulta con contexto de conversacion
         # Si hay documento adjunto, forzar search_documents=False para mejor rendimiento

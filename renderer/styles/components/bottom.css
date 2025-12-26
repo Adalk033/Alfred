@@ -152,14 +152,77 @@
 /* Indicador de archivo adjunto */
 .attached-file-indicator {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     padding: 8px 12px;
     background-color: var(--bg-tertiary);
     border: 1px solid var(--mode-primary);
     border-radius: 8px;
     margin-top: 8px;
-    gap: 12px;
+    gap: 8px;
+}
+
+.attached-files-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.attached-files-header svg {
+    flex-shrink: 0;
+    color: var(--mode-primary);
+}
+
+.attached-files-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.remove-all-files-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background-color: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+
+.remove-all-files-btn:hover {
+    background-color: rgba(255, 59, 48, 0.1);
+    color: #ff3b30;
+}
+
+.attached-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.attached-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background-color: var(--bg-secondary);
+    border-radius: 6px;
+    gap: 8px;
+}
+
+.attached-file-item:hover {
+    background-color: var(--bg-hover);
 }
 
 .attached-file-info {
@@ -182,18 +245,19 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 200px;
 }
 
 .attached-file-info .file-size {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 11px;
     white-space: nowrap;
 }
 
 .remove-file-btn {
     flex-shrink: 0;
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     border: none;
     background-color: transparent;
     color: var(--text-secondary);

@@ -160,13 +160,13 @@ function registerIPCHandlers(dependencies) {
 
     ipcMain.handle('send-query-with-attachment', async (event, queryData) => {
         try {
-            const { message, conversationId, searchDocuments, attachedFile } = queryData;
+            const { message, conversationId, searchDocuments, attachedFiles } = queryData;
 
-            console.log('[MAIN] Enviando consulta con archivo adjunto:', {
+            console.log('[MAIN] Enviando consulta con archivos adjuntos:', {
                 message,
                 conversationId,
                 searchDocuments,
-                hasAttachment: !!attachedFile
+                attachmentCount: attachedFiles ? attachedFiles.length : 0
             });
 
             const result = await makeRequest('http://127.0.0.1:8000/query/conversation', {
@@ -181,7 +181,7 @@ function registerIPCHandlers(dependencies) {
                     save_response: false,
                     search_documents: searchDocuments,
                     max_context_messages: 10,
-                    temp_document: attachedFile || null
+                    temp_documents: attachedFiles || null
                 })
             });
 
