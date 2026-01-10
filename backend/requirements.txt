@@ -9,7 +9,7 @@
 accelerate==1.10.1
 aiofiles==24.1.0
 aiohappyeyeballs==2.6.1
-aiohttp==3.12.15
+aiohttp==3.13.3
 aiosignal==1.4.0
 annotated-types==0.7.0
 antlr4-python3-runtime==4.9.3
@@ -159,7 +159,7 @@ pandas==2.2.3
 pdf2image==1.17.0
 pdfminer.six==20251107
 pikepdf==9.11.0
-pypdf==6.4.0
+pypdf==6.6.0
 
 # === Image Processing ===
 pi_heif==1.1.1
@@ -306,7 +306,7 @@ unstructured-inference==1.0.5
 unstructured.pytesseract==0.3.15
 
 # === HTTP Client ===
-urllib3==2.6.0
+urllib3==2.6.3
 
 # === ASGI Server ===
 uvicorn==0.37.0
