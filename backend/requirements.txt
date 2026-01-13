@@ -41,7 +41,7 @@ emoji==2.14.0
 
 # === FastAPI & Web Framework ===
 fastapi==0.115.0
-filelock==3.20.1
+filelock==3.20.3
 filetype==1.2.0
 flatbuffers==25.9.23
 fonttools==4.61.0
