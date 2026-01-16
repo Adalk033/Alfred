@@ -177,7 +177,7 @@ protobuf==6.31.1
 psutil==6.1.0
 
 # === Authentication ===
-pyasn1==0.6.1
+pyasn1==0.6.2
 pyasn1_modules==0.4.2
 pybase64==1.4.2
 
