@@ -41,7 +41,7 @@ emoji==2.14.0
 
 # === FastAPI & Web Framework ===
 fastapi==0.115.0
-filelock==3.20.1
+filelock==3.20.3
 filetype==1.2.0
 flatbuffers==25.9.23
 fonttools==4.61.0
@@ -177,7 +177,7 @@ protobuf==6.31.1
 psutil==6.1.0
 
 # === Authentication ===
-pyasn1==0.6.1
+pyasn1==0.6.2
 pyasn1_modules==0.4.2
 pybase64==1.4.2
 
