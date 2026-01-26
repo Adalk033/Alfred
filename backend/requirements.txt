@@ -220,7 +220,7 @@ python-iso639==2025.11.16
 python-magic==0.4.27
 
 # === Multipart Forms ===
-python-multipart==0.0.21
+python-multipart==0.0.22
 
 # === Outlook MSG Files ===
 python-oxmsg==0.0.2
