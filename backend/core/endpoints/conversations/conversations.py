@@ -103,6 +103,7 @@ class QueryResponse(BaseModel):
     context_count: int = Field(0, description="Numero de fragmentos recuperados")
     from_cache: Optional[bool] = Field(None, description="Si la respuesta proviene del cache en memoria")
     cache_age_seconds: Optional[float] = Field(None, description="Edad del cache en segundos")
+    used_attached_files: Optional[List[Dict[str, str]]] = Field(None, description="Archivos adjuntos que se usaron en esta respuesta")
 
 # ============================================================================
 # FUNCIONES AUXILIARES
@@ -503,24 +504,35 @@ async def query_with_conversation(request: QueryWithConversationRequest):
         # Agregar mensajes a la conversacion si existe
         if request.conversation_id:
             conv_mgr = get_conversation_manager()
+            # Preparar metadata del mensaje del usuario con documentos adjuntos si existen
+            user_metadata = {}
+            if temp_documents:
+                # Guardar solo los nombres de los archivos en la metadata del mensaje
+                user_metadata['attached_files'] = [{"name": doc['name']} for doc in temp_documents]
+            
             # Agregar pregunta del usuario (ya descifrada)
             conv_mgr.add_message(
                 conversation_id=request.conversation_id,
                 role="user",
                 content=question,  # Usar pregunta descifrada
-                metadata={},
+                metadata=user_metadata,
                 encrypt_sensitive=False  # No hay datos sensibles en pregunta
             )
             # Agregar respuesta del asistente (cifra automaticamente metadata)
+            assistant_metadata = {
+                "sources": result.get('sources', []),
+                "personal_data": personal_data,
+                "from_history": result.get('from_history', False)
+            }
+            # Si se usaron documentos adjuntos, indicarlo en la metadata
+            if temp_documents:
+                assistant_metadata['used_attached_files'] = [{"name": doc['name']} for doc in temp_documents]
+            
             conv_mgr.add_message(
                 conversation_id=request.conversation_id,
                 role="assistant",
                 content=result['answer'],
-                metadata={
-                    "sources": result.get('sources', []),
-                    "personal_data": personal_data,
-                    "from_history": result.get('from_history', False)
-                },
+                metadata=assistant_metadata,
                 encrypt_sensitive=True  # Cifrar datos sensibles en metadata
             )
             
@@ -548,13 +560,19 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                     user_context="Guardado en historial Q&A desde conversacion"
                 )
         
+        # Preparar informacion de archivos adjuntos usados para la respuesta
+        used_files = None
+        if temp_documents:
+            used_files = [{"name": doc['name']} for doc in temp_documents]
+        
         return QueryResponse(
             answer=result['answer'],
             personal_data=personal_data,
             sources=result.get('sources', []),
             from_history=result.get('from_history', False),
             history_score=result.get('history_score'),
-            context_count=result.get('context_count', 0)
+            context_count=result.get('context_count', 0),
+            used_attached_files=used_files
         )
     
     except Exception as e:

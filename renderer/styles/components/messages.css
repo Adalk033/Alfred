@@ -390,10 +390,17 @@
 
 .attachment-files-list {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0px;
     flex: 1;
     min-width: 0;
+}
+
+.attachment-description {
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-right: 4px;
 }
 
 .attachment-file-name {

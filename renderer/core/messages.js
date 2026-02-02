@@ -224,6 +224,12 @@ export async function addMessageWithTyping(content, role, metadata = null, userQ
 
             // Agregar metadata despues de terminar de escribir
             if (metadata) {
+                // Mostrar indicador de archivos adjuntos usados si existen
+                if (metadata.used_attached_files && metadata.used_attached_files.length > 0) {
+                    const attachmentIndicator = createAttachmentIndicatorForAssistant(metadata.used_attached_files);
+                    contentDiv.appendChild(attachmentIndicator);
+                }
+                
                 const meta = document.createElement('div');
                 meta.className = 'message-meta';
 
@@ -324,6 +330,57 @@ export async function addMessageWithTyping(content, role, metadata = null, userQ
     }
 
     typeChar();
+}
+
+/**
+ * Create attachment indicator for assistant messages
+ * @param {Array<{name: string}>} attachedFiles - Array of file objects
+ * @returns {HTMLElement} The attachment indicator element
+ */
+function createAttachmentIndicatorForAssistant(attachedFiles) {
+    const indicator = document.createElement('div');
+    indicator.className = 'message-attachment';
+    
+    // Icono de archivo
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('width', '14');
+    icon.setAttribute('height', '14');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('fill', 'currentColor');
+    
+    const iconPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    iconPath.setAttribute('d', 'M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z');
+    icon.appendChild(iconPath);
+    
+    // Lista de archivos
+    const filesList = document.createElement('div');
+    filesList.className = 'attachment-files-list';
+    
+    // Texto descriptivo
+    const descSpan = document.createElement('span');
+    descSpan.className = 'attachment-description';
+    descSpan.textContent = `Usando ${attachedFiles.length === 1 ? 'documento' : 'documentos'}: `;
+    filesList.appendChild(descSpan);
+    
+    // Nombres de archivos
+    attachedFiles.forEach((file, index) => {
+        const fileNameSpan = document.createElement('span');
+        fileNameSpan.className = 'attachment-file-name';
+        fileNameSpan.textContent = file.name;
+        filesList.appendChild(fileNameSpan);
+        
+        // Agregar separador si no es el ultimo
+        if (index < attachedFiles.length - 1) {
+            const separator = document.createElement('span');
+            separator.textContent = ', ';
+            filesList.appendChild(separator);
+        }
+    });
+    
+    indicator.appendChild(icon);
+    indicator.appendChild(filesList);
+    
+    return indicator;
 }
 
 /**

@@ -278,6 +278,57 @@ function sanitizeInputForMarkdown(text) {
     return sanitized;
 }
 
+// Crear indicador de archivos adjuntos para mensajes
+function createAttachmentIndicatorForMessage(attachedFiles, isUsed = false) {
+    const indicator = document.createElement('div');
+    indicator.className = 'message-attachment';
+    
+    // Icono de archivo
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('width', '14');
+    icon.setAttribute('height', '14');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('fill', 'currentColor');
+    
+    const iconPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    iconPath.setAttribute('d', 'M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z');
+    icon.appendChild(iconPath);
+    
+    // Lista de archivos
+    const filesList = document.createElement('div');
+    filesList.className = 'attachment-files-list';
+    
+    // Texto descriptivo
+    const descSpan = document.createElement('span');
+    descSpan.className = 'attachment-description';
+    if (isUsed) {
+        descSpan.textContent = `Usando ${attachedFiles.length === 1 ? 'documento' : 'documentos'}: `;
+    } else {
+        descSpan.textContent = attachedFiles.length === 1 ? 'Documento adjunto: ' : 'Documentos adjuntos: ';
+    }
+    filesList.appendChild(descSpan);
+    
+    // Nombres de archivos
+    attachedFiles.forEach((file, index) => {
+        const fileNameSpan = document.createElement('span');
+        fileNameSpan.className = 'attachment-file-name';
+        fileNameSpan.textContent = file.name;
+        filesList.appendChild(fileNameSpan);
+        
+        // Agregar separador si no es el ultimo
+        if (index < attachedFiles.length - 1) {
+            const separator = document.createElement('span');
+            separator.textContent = ', ';
+            filesList.appendChild(separator);
+        }
+    });
+    
+    indicator.appendChild(icon);
+    indicator.appendChild(filesList);
+    
+    return indicator;
+}
+
 // Actualizar estado de conexion
 export function updateStatus(status, text, statusElement) {
     if (statusElement) {
@@ -352,6 +403,17 @@ export function addMessage(content, role, metadata = null, userQuestion = null) 
     }
 
     contentDiv.appendChild(bubble);
+
+    // Agregar indicador de archivos adjuntos si existen
+    // Para mensajes de usuario: attached_files
+    // Para mensajes de asistente: used_attached_files
+    if (metadata) {
+        const attachedFiles = metadata.attached_files || metadata.used_attached_files;
+        if (attachedFiles && attachedFiles.length > 0) {
+            const attachmentIndicator = createAttachmentIndicatorForMessage(attachedFiles, role === 'assistant');
+            contentDiv.appendChild(attachmentIndicator);
+        }
+    }
 
     // Agregar metadata si existe
     if (metadata) {
