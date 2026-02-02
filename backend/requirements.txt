@@ -171,7 +171,7 @@ propcache==0.4.1
 
 # === Protocol Buffers ===
 proto-plus==1.27.0
-protobuf==6.31.1
+protobuf==6.33.5
 
 # === System Monitoring ===
 psutil==6.1.0
