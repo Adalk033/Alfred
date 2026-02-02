@@ -17,6 +17,7 @@
 @import './components/dialog.css';
 @import './components/history-search.css';
 @import './components/about.css';
+@import './components/learning.css';
 
 .container {
     flex: 1;

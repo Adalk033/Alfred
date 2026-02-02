@@ -204,6 +204,22 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_document_paths_enabled ON document_paths(enabled);
     """)
 
+    # Tabla para datos de aprendizaje del usuario
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_learning_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern_type TEXT NOT NULL,
+        pattern_data TEXT NOT NULL,
+        confidence REAL DEFAULT 0.0,
+        learned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_user_learning_pattern_type ON user_learning_data(pattern_type);
+    """)
+
     # Migracion: Agregar columna metadata a conversation_threads si no existe
     # Verificar si la columna ya existe
     cursor.execute("PRAGMA table_info(conversation_threads)")

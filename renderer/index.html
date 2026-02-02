@@ -712,6 +712,99 @@
                         <div class="setting-group">
                             <button id="savePersonalizationBtn" class="button primary">Guardar Personalizacion</button>
                         </div>
+
+                        <!-- Seccion Aprendizaje Automatico -->
+                        <div class="learning-section">
+                            <h4 class="subsection-title">Aprendizaje Automatico</h4>
+                            <p class="setting-description">
+                                Alfred puede aprender de tus conversaciones para personalizar mejor sus respuestas.
+                                El aprendizaje se ejecuta automaticamente cada 7 dias o puedes iniciarlo manualmente.
+                            </p>
+
+                            <!-- Estado del aprendizaje -->
+                            <div class="setting-group">
+                                <label>Estado del aprendizaje</label>
+                                <div class="learning-status" id="learningStatus">
+                                    <div class="status-item">
+                                        <span class="status-label">Ultimo aprendizaje:</span>
+                                        <span class="status-value" id="lastLearningDate">Nunca</span>
+                                    </div>
+                                    <div class="status-item">
+                                        <span class="status-label">Modo utilizado:</span>
+                                        <span class="status-value" id="lastLearningMode">-</span>
+                                    </div>
+                                    <div class="status-item">
+                                        <span class="status-label">Temas aprendidos:</span>
+                                        <span class="status-value" id="learnedTopicsCount">0</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Configuracion de aprendizaje -->
+                            <div class="setting-group">
+                                <label>Aprendizaje automatico</label>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="autoLearningEnabled" checked>
+                                    <label for="autoLearningEnabled">Habilitar aprendizaje automatico cada 7 dias</label>
+                                </div>
+                            </div>
+
+                            <div class="setting-group">
+                                <label for="defaultLearningMode">Modo por defecto</label>
+                                <select id="defaultLearningMode">
+                                    <option value="light" selected>Ligero (rapido, menos recursos)</option>
+                                    <option value="heavy">Profundo (mas lento, mas preciso)</option>
+                                </select>
+                                <p class="setting-description">
+                                    El modo ligero analiza patrones basicos. El modo profundo incluye analisis de vocabulario y preferencias de formato.
+                                </p>
+                            </div>
+
+                            <!-- Aprendizaje manual -->
+                            <div class="setting-group">
+                                <label>Aprendizaje manual</label>
+                                <p class="setting-description">
+                                    Inicia un aprendizaje ahora mismo con el modo que prefieras.
+                                </p>
+                                <div class="learning-actions">
+                                    <select id="manualLearningMode">
+                                        <option value="light">Modo Ligero</option>
+                                        <option value="heavy">Modo Profundo</option>
+                                    </select>
+                                    <button id="startLearningBtn" class="button primary">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                        </svg>
+                                        Iniciar Aprendizaje
+                                    </button>
+                                </div>
+                                <div id="learningProgress" class="learning-progress" style="display: none;">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="learningProgressFill"></div>
+                                    </div>
+                                    <span class="progress-text" id="learningProgressText">Aprendiendo...</span>
+                                </div>
+                            </div>
+
+                            <!-- Patrones aprendidos -->
+                            <div class="setting-group">
+                                <label>Patrones aprendidos</label>
+                                <div class="learned-patterns" id="learnedPatterns">
+                                    <p class="no-patterns">No hay patrones aprendidos aun.</p>
+                                </div>
+                            </div>
+
+                            <!-- Resetear aprendizaje -->
+                            <div class="setting-group">
+                                <button id="resetLearningBtn" class="button secondary danger-text">
+                                    Resetear Aprendizaje
+                                </button>
+                                <p class="setting-description warning-text">
+                                    Esto eliminara todos los patrones aprendidos. Alfred dejara de usar preferencias aprendidas.
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Seccion Documentos -->

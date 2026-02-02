@@ -40,24 +40,18 @@ let modeIndicatorName = null;
  * @param {string} mode - Modo activo
  */
 export function updateModeIndicator(mode) {
-    console.log('[updateModeIndicator] Llamada con modo:', mode);
-    console.log('[updateModeIndicator] modeIndicatorName existe:', !!modeIndicatorName);
-
     if (!modeIndicatorName) {
-        console.warn('[updateModeIndicator] modeIndicatorName no esta inicializado, buscando elemento...');
+        // Buscar elemento si no esta inicializado (comportamiento normal en primera carga)
         const indicator = document.getElementById('modeIndicator');
         if (indicator) {
             modeIndicatorName = indicator.querySelector('.mode-name');
-            console.log('[updateModeIndicator] Elemento encontrado manualmente');
         } else {
-            console.error('[updateModeIndicator] No se pudo encontrar #modeIndicator en el DOM');
             return;
         }
     }
 
     const modeName = MODE_NAMES[mode] || 'Work';
     modeIndicatorName.textContent = modeName;
-    console.log('[updateModeIndicator] Texto actualizado a:', modeName);
 }
 
 /**

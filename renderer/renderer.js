@@ -10,6 +10,7 @@ import { handleFileAttach, removeAttachedFile, setupDragAndDrop } from './featur
 import { showHistory } from './features/history/history-manager.js';
 import { loadIndexationStatus, loadDocumentPaths, addDocPath, browseDocPath, toggleDocPath, removeDocPath, reindexDocuments, clearIndex } from './features/documents/documents-manager.js';
 import { loadProfilePicture, changeProfilePicture, loadUserInfo, loadPersonalization, saveUserInfo, savePersonalization } from './features/user/profile-manager.js';
+import { initLearningManager, checkAutoLearning } from './features/user/learning-manager.js';
 import { initializeOllamaElements, loadOllamaKeepAlive, updateKeepAliveDisplay, loadModelsIntoSelector, loadOllamaModels, downloadOllamaModel, selectModel, deleteModel, loadCurrentModel, changeModel } from './features/models/ollama-manager.js';
 import { checkAndShowWelcomeModal, checkAndShowFirstTimeEncryptionModal, loadEncryptionStatus, loadEncryptionKey, toggleEncryptionKey, copyEncryptionKey, enableEncryption } from './features/security/encryption-manager.js';
 import { loadSettings, saveSettingsHandler } from './features/settings/settings-manager.js';
@@ -147,6 +148,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadProfilePicture();
     await loadUserInfo(); // Cargar informacion personal del usuario
     await loadConversations(); // Cargar conversaciones al inicio
+
+    // Verificar aprendizaje automatico (cada 7 dias)
+    // Se ejecuta en background sin bloquear la UI
+    checkAutoLearning().catch(err => console.warn('Error en verificacion de aprendizaje:', err));
 
     // Cargar versiones de la aplicacion en seccion "Acerca de"
     loadAppVersions();
@@ -326,6 +331,8 @@ function setupEventListeners() {
             // Cargar personalizacion si se abre la seccion de personalizacion
             if (sectionName === 'personalizacion') {
                 loadPersonalization();
+                // Inicializar gestor de aprendizaje
+                initLearningManager();
             }
 
             // Cargar seguridad si se abre la seccion de seguridad

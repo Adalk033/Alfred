@@ -1,9 +1,52 @@
 // api.js - Modulo para comunicacion con el backend
 
-import { getSettings, getCurrentConversationId, addToConversationHistory } from '../state/state.js';
-import { addMessage, addMessageWithTyping, showTypingIndicator, hideTypingIndicator, clearMessages } from './messages.js';
-import { showNotification, updateStatus, disableInput, clearInput, showSidebar, checkSidebar, hideSidebar } from './ui.js';
+import { addToConversationHistory } from '../state/state.js';
+import * as State from '../state/state.js';
+import { addMessage, updateStatus } from '../dom/dom-utils.js';
+import { addMessageWithTyping } from '../core/messages.js';
+import { showNotification } from '../core/notifications.js';
 import { getCryptoManager } from '../crypto/crypto.js';
+
+// URL base del backend
+let API_URL = 'http://localhost:8000';
+
+/**
+ * Obtener la URL base de la API
+ */
+export function getApiUrl() {
+    return API_URL;
+}
+
+/**
+ * Funciones auxiliares para UI (definidas localmente para evitar dependencias circulares)
+ */
+function showTypingIndicator() {
+    if (State.typingIndicator) {
+        State.typingIndicator.style.display = 'flex';
+    }
+}
+
+function hideTypingIndicator() {
+    if (State.typingIndicator) {
+        State.typingIndicator.style.display = 'none';
+    }
+}
+
+function disableInput(disabled) {
+    if (State.messageInput) {
+        State.messageInput.disabled = disabled;
+    }
+    if (State.sendBtn) {
+        State.sendBtn.disabled = disabled;
+    }
+}
+
+function clearInput() {
+    if (State.messageInput) {
+        State.messageInput.value = '';
+        State.messageInput.style.height = 'auto';
+    }
+}
 
 // Verificar estado del servidor
 export async function checkServerStatus() {
@@ -138,63 +181,6 @@ export async function saveConversation(question, answer, metadata) {
     }
 
     return result;
-}
-
-// Mostrar historial
-export async function showHistory() {
-    if (checkSidebar()) {
-        hideSidebar();
-        return;
-    }
-    
-    try {
-        const result = await window.alfredAPI.getHistory(20);
-
-        if (result.success) {
-            // DESCIFRAR HISTORIAL SI ES NECESARIO
-            const decryptedData = await Promise.all(result.data.map(item => decryptResponseIfNeeded(item)));
-            
-            const content = renderHistoryContent(decryptedData);
-            showSidebar('Historial Preguntas rapidas', content);
-            
-            // Agregar event listeners despues de insertar el HTML
-            attachHistoryListeners(decryptedData);
-        }
-    } catch (error) {
-        showNotification('error', 'Error al cargar el historial');
-        console.error('Error:', error);
-    }
-}
-
-// Agregar event listeners a los items del historial
-function attachHistoryListeners(historyData) {
-    const historyItems = document.querySelectorAll('.history-item');
-    historyItems.forEach((element, index) => {
-        element.onclick = () => {
-            loadHistoryItem(historyData[index]);
-            hideSidebar();
-        };
-    });
-}
-
-// Renderizar contenido del historial
-function renderHistoryContent(historyData) {
-    if (historyData.length === 0) {
-        return '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No hay conversaciones guardadas</p>';
-    }
-
-    let html = '';
-    historyData.forEach(item => {
-        html += `
-            <div class="history-item">
-                <div class="history-question">${escapeHtml(item.question)}</div>
-                <div class="history-answer">${escapeHtml(item.answer)}</div>
-                <div class="history-time">${new Date(item.timestamp).toLocaleString('es-ES')}</div>
-            </div>
-        `;
-    });
-
-    return html;
 }
 
 // Cargar item del historial

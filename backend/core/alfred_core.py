@@ -559,6 +559,16 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         prompt_template = prompt_template.replace("{ABOUT_USER}", personalization['about_user'])
         prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
         
+        # Aplicar patrones aprendidos del usuario (si existen)
+        try:
+            from user_learning_manager import get_learning_manager
+            learning_manager = get_learning_manager()
+            learned_patterns = learning_manager.get_learned_patterns()
+            if learned_patterns:
+                prompt_template = learning_manager.apply_learned_profile(prompt_template, learned_patterns)
+        except Exception as e:
+            logger.debug(f"No se pudieron aplicar patrones aprendidos: {e}")
+        
         # Construir historial de conversacion
         conversation_history_text = ""
         if conversation_history and len(conversation_history) > 0:
@@ -695,6 +705,16 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         prompt_template = prompt_template.replace("{USER_OCCUPATION}", personalization['user_occupation'])
         prompt_template = prompt_template.replace("{ABOUT_USER}", personalization['about_user'])
         prompt_template = prompt_template.replace("{CURRENT_DATETIME}", current_datetime)
+        
+        # Aplicar patrones aprendidos del usuario (si existen)
+        try:
+            from user_learning_manager import get_learning_manager
+            learning_manager = get_learning_manager()
+            learned_patterns = learning_manager.get_learned_patterns()
+            if learned_patterns:
+                prompt_template = learning_manager.apply_learned_profile(prompt_template, learned_patterns)
+        except Exception as e:
+            logger.debug(f"No se pudieron aplicar patrones aprendidos: {e}")
         
         # 5. Crear prompt con ChatPromptTemplate (flujo unificado)
         prompt = ChatPromptTemplate.from_template(prompt_template)

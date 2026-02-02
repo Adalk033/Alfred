@@ -77,6 +77,7 @@ from functionsToHistory import encrypt_personal_data, decrypt_personal_data
 
 # Importar routers de endpoints
 from endpoints.user.user import router as user_router
+from endpoints.user.learning import router as learning_router
 from endpoints.conversations.conversations import router as conversations_router
 from endpoints.documents.documents import router as documents_router
 from endpoints.security.security import router as security_router
@@ -500,6 +501,9 @@ app.add_middleware(
 
 ## Router de los endpoints de usuario
 app.include_router(user_router)
+
+## Router de los endpoints de aprendizaje personalizado
+app.include_router(learning_router)
 
 ## Router de los endpoints de conversaciones
 app.include_router(conversations_router)
