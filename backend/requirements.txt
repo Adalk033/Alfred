@@ -171,7 +171,7 @@ propcache==0.4.1
 
 # === Protocol Buffers ===
 proto-plus==1.27.0
-protobuf==6.31.1
+protobuf==6.33.5
 
 # === System Monitoring ===
 psutil==6.1.0
@@ -300,7 +300,7 @@ typing_extensions==4.12.2
 tzdata==2024.2
 
 # === Document Processing ===
-unstructured==0.18.15
+unstructured==0.18.18
 unstructured-client==0.42.3
 unstructured-inference==1.0.5
 unstructured.pytesseract==0.3.15
