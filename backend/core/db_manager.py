@@ -255,6 +255,13 @@ def init_db():
         conn.commit()
         db_logger.info("Primera instalacion detectada - configuracion inicial pendiente")
     
+    # Agregar configuracion de context_messages_limit si no existe (para versiones anteriores)
+    cursor.execute(
+        "INSERT OR IGNORE INTO user_settings (setting_key, setting_value, setting_type) VALUES (?, ?, ?)",
+        ('context_messages_limit', '50', 'int')
+    )
+    conn.commit()
+    
     conn.close()
     db_logger.info("Base de datos inicializada correctamente")
 
@@ -1373,6 +1380,7 @@ def get_conversation(conversation_id: str):
             (conversation_id,)
         )
         message_rows = cursor.fetchall()
+        print(f"[DB] get_conversation: Obtenidos {len(message_rows)} mensajes de la BD para conversacion {conversation_id}", flush=True)
         
         for msg_row in message_rows:
             try:

@@ -429,6 +429,18 @@ export async function loadPersonalization() {
             console.log('✅ Informacion sobre el usuario cargada');
         }
 
+        // Load context messages limit
+        const contextResult = await window.alfredAPI.getUserSetting('context_messages_limit');
+        const contextMessagesLimitInput = document.getElementById('contextMessagesLimit');
+        if (contextResult.success && contextResult.data && contextMessagesLimitInput) {
+            const contextLimit = contextResult.data.value || '50';
+            contextMessagesLimitInput.value = contextLimit;
+            console.log('✅ Limite de mensajes de contexto cargado:', contextLimit);
+        } else if (contextMessagesLimitInput) {
+            // Set default if not in DB yet
+            contextMessagesLimitInput.value = '50';
+        }
+
     } catch (error) {
         console.error('❌ Error al cargar personalizacion:', error);
     }
@@ -470,21 +482,23 @@ export async function saveUserInfo() {
     }
 }
 
-// Save personalization (Personalization: assistant, instructions, occupation, about you)
+// Save personalization (Personalization: assistant, instructions, occupation, about you, context limit)
 export async function savePersonalization() {
     try {
         const assistantNameInput = document.getElementById('assistantName');
         const customInstructionsInput = document.getElementById('customInstructions');
         const userOccupationInput = document.getElementById('userOccupation');
         const aboutUserInput = document.getElementById('aboutUser');
+        const contextMessagesLimitInput = document.getElementById('contextMessagesLimit');
 
         const assistantName = assistantNameInput?.value.trim();
         const customInstructions = customInstructionsInput?.value.trim();
         const userOccupation = userOccupationInput?.value.trim();
         const aboutUser = aboutUserInput?.value.trim();
+        const contextMessagesLimit = contextMessagesLimitInput?.value ? parseInt(contextMessagesLimitInput.value) : 50;
 
         console.log('💾 Guardando personalizacion...', {
-            assistantName, customInstructions, userOccupation, aboutUser
+            assistantName, customInstructions, userOccupation, aboutUser, contextMessagesLimit
         });
 
         // Save assistant name
@@ -516,6 +530,14 @@ export async function savePersonalization() {
             const aboutResult = await window.alfredAPI.setUserSetting('about_user', aboutUser, 'string');
             if (!aboutResult.success) {
                 throw new Error('Error al guardar informacion sobre el usuario');
+            }
+        }
+
+        // Save context messages limit
+        if (contextMessagesLimit >= 5 && contextMessagesLimit <= 100) {
+            const contextResult = await window.alfredAPI.setUserSetting('context_messages_limit', contextMessagesLimit.toString(), 'int');
+            if (!contextResult.success) {
+                throw new Error('Error al guardar limite de mensajes de contexto');
             }
         }
 

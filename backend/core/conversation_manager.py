@@ -167,13 +167,18 @@ class ConversationManager:
         conversation = db_get_conversation(conversation_id)
         
         if not conversation:
+            print(f"[CONV_MGR] No se encontro conversacion {conversation_id}", flush=True)
             return []
         
         messages = conversation.get("messages", [])
+        print(f"[CONV_MGR] Conversacion tiene {len(messages)} mensajes en total", flush=True)
         
         if max_messages:
-            return messages[-max_messages:]
+            filtered = messages[-max_messages:]
+            print(f"[CONV_MGR] Limitando a ultimos {max_messages} mensajes: {len(filtered)} mensajes", flush=True)
+            return filtered
         
+        print(f"[CONV_MGR] Devolviendo TODOS los {len(messages)} mensajes", flush=True)
         return messages
     
     def clear_conversation(self, conversation_id: str) -> bool:

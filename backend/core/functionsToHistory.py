@@ -193,7 +193,7 @@ def search_in_qa_history(question, history=None, threshold=0.3, top_k=3):
         history = load_qa_history('alfred_qa_history.json')
     
     if not history:
-        print("No se encontró historial.")
+        print("No se encontro historial.")
         return []
     
     # Extraer keywords de la pregunta del usuario

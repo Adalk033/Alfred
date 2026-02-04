@@ -128,6 +128,20 @@ function registerIPCHandlers(dependencies) {
         try {
             console.log('[MAIN] Enviando consulta con conversacion:', { question, conversationId, searchDocuments });
 
+            // Obtener el limite de mensajes de contexto desde la configuracion
+            let contextLimit = 50; // Default fallback
+            try {
+                const settingResult = await makeRequest('http://127.0.0.1:8000/user/setting/context_messages_limit', {
+                    method: 'GET'
+                });
+                if (settingResult.statusCode === 200 && settingResult.data?.value) {
+                    contextLimit = parseInt(settingResult.data.value);
+                    console.log(`[MAIN] Usando limite de contexto configurado: ${contextLimit} mensajes`);
+                }
+            } catch (error) {
+                console.log('[MAIN] No se pudo obtener context_messages_limit, usando default: 50');
+            }
+
             const result = await makeRequest('http://127.0.0.1:8000/query/conversation', {
                 method: 'POST',
                 headers: {
@@ -139,7 +153,7 @@ function registerIPCHandlers(dependencies) {
                     use_history: true,
                     save_response: false,
                     search_documents: searchDocuments,
-                    max_context_messages: 10
+                    max_context_messages: contextLimit
                 })
             });
 
@@ -169,6 +183,20 @@ function registerIPCHandlers(dependencies) {
                 attachmentCount: attachedFiles ? attachedFiles.length : 0
             });
 
+            // Obtener el limite de mensajes de contexto desde la configuracion
+            let contextLimit = 50; // Default fallback
+            try {
+                const settingResult = await makeRequest('http://127.0.0.1:8000/user/setting/context_messages_limit', {
+                    method: 'GET'
+                });
+                if (settingResult.statusCode === 200 && settingResult.data?.value) {
+                    contextLimit = parseInt(settingResult.data.value);
+                    console.log(`[MAIN] Usando limite de contexto configurado: ${contextLimit} mensajes`);
+                }
+            } catch (error) {
+                console.log('[MAIN] No se pudo obtener context_messages_limit, usando default: 50');
+            }
+
             const result = await makeRequest('http://127.0.0.1:8000/query/conversation', {
                 method: 'POST',
                 headers: {
@@ -180,7 +208,7 @@ function registerIPCHandlers(dependencies) {
                     use_history: true,
                     save_response: false,
                     search_documents: searchDocuments,
-                    max_context_messages: 10,
+                    max_context_messages: contextLimit,
                     temp_documents: attachedFiles || null
                 })
             });

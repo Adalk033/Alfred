@@ -360,19 +360,19 @@ async def query_with_conversation(request: QueryWithConversationRequest):
         
         if question and question.startswith('gAAAAAB'):
             # La pregunta viene cifrada, descifrarla
-            backend_logger.info(f"🔓 Pregunta cifrada detectada (conversacion), descifrando...")
+            backend_logger.info(f"Pregunta cifrada detectada (conversacion), descifrando...")
             try:
                 question = decrypt_data(question)
                 was_encrypted = True
-                backend_logger.info(f"✅ Pregunta descifrada correctamente: {question[:50]}...")
+                backend_logger.info(f"Pregunta descifrada correctamente: {question[:50]}...")
             except Exception as decrypt_error:
-                backend_logger.error(f"❌ Error al descifrar pregunta: {decrypt_error}")
+                backend_logger.error(f"Error al descifrar pregunta: {decrypt_error}")
                 raise HTTPException(
                     status_code=400, 
                     detail="Error al descifrar la pregunta. Verifica que el cifrado este configurado correctamente."
                 )
         
-        print(f"Procesando consulta con conversacion {'(descifrada)' if was_encrypted else ''}: {question[:50]}...")
+        print(f"Procesando consulta con conversacion {'(descifrada)' if was_encrypted else ''}: {question[:50]}...", flush=True)
         
         # Obtener historial de conversacion si existe (descifra automaticamente)
         conversation_history = None
@@ -383,10 +383,17 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 max_messages=request.max_context_messages,
                 decrypt_messages=True  # Cambiado de decrypt_sensitive a decrypt_messages
             )
+            print(f"Mensajes obtenidos de BD: {len(messages)}", flush=True)
+            
             conversation_history = [
                 {"role": msg["role"], "content": msg["content"]}
                 for msg in messages
             ]
+            print(f"Historial preparado para enviar a alfred_core: {len(conversation_history)} mensajes", flush=True)
+            if conversation_history:
+                print(f"   - Primer mensaje: {conversation_history[0]['role']}: {conversation_history[0]['content'][:50]}...", flush=True)
+        else:
+            print("NO hay conversation_id - no se enviara historial", flush=True)
         
         # Si hay documentos temporales adjuntos, guardarlos en metadata de la conversacion
         # Si no hay documentos adjuntos, intentar recuperarlos de la metadata
@@ -396,7 +403,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
         MAX_TEMP_DOCUMENTS = 5
         if temp_documents and len(temp_documents) > MAX_TEMP_DOCUMENTS:
             temp_documents = temp_documents[:MAX_TEMP_DOCUMENTS]
-            print(f"⚠️ Limitando a {MAX_TEMP_DOCUMENTS} documentos temporales")
+            print(f"Limitando a {MAX_TEMP_DOCUMENTS} documentos temporales")
         
         if request.conversation_id:
             conv_mgr = get_conversation_manager()
@@ -407,14 +414,14 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 metadata['temp_documents'] = temp_documents
                 conv_mgr.update_conversation_metadata(request.conversation_id, metadata)
                 doc_names = [d['name'] for d in temp_documents]
-                print(f"📎 {len(temp_documents)} documento(s) temporal(es) guardado(s) en conversacion: {', '.join(doc_names)}")
+                print(f"{len(temp_documents)} documento(s) temporal(es) guardado(s) en conversacion: {', '.join(doc_names)}")
             else:
                 # Intentar recuperar documentos de metadata
                 metadata = conv_mgr.get_conversation_metadata(request.conversation_id)
                 if metadata and 'temp_documents' in metadata:
                     temp_documents = metadata['temp_documents']
                     doc_names = [d['name'] for d in temp_documents]
-                    print(f"📎 {len(temp_documents)} documento(s) temporal(es) recuperado(s) de conversacion: {', '.join(doc_names)}")
+                    print(f"{len(temp_documents)} documento(s) temporal(es) recuperado(s) de conversacion: {', '.join(doc_names)}")
         
         # Si hay documentos temporales (adjuntos o recuperados), agregarlos al contexto de la pregunta
         question_with_context = question  # Usar pregunta descifrada
@@ -431,22 +438,22 @@ async def query_with_conversation(request: QueryWithConversationRequest):
             
             for idx, temp_doc in enumerate(temp_documents):
                 file_name = temp_doc['name']
-                print(f"📎 Procesando documento {idx + 1}/{len(temp_documents)}: {file_name}")
+                print(f"Procesando documento {idx + 1}/{len(temp_documents)}: {file_name}")
                 
                 # Detectar formato y procesar segun extension
                 file_ext = file_name.lower()
                 
                 if file_ext.endswith('.pdf'):
-                    print(f"📄 Procesando PDF...")
+                    print(f"Procesando PDF...")
                     doc_content = extractors['pdf'](temp_doc['content'], file_name)
                 elif file_ext.endswith('.docx'):
-                    print(f"📄 Procesando Word (DOCX)...")
+                    print(f"Procesando Word (DOCX)...")
                     doc_content = extractors['docx'](temp_doc['content'], file_name)
                 elif file_ext.endswith('.xlsx'):
-                    print(f"📊 Procesando Excel (XLSX)...")
+                    print(f"Procesando Excel (XLSX)...")
                     doc_content = extractors['xlsx'](temp_doc['content'], file_name)
                 elif file_ext.endswith('.pptx'):
-                    print(f"📊 Procesando PowerPoint (PPTX)...")
+                    print(f"Procesando PowerPoint (PPTX)...")
                     doc_content = extractors['pptx'](temp_doc['content'], file_name)
                 else:
                     # Archivos de texto plano (txt, md, json, xml, csv, etc)
@@ -454,7 +461,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 
                 # Obtener tamanio
                 doc_size_kb = len(doc_content.encode('utf-8')) / 1024
-                print(f"📊 Tamanio del documento: {doc_size_kb:.2f} KB")
+                print(f"Tamanio del documento: {doc_size_kb:.2f} KB")
                 
                 # Calcular espacio disponible para este documento
                 remaining_chars = max_total_chars - total_chars
@@ -462,7 +469,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
                 
                 # Truncar si es necesario
                 if len(doc_content) > max_chars_per_doc:
-                    print(f"⚠️ Documento truncado de {len(doc_content)} a {max_chars_per_doc} chars")
+                    print(f"Documento truncado de {len(doc_content)} a {max_chars_per_doc} chars")
                     doc_content = doc_content[:max_chars_per_doc] + "\n\n[... documento truncado por tamanio ...]"
                 
                 total_chars += len(doc_content)
@@ -474,7 +481,7 @@ async def query_with_conversation(request: QueryWithConversationRequest):
             
             # Forzar modo prompt-only cuando hay documentos adjuntos (mas rapido)
             force_prompt_only = True
-            print(f"🚀 Modo prompt-only forzado para {len(temp_documents)} archivo(s) adjunto(s)")
+            print(f"Modo prompt-only forzado para {len(temp_documents)} archivo(s) adjunto(s)")
             
             question_with_context = all_documents_context + "\n\n" + question  # Usar pregunta descifrada
         

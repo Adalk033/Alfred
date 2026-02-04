@@ -710,6 +710,15 @@
                         </div>
 
                         <div class="setting-group">
+                            <label for="contextMessagesLimit">Limite de mensajes de contexto</label>
+                            <input type="number" id="contextMessagesLimit" min="5" max="100" value="50" />
+                            <p class="setting-description">
+                                Numero maximo de mensajes previos que el asistente recordara en cada conversacion (5-100).
+                                Mas mensajes = mayor contexto pero mayor consumo de recursos.
+                            </p>
+                        </div>
+
+                        <div class="setting-group">
                             <button id="savePersonalizationBtn" class="button primary">Guardar Personalizacion</button>
                         </div>
 

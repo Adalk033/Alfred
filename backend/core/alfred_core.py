@@ -299,6 +299,15 @@ class AlfredCore:
         if not self._initialized:
             raise RuntimeError("Alfred Core no esta inicializado")
         
+        # Log detallado del historial recibido
+        if conversation_history:
+            print(f"HISTORIAL RECIBIDO: {len(conversation_history)} mensajes", flush=True)
+            logger.info(f"Historial de conversacion recibido: {len(conversation_history)} mensajes")
+            logger.debug(f"Primeros mensajes: {conversation_history[:2] if len(conversation_history) >= 2 else conversation_history}")
+        else:
+            print("NO se recibio historial (conversation_history=None)", flush=True)
+            logger.info("NO se recibio historial de conversacion (conversation_history=None)")
+        
         # 0. Verificar cache en memoria (si esta habilitado)
         if self._cache_enabled and search_documents:
             cache_key = hash(question.lower().strip())
@@ -475,6 +484,8 @@ Pregunta original: {question}
 Query expandida (solo palabras clave y terminos de busqueda):"""
 
         try:
+            print("Ver prompt de expansion de query:")
+            print(expansion_prompt)
             expanded = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: self.llm.invoke(expansion_prompt)
@@ -572,28 +583,32 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         # Construir historial de conversacion
         conversation_history_text = ""
         if conversation_history and len(conversation_history) > 0:
+            print(f"Construyendo historial: {len(conversation_history)} mensajes", flush=True)
+            logger.info(f"Construyendo historial: {len(conversation_history)} mensajes (max 50)")
             history_parts = ["Previous messages in this conversation:"]
-            for msg in conversation_history[-30:]:
+            for msg in conversation_history[-50:]:
                 role = "User" if msg["role"] == "user" else "Alfred"
                 history_parts.append(f"{role}: {msg['content']}")
             conversation_history_text = "\n".join(history_parts)
+            print(f"   Primeros 200 chars del historial: {conversation_history_text[:200]}...", flush=True)
+            logger.debug(f"   Texto del historial (primeros 200 chars): {conversation_history_text[:200]}...")
         else:
+            print(f"NO hay historial (None={conversation_history is None})", flush=True)
+            logger.warning(f"NO hay historial de conversacion para incluir (conversation_history={'None' if conversation_history is None else 'empty list'})")
             conversation_history_text = "No previous conversation history."
-        
-        # Reemplazar historial de conversacion
-        prompt_template = prompt_template.replace("{conversation_history}", conversation_history_text)
         
         # Crear ChatPromptTemplate (mismo flujo que con documentos)
         prompt = ChatPromptTemplate.from_template(prompt_template)
         
         try:
             # Invocar LLM con template de LangChain (flujo unificado)
+            logger.debug(f"Prompt sin documentos (con historial: {len(conversation_history) if conversation_history else 0} mensajes)")
             answer = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: self.llm.invoke(
                     prompt.format(
                         input=question,
-                        context=""  # Sin contexto de documentos
+                        context=conversation_history_text  # Historial de conversacion como contexto
                     )
                 )
             )
@@ -677,12 +692,18 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         # 3. Construir historial de conversacion
         conversation_history_text = ""
         if conversation_history and len(conversation_history) > 0:
+            print(f"Construyendo historial: {len(conversation_history)} mensajes", flush=True)
+            logger.info(f"Construyendo historial: {len(conversation_history)} mensajes (max 50)")
             history_parts = ["Previous messages in this conversation:"]
-            for msg in conversation_history[-30:]:
+            for msg in conversation_history[-50:]:
                 role = "User" if msg["role"] == "user" else "Alfred"
                 history_parts.append(f"{role}: {msg['content']}")
             conversation_history_text = "\n".join(history_parts)
+            print(f"   Primeros 200 chars del historial: {conversation_history_text[:200]}...", flush=True)
+            logger.debug(f"   Texto del historial (primeros 200 chars): {conversation_history_text[:200]}...")
         else:
+            print(f"NO hay historial (None={conversation_history is None})", flush=True)
+            logger.warning(f"NO hay historial de conversacion para incluir (conversation_history={'None' if conversation_history is None else 'empty list'})")
             conversation_history_text = "No previous conversation history."
         
         # Combinar historial de conversacion + contexto de documentos en un solo string
@@ -721,6 +742,7 @@ Query expandida (solo palabras clave y terminos de busqueda):"""
         
         # 6. Generar respuesta usando el contexto combinado
         try:
+            logger.debug(f"Prompt con documentos (historial: {len(conversation_history) if conversation_history else 0} mensajes, docs: {len(retrieval_result.documents)})")
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: self.llm.invoke(
