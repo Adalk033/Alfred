@@ -163,7 +163,7 @@ pypdf==6.6.2
 
 # === Image Processing ===
 pi_heif==1.1.1
-pillow==11.3.0
+pillow==12.1.1
 
 # === Analytics ===
 posthog==5.4.0
