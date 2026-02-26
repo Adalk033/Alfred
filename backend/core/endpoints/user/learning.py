@@ -5,8 +5,7 @@ Permite iniciar aprendizaje manual, ver estado y resetear patrones aprendidos
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
-from datetime import datetime
+from typing import Optional, Dict, Any
 
 from user_learning_manager import get_learning_manager
 from db_manager import get_user_setting, set_user_setting, delete_user_setting
