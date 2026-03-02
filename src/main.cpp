@@ -1,7 +1,7 @@
 // ============================================================================
 // main.cpp - Punto de entrada de Alfred (Asistente IA local)
 // ============================================================================
-// Servidor REST HTTP con RAG local usando llama.cpp + CUDA
+// Servidor REST HTTP con llama.cpp + CUDA
 // Sin dependencia de Ollama - inferencia directa con modelos GGUF
 //
 // Para compilar y ejecutar:
@@ -11,7 +11,6 @@
 //
 // Modelos requeridos en %APPDATA%/Alfred/models/ (o ~/.alfred/models/):
 //   - gemma-2-9b-it-Q5_K_M.gguf  (LLM)
-//   - nomic-embed-text-v1.5.Q5_K_M.gguf (embeddings)
 // ============================================================================
 
 #include "alfred/config.h"
@@ -42,11 +41,10 @@ void signal_handler(int signum) {
 void print_banner() {
     std::cout << "\n";
     std::cout << "  ================================================================\n";
-    std::cout << "  Alfred - Asistente IA Local con RAG\n";
+    std::cout << "  Alfred - Asistente IA Local\n";
     std::cout << "  ================================================================\n";
     std::cout << "  Motor:     llama.cpp + GGUF (HuggingFace)\n";
     std::cout << "  Backend:   C++ nativo con cpp-httplib\n";
-    std::cout << "  Vectores:  hnswlib (reemplaza ChromaDB)\n";
     std::cout << "  Database:  SQLite (encriptacion AES-256-GCM)\n";
     std::cout << "  ================================================================\n";
     std::cout << "\n";
@@ -79,12 +77,12 @@ int main(int argc, char* argv[]) {
     print_banner();
 
     // 1. Inicializar rutas
-    std::cout << "[1/6] Inicializando rutas...\n";
+    std::cout << "[1/5] Inicializando rutas...\n";
     alfred::init_paths();
     auto& cfg = alfred::get_config();
 
     // 2. Inicializar logger
-    std::cout << "[2/6] Inicializando logger...\n";
+    std::cout << "[2/5] Inicializando logger...\n";
     alfred::init_logger(cfg.logs_dir, verbose ? "debug" : "info");
     alfred::log_info("Alfred iniciando...");
 
@@ -93,12 +91,12 @@ int main(int argc, char* argv[]) {
     std::signal(SIGTERM, signal_handler);
 
     // 4. Inicializar base de datos
-    std::cout << "[3/6] Inicializando base de datos...\n";
+    std::cout << "[3/5] Inicializando base de datos...\n";
     alfred::DBManager::instance().initialize(cfg.db_path);
     alfred::log_info("Base de datos inicializada");
 
     // 5. Configurar encriptacion (si hay clave guardada)
-    std::cout << "[4/6] Configurando encriptacion...\n";
+    std::cout << "[4/5] Configurando encriptacion...\n";
     auto enc_key = alfred::DBManager::instance().get_app_setting("encryption_key_hash");
     if (enc_key) {
         alfred::log_info("Encriptacion disponible (clave configurada previamente)");
@@ -107,7 +105,7 @@ int main(int argc, char* argv[]) {
     }
 
     // 6. Inicializar Alfred Core (carga modelos)
-    std::cout << "[5/6] Inicializando Alfred Core (cargando modelos)...\n";
+    std::cout << "[5/5] Inicializando Alfred Core (cargando modelos)...\n";
     alfred::AlfredCore core;
     if (!core.initialize()) {
         alfred::log_error("Error inicializando Alfred Core");
@@ -117,7 +115,7 @@ int main(int argc, char* argv[]) {
     }
 
     // 7. Configurar y arrancar servidor HTTP
-    std::cout << "[6/6] Iniciando servidor HTTP...\n";
+    std::cout << "\n  Iniciando servidor HTTP...\n";
     g_server = std::make_unique<alfred::HttpServer>();
 
     if (!g_server->setup(core)) {

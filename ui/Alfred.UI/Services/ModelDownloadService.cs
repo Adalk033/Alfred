@@ -10,7 +10,7 @@ public sealed class RecommendedModel
     public required string Name { get; init; }
     public required string FileName { get; init; }
     public required string Url { get; init; }
-    public required string Type { get; init; }     // "llm" o "embedder"
+    public required string Type { get; init; }     // "llm"
     public required string SizeLabel { get; init; } // ej. "~6.5 GB"
     public required string Description { get; init; }
 }

@@ -24,12 +24,11 @@ struct AppConfig {
     std::string models_dir;
     std::string docs_dir;
     std::string logs_dir;
-    std::string chroma_dir;
+
 
     // --- LLM (llama.cpp con CUDA) ---
     // Modelos GGUF seleccionados por el usuario (vacio = sin modelo por defecto)
     std::string llm_model_file;
-    std::string embed_model_file;
     int n_ctx           = 4096;
     int n_gpu_layers    = 99;     // Offload todas las capas a GPU
     int n_batch         = 512;
@@ -38,23 +37,6 @@ struct AppConfig {
     float top_p         = 0.9f;
     int max_tokens      = 2048;
     int seed            = -1;     // -1 = aleatorio
-
-    // --- Embeddings ---
-    int embedding_dim   = 768;
-
-    // --- Chunking (estrategias de fragmentacion) ---
-    int chunk_size_text      = 600;
-    int chunk_overlap_text   = 100;
-    int chunk_size_code      = 500;
-    int chunk_overlap_code   = 100;
-    int chunk_size_document  = 800;
-    int chunk_overlap_document = 150;
-
-    // --- Retrieval (busqueda semantica) ---
-    int default_k           = 20;
-    int fetch_k             = 40;
-    float score_threshold   = 0.0f;
-    float mmr_diversity     = 0.3f;
 
     // --- Cache de consultas ---
     int query_cache_max          = 50;
@@ -67,9 +49,8 @@ struct AppConfig {
     std::string about_user;
 };
 
-// Plantillas de prompt (respuestas siempre en espanol)
+// Plantilla de prompt (respuestas siempre en espanol)
 extern const std::string PROMPT_TEMPLATE_NO_DOCUMENTS;
-extern const std::string PROMPT_TEMPLATE_WITH_DOCUMENTS;
 
 // Singleton de configuracion
 AppConfig& get_config();

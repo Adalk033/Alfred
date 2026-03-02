@@ -4,6 +4,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Navigation;
 
 namespace Alfred.UI;
 
@@ -12,6 +13,7 @@ public sealed partial class MainWindow : Window
     private readonly BackendProcessManager _backend;
     private readonly AlfredApiClient _api;
     private readonly DispatcherTimer _healthTimer;
+    private bool _suppressNavigation;
 
     public MainWindow()
     {
@@ -19,9 +21,17 @@ public sealed partial class MainWindow : Window
         Title = "Alfred - Asistente IA Local";
         ExtendsContentIntoTitleBar = true;
 
+        // Establecer icono de la ventana
+        var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");
+        if (System.IO.File.Exists(iconPath))
+            AppWindow.SetIcon(iconPath);
+
         _api = new AlfredApiClient();
         _backend = new BackendProcessManager();
         _backend.StatusChanged += OnBackendStatusChanged;
+
+        // Suscribir al servicio global de notificaciones
+        NotificationService.Instance.NotificationRequested += OnNotificationRequested;
 
         _healthTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         _healthTimer.Tick += async (_, _) => await CheckHealth();
@@ -98,8 +108,35 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    /// <summary>
+    /// Maneja las notificaciones globales del NotificationService.
+    /// </summary>
+    private void OnNotificationRequested(InfoBarSeverity severity, string message, string? title, int durationMs)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            GlobalNotificationBar.Severity = severity;
+            GlobalNotificationBar.Message = message;
+            GlobalNotificationBar.Title = title ?? "";
+            GlobalNotificationBar.IsOpen = true;
+
+            if (durationMs > 0)
+            {
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(durationMs) };
+                timer.Tick += (_, _) =>
+                {
+                    GlobalNotificationBar.IsOpen = false;
+                    timer.Stop();
+                };
+                timer.Start();
+            }
+        });
+    }
+
     private void OnNavigationChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        if (_suppressNavigation) return;
+
         if (args.SelectedItem is NavigationViewItem item)
         {
             string tag = item.Tag?.ToString() ?? "chat";
@@ -108,12 +145,52 @@ public sealed partial class MainWindow : Window
                 "chat" => typeof(ChatPage),
                 "conversations" => typeof(ConversationsPage),
                 "history" => typeof(HistoryPage),
-                "documents" => typeof(DocumentsPage),
                 "models" => typeof(ModelsPage),
                 "settings" => typeof(SettingsPage),
                 _ => typeof(ChatPage)
             };
             ContentFrame.Navigate(pageType, _api);
+        }
+    }
+
+    /// <summary>
+    /// Sincroniza la seleccion del NavigationView cuando una pagina navega internamente
+    /// (por ejemplo, ConversationsPage o HistoryPage navegan a ChatPage).
+    /// </summary>
+    private void OnContentFrameNavigated(object sender, NavigationEventArgs e)
+    {
+        string? tag = e.SourcePageType switch
+        {
+            Type t when t == typeof(ChatPage) => "chat",
+            Type t when t == typeof(ConversationsPage) => "conversations",
+            Type t when t == typeof(HistoryPage) => "history",
+            Type t when t == typeof(ModelsPage) => "models",
+            Type t when t == typeof(SettingsPage) => "settings",
+            _ => null
+        };
+
+        if (tag == null) return;
+
+        // Buscar el item en MenuItems y FooterMenuItems
+        NavigationViewItem? targetItem = null;
+
+        foreach (var item in NavView.MenuItems.OfType<NavigationViewItem>())
+        {
+            if (item.Tag?.ToString() == tag) { targetItem = item; break; }
+        }
+        if (targetItem == null)
+        {
+            foreach (var item in NavView.FooterMenuItems.OfType<NavigationViewItem>())
+            {
+                if (item.Tag?.ToString() == tag) { targetItem = item; break; }
+            }
+        }
+
+        if (targetItem != null && NavView.SelectedItem != targetItem)
+        {
+            _suppressNavigation = true;
+            NavView.SelectedItem = targetItem;
+            _suppressNavigation = false;
         }
     }
 
@@ -129,6 +206,7 @@ public sealed partial class MainWindow : Window
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
         _healthTimer.Stop();
+        NotificationService.Instance.NotificationRequested -= OnNotificationRequested;
         _backend.StopAsync().GetAwaiter().GetResult();
         _api.Dispose();
     }

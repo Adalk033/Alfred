@@ -14,7 +14,6 @@
 #include "alfred/paths.h"
 #include "alfred/logger.h"
 #include "alfred/string_utils.h"
-#include "alfred/path_validator.h"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -87,6 +86,32 @@ void handle_health(const httplib::Request& /*req*/, httplib::Response& res,
 // ============================================================================
 // Query
 // ============================================================================
+
+// Helper: extraer contenido de texto de archivos adjuntos para inyectar como contexto
+static std::string extract_attached_context(const json& body) {
+    if (!body.contains("attached_files") || !body["attached_files"].is_array())
+        return "";
+
+    std::string context;
+    for (const auto& file : body["attached_files"]) {
+        std::string name = file.value("name", "");
+        std::string content = file.value("content", "");
+        if (name.empty() || content.empty()) continue;
+
+        // Si el contenido es base64 (data:...;base64,...) solo incluir el nombre como referencia
+        // El backend no puede decodificar binarios como PDF sin librerias externas
+        if (content.rfind("data:", 0) == 0 && content.find(";base64,") != std::string::npos) {
+            context += "\n[Archivo adjunto: " + name + " (formato binario, contenido no procesable directamente)]\n";
+        } else {
+            // Archivo de texto plano: incluir contenido completo
+            // Limitar a 50000 caracteres por archivo para evitar desbordar el contexto
+            std::string trimmed = content.length() > 50000 ? content.substr(0, 50000) + "\n... (contenido truncado)" : content;
+            context += "\n--- Contenido de " + name + " ---\n" + trimmed + "\n--- Fin de " + name + " ---\n";
+        }
+    }
+    return context;
+}
+
 void handle_query(const httplib::Request& req, httplib::Response& res,
                   AlfredCore& core) {
     json body;
@@ -99,16 +124,21 @@ void handle_query(const httplib::Request& req, httplib::Response& res,
     }
 
     bool use_history = body.value("use_history", true);
-    bool search_documents = body.value("search_documents", true);
+
+    // Inyectar contenido de archivos adjuntos como contexto adicional
+    std::string attached_context = extract_attached_context(body);
+    std::string full_question = question;
+    if (!attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context + "\n\nPregunta del usuario: " + question;
+        log_info("Query con " + std::to_string(body["attached_files"].size()) + " archivos adjuntos");
+    }
 
     log_info("Query: " + truncate(question, 80));
 
-    auto result = core.query(question, use_history, search_documents);
+    auto result = core.query(full_question, use_history);
 
     json data;
     data["answer"] = result.answer;
-    data["sources"] = result.sources.empty() ? json(nullptr)
-                      : json::parse(result.sources, nullptr, false);
     data["personal_data"] = result.personal_data.empty() ? json(nullptr)
                             : json::parse(result.personal_data, nullptr, false);
     data["from_cache"] = result.from_cache;
@@ -246,21 +276,26 @@ void handle_conversation_query(const httplib::Request& req, httplib::Response& r
     if (question.empty()) { json_error(res, 400, "Campo 'question' requerido"); return; }
 
     bool use_history = body.value("use_history", true);
-    bool search_documents = body.value("search_documents", true);
 
-    // Guardar pregunta del usuario
+    // Inyectar contenido de archivos adjuntos como contexto adicional
+    std::string attached_context = extract_attached_context(body);
+    std::string full_question = question;
+    if (!attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context + "\n\nPregunta del usuario: " + question;
+        log_info("Conversation query con archivos adjuntos (conv: " + conv_id + ")");
+    }
+
+    // Guardar pregunta del usuario (la original, no la expandida)
     ConversationManager::instance().add_message(conv_id, "user", question);
 
-    // Generar respuesta
-    auto result = core.query(question, use_history, search_documents, conv_id);
+    // Generar respuesta con contexto expandido
+    auto result = core.query(full_question, use_history, conv_id);
 
     // Guardar respuesta del asistente
     ConversationManager::instance().add_message(conv_id, "assistant", result.answer);
 
     json data;
     data["answer"] = result.answer;
-    data["sources"] = result.sources.empty() ? json(nullptr)
-                      : json::parse(result.sources, nullptr, false);
     data["personal_data"] = result.personal_data.empty() ? json(nullptr)
                             : json::parse(result.personal_data, nullptr, false);
     data["from_cache"] = result.from_cache;
@@ -268,85 +303,6 @@ void handle_conversation_query(const httplib::Request& req, httplib::Response& r
     data["time_ms"] = result.total_time_ms;
     data["conversation_id"] = conv_id;
     json_ok(res, data);
-}
-
-// ============================================================================
-// Documentos
-// ============================================================================
-void handle_list_document_paths(const httplib::Request& /*req*/, httplib::Response& res) {
-    auto paths = DBManager::instance().get_document_paths();
-    json data = json::array();
-    for (const auto& p : paths) {
-        data.push_back({
-            {"id", p.id},
-            {"path", p.path},
-            {"enabled", p.enabled},
-            {"documents_count", p.documents_count},
-            {"added_at", p.added_at}
-        });
-    }
-    json_ok(res, data);
-}
-
-void handle_add_document_path(const httplib::Request& req, httplib::Response& res) {
-    json body;
-    if (!parse_body(req, res, body)) return;
-
-    std::string doc_path = body.value("path", "");
-    if (doc_path.empty()) { json_error(res, 400, "Campo 'path' requerido"); return; }
-
-    // Validar ruta
-    auto validation = validate_document_path(doc_path);
-    if (!validation.valid) {
-        json_error(res, 400, "Ruta invalida: " + validation.message);
-        return;
-    }
-
-    if (!std::filesystem::exists(doc_path)) {
-        json_error(res, 400, "La ruta no existe: " + doc_path);
-        return;
-    }
-
-    auto id = DBManager::instance().add_document_path(doc_path);
-    res.status = 201;
-    json data;
-    data["id"] = id;
-    data["path"] = doc_path;
-    res.set_content(data.dump(), "application/json");
-}
-
-void handle_update_document_path(const httplib::Request& req, httplib::Response& res) {
-    std::string id_str = path_param(req, "id");
-    if (id_str.empty()) { json_error(res, 400, "ID requerido"); return; }
-
-    json body;
-    if (!parse_body(req, res, body)) return;
-
-    bool enabled = body.value("enabled", true);
-    int64_t id = std::stoll(id_str);
-    DBManager::instance().update_document_path(id, enabled);
-    json_ok(res, {{"status", "updated"}});
-}
-
-void handle_delete_document_path(const httplib::Request& req, httplib::Response& res) {
-    std::string id_str = path_param(req, "id");
-    if (id_str.empty()) { json_error(res, 400, "ID requerido"); return; }
-
-    int64_t id = std::stoll(id_str);
-    DBManager::instance().delete_document_path(id);
-    json_ok(res, {{"status", "deleted"}});
-}
-
-void handle_reindex_documents(const httplib::Request& /*req*/, httplib::Response& res,
-                               AlfredCore& core) {
-    log_info("Solicitud de re-indexacion recibida");
-    auto stats = core.reindex_all();
-    json_ok(res, stats);
-}
-
-void handle_document_stats(const httplib::Request& /*req*/, httplib::Response& res) {
-    auto stats = DBManager::instance().get_document_stats();
-    json_ok(res, stats);
 }
 
 // ============================================================================
@@ -419,20 +375,6 @@ void handle_delete_history(const httplib::Request& req, httplib::Response& res) 
 // ============================================================================
 // Seguridad
 // ============================================================================
-void handle_welcome_status(const httplib::Request& /*req*/, httplib::Response& res) {
-    auto& db = DBManager::instance();
-    auto completed = db.get_app_setting("welcome_completed");
-
-    json data;
-    data["completed"] = completed.has_value() && *completed == "true";
-    json_ok(res, data);
-}
-
-void handle_welcome_complete(const httplib::Request& /*req*/, httplib::Response& res) {
-    DBManager::instance().set_app_setting("welcome_completed", "true");
-    json_ok(res, {{"status", "completed"}});
-}
-
 void handle_encryption_status(const httplib::Request& /*req*/, httplib::Response& res) {
     auto& enc = Encryption::instance();
     json data;
@@ -645,44 +587,8 @@ void handle_model_status(const httplib::Request& /*req*/, httplib::Response& res
     json data;
     data["llm_loaded"] = core.llm().is_loaded();
     data["llm_model"] = core.llm().model_name();
-    data["embedder_loaded"] = core.embedder().is_loaded();
-    data["embedder_model"] = core.embedder().model_name();
-    data["embedder_dim"] = core.embedder().dimension();
     data["models_dir"] = get_config().models_dir;
     json_ok(res, data);
-}
-
-void handle_change_embedder(const httplib::Request& req, httplib::Response& res,
-                             AlfredCore& core) {
-    json body;
-    if (!parse_body(req, res, body)) return;
-
-    std::string model_path = body.value("model_path", "");
-    if (model_path.empty()) {
-        model_path = body.value("model_name", "");
-        if (!model_path.empty()) {
-            model_path = get_config().models_dir + "/" + model_path;
-        }
-    }
-
-    if (model_path.empty()) {
-        json_error(res, 400, "Campo 'model_path' o 'model_name' requerido");
-        return;
-    }
-
-    if (!std::filesystem::exists(model_path)) {
-        json_error(res, 404, "Modelo no encontrado: " + model_path);
-        return;
-    }
-
-    log_info("Cambiando modelo de embeddings a: " + model_path);
-    bool success = core.change_embedder(model_path);
-
-    if (success) {
-        json_ok(res, {{"status", "changed"}, {"model", model_path}});
-    } else {
-        json_error(res, 500, "Error cambiando modelo de embeddings");
-    }
 }
 
 // ============================================================================
@@ -692,45 +598,8 @@ void handle_optimization_stats(const httplib::Request& /*req*/, httplib::Respons
                                 AlfredCore& core) {
     json data;
     data["cache"] = core.get_cache_stats();
-    data["vector_count"] = core.vector_store().count();
     data["qa_history"] = DBManager::instance().get_qa_history_stats();
-    data["document_stats"] = DBManager::instance().get_document_stats();
     json_ok(res, data);
-}
-
-// ============================================================================
-// Mantenimiento
-// ============================================================================
-void handle_reload_documents(const httplib::Request& /*req*/, httplib::Response& res,
-                              AlfredCore& core) {
-    log_info("Recargando documentos...");
-    auto stats = core.reindex_all();
-    json data;
-    data["status"] = "reloaded";
-    data["stats"] = stats;
-    json_ok(res, data);
-}
-
-void handle_test_search(const httplib::Request& req, httplib::Response& res,
-                         AlfredCore& core) {
-    std::string query_str = req.has_param("q") ? req.get_param_value("q") : "";
-    if (query_str.empty()) {
-        json body;
-        if (parse_body(req, res, body)) {
-            query_str = body.value("query", "");
-        }
-    }
-
-    if (query_str.empty()) {
-        json_error(res, 400, "Parametro 'q' o campo 'query' requerido");
-        return;
-    }
-
-    int k = 5;
-    if (req.has_param("k")) k = std::stoi(req.get_param_value("k"));
-
-    auto result = core.test_search(query_str, k);
-    json_ok(res, result);
 }
 
 // ============================================================================
@@ -776,26 +645,6 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
         handle_conversation_query(req, res, core);
     });
 
-    // Documentos
-    server.Get("/documents/paths", [](const httplib::Request& req, httplib::Response& res) {
-        handle_list_document_paths(req, res);
-    });
-    server.Post("/documents/paths", [](const httplib::Request& req, httplib::Response& res) {
-        handle_add_document_path(req, res);
-    });
-    server.Put("/documents/paths/:id", [](const httplib::Request& req, httplib::Response& res) {
-        handle_update_document_path(req, res);
-    });
-    server.Delete("/documents/paths/:id", [](const httplib::Request& req, httplib::Response& res) {
-        handle_delete_document_path(req, res);
-    });
-    server.Post("/documents/reindex", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_reindex_documents(req, res, core);
-    });
-    server.Get("/documents/stats", [](const httplib::Request& req, httplib::Response& res) {
-        handle_document_stats(req, res);
-    });
-
     // Historial
     server.Get("/history/search", [](const httplib::Request& req, httplib::Response& res) {
         handle_search_history(req, res);
@@ -808,12 +657,6 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
 
     // Seguridad
-    server.Get("/welcome/status", [](const httplib::Request& req, httplib::Response& res) {
-        handle_welcome_status(req, res);
-    });
-    server.Post("/welcome/complete", [](const httplib::Request& req, httplib::Response& res) {
-        handle_welcome_complete(req, res);
-    });
     server.Get("/encryption/status", [](const httplib::Request& req, httplib::Response& res) {
         handle_encryption_status(req, res);
     });
@@ -861,9 +704,6 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     server.Post("/models/change", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_change_model(req, res, core);
     });
-    server.Post("/models/change-embedder", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_change_embedder(req, res, core);
-    });
     server.Get("/models/status", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_model_status(req, res, core);
     });
@@ -873,18 +713,7 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
         handle_optimization_stats(req, res, core);
     });
 
-    // Mantenimiento
-    server.Post("/reload", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_reload_documents(req, res, core);
-    });
-    server.Get("/test/search", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_test_search(req, res, core);
-    });
-    server.Post("/test/search", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_test_search(req, res, core);
-    });
-
-    log_info("Endpoints registrados: ~40 rutas");
+    log_info("Endpoints registrados");
 }
 
 } // namespace alfred

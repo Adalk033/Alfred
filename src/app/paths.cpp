@@ -56,10 +56,6 @@ fs::path get_logs_dir() {
     return get_app_data_dir() / "logs";
 }
 
-fs::path get_vector_store_dir() {
-    return get_app_data_dir() / "vector_store";
-}
-
 fs::path get_encryption_key_path() {
     return get_app_data_dir() / "data" / "secret.key";
 }
@@ -72,7 +68,6 @@ void init_paths() {
         get_models_dir(),
         get_docs_dir(),
         get_logs_dir(),
-        get_vector_store_dir(),
         get_encryption_key_path().parent_path(),
     };
 
@@ -90,7 +85,6 @@ void init_paths() {
     cfg.models_dir = get_models_dir().string();
     cfg.docs_dir   = get_docs_dir().string();
     cfg.logs_dir   = get_logs_dir().string();
-    cfg.chroma_dir = get_vector_store_dir().string();
 }
 
 } // namespace alfred

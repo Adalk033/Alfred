@@ -53,15 +53,50 @@ public sealed class AlfredApiClient : IDisposable
     // Query
     // ========================================================================
 
-    public async Task<QueryResponse?> SendQueryAsync(string question, bool useHistory = true, bool searchDocuments = true)
+    public async Task<QueryResponse?> SendQueryAsync(string question, bool useHistory = true)
     {
         var request = new QueryRequest
         {
             Question = question,
-            UseHistory = useHistory,
-            SearchDocuments = searchDocuments
+            UseHistory = useHistory
         };
         return await PostAsync<QueryResponse>("/query", request);
+    }
+
+    /// <summary>
+    /// Envia una consulta con archivos adjuntos (PDF, DOCX, etc.).
+    /// Los archivos se envian como contenido inline en JSON.
+    /// </summary>
+    public async Task<QueryResponse?> SendQueryWithAttachmentAsync(
+        string question,
+        List<AttachedFileData>? attachedFiles = null,
+        bool useHistory = true)
+    {
+        var request = new QueryWithAttachmentRequest
+        {
+            Question = question,
+            UseHistory = useHistory,
+            AttachedFiles = attachedFiles
+        };
+        return await PostAsync<QueryResponse>("/query", request);
+    }
+
+    /// <summary>
+    /// Envia una consulta dentro de una conversacion, con archivos adjuntos opcionales.
+    /// </summary>
+    public async Task<QueryResponse?> SendConversationQueryAsync(
+        string conversationId,
+        string question,
+        List<AttachedFileData>? attachedFiles = null,
+        bool useHistory = true)
+    {
+        var request = new ConversationQueryRequest
+        {
+            Question = question,
+            UseHistory = useHistory,
+            AttachedFiles = attachedFiles
+        };
+        return await PostAsync<QueryResponse>($"/conversations/{conversationId}/query", request);
     }
 
     // ========================================================================
@@ -97,50 +132,19 @@ public sealed class AlfredApiClient : IDisposable
         return await DeleteAsync($"/conversations/{id}");
     }
 
-    public async Task<QueryResponse?> SendConversationQueryAsync(string conversationId, string question,
-        bool useHistory = true, bool searchDocuments = true)
+    public async Task<bool> ClearConversationAsync(string id)
     {
-        var request = new ConversationQueryRequest
-        {
-            Question = question,
-            UseHistory = useHistory,
-            SearchDocuments = searchDocuments
-        };
-        return await PostAsync<QueryResponse>($"/conversations/{conversationId}/query", request);
+        return await DeleteAsync($"/conversations/{id}/messages");
     }
 
-    // ========================================================================
-    // Documentos
-    // ========================================================================
-
-    public async Task<List<DocumentPathInfo>> ListDocumentPathsAsync()
+    public async Task<List<ConversationThread>> SearchConversationsAsync(string query)
     {
-        return await GetAsync<List<DocumentPathInfo>>("/documents/paths") ?? [];
-    }
+        var all = await ListConversationsAsync(200, 0);
+        if (string.IsNullOrWhiteSpace(query)) return all;
 
-    public async Task<DocumentPathInfo?> AddDocumentPathAsync(string path)
-    {
-        return await PostAsync<DocumentPathInfo>("/documents/paths", new { path });
-    }
-
-    public async Task<bool> UpdateDocumentPathAsync(long id, bool enabled)
-    {
-        return await PutAsync($"/documents/paths/{id}", new { enabled });
-    }
-
-    public async Task<bool> DeleteDocumentPathAsync(long id)
-    {
-        return await DeleteAsync($"/documents/paths/{id}");
-    }
-
-    public async Task<object?> ReindexDocumentsAsync()
-    {
-        return await PostAsync<object>("/documents/reindex", new { });
-    }
-
-    public async Task<object?> GetDocumentStatsAsync()
-    {
-        return await GetAsync<object>("/documents/stats");
+        return all.Where(c =>
+            c.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     // ========================================================================
@@ -186,12 +190,6 @@ public sealed class AlfredApiClient : IDisposable
         return response?.IsSuccessStatusCode ?? false;
     }
 
-    public async Task<bool> ChangeEmbedderAsync(string modelPath)
-    {
-        var response = await PostRawAsync("/models/change-embedder", new { model_path = modelPath });
-        return response?.IsSuccessStatusCode ?? false;
-    }
-
     // ========================================================================
     // GPU
     // ========================================================================
@@ -230,6 +228,37 @@ public sealed class AlfredApiClient : IDisposable
     public async Task<bool> DeleteUserSettingAsync(string key)
     {
         return await DeleteAsync($"/user/settings/{key}");
+    }
+
+    // ========================================================================
+    // Seguridad y cifrado
+    // ========================================================================
+
+    public async Task<EncryptionStatus?> GetEncryptionStatusAsync()
+    {
+        return await GetAsync<EncryptionStatus>("/encryption/status");
+    }
+
+    public async Task<bool> SetupEncryptionAsync(bool enabled, string key = "")
+    {
+        var response = await PostRawAsync("/encryption/setup", new { enabled, key });
+        return response?.IsSuccessStatusCode ?? false;
+    }
+
+    // ========================================================================
+    // App Settings
+    // ========================================================================
+
+    public async Task<string?> GetAppSettingAsync(string key)
+    {
+        var item = await GetAsync<SettingItem>($"/settings/{key}");
+        return item?.Value;
+    }
+
+    public async Task<bool> SetAppSettingAsync(string key, string value)
+    {
+        var response = await PostRawAsync("/settings", new { key, value });
+        return response?.IsSuccessStatusCode ?? false;
     }
 
     // ========================================================================

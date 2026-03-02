@@ -12,9 +12,24 @@
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="8" Padding="20">
                 <StackPanel Spacing="16">
-                    <TextBlock Text="Perfil de usuario" FontWeight="SemiBold" FontSize="16" />
-                    <TextBlock Text="Esta informacion ayuda a Alfred a personalizar sus respuestas."
-                               FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Perfil de usuario" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Esta informacion ayuda a Alfred a personalizar sus respuestas."
+                                   FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <!-- Foto de perfil -->
+                    <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Left">
+                        <PersonPicture x:Name="ProfilePicture" Width="72" Height="72"
+                                       DisplayName="?" />
+                        <StackPanel VerticalAlignment="Center" Spacing="8">
+                            <Button Content="Cambiar foto" Click="OnChangeProfilePicture"
+                                    Padding="12,6" />
+                            <Button x:Name="RemovePictureButton" Content="Quitar foto"
+                                    Click="OnRemoveProfilePicture" Padding="12,6"
+                                    Visibility="Collapsed" />
+                        </StackPanel>
+                    </StackPanel>
 
                     <TextBox x:Name="UserNameBox" Header="Nombre" PlaceholderText="Tu nombre" />
                     <TextBox x:Name="UserAgeBox" Header="Edad" PlaceholderText="Tu edad" />
@@ -25,6 +40,87 @@
 
                     <Button Content="Guardar perfil" Style="{StaticResource AccentButtonStyle}"
                             Click="OnSaveProfile" />
+                </StackPanel>
+            </Border>
+
+            <!-- Personalizacion del asistente -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8" Padding="20">
+                <StackPanel Spacing="16">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Personalizacion" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Configura el comportamiento y estilo de Alfred."
+                                   FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <TextBox x:Name="AssistantNameBox" Header="Nombre del asistente"
+                             PlaceholderText="Alfred" />
+
+                    <ComboBox x:Name="ToneCombo" Header="Tono de respuesta"
+                              SelectedIndex="0" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Profesional" Tag="professional" />
+                        <ComboBoxItem Content="Amigable" Tag="friendly" />
+                        <ComboBoxItem Content="Conciso" Tag="concise" />
+                        <ComboBoxItem Content="Detallado" Tag="detailed" />
+                        <ComboBoxItem Content="Creativo" Tag="creative" />
+                    </ComboBox>
+
+                    <NumberBox x:Name="ContextLimitBox" Header="Limite de contexto (mensajes)"
+                               Minimum="2" Maximum="100" Value="10"
+                               SpinButtonPlacementMode="Inline"
+                               SmallChange="1" LargeChange="5" />
+
+                    <TextBox x:Name="CustomInstructionsBox" Header="Instrucciones personalizadas"
+                             PlaceholderText="Instrucciones adicionales para Alfred..."
+                             TextWrapping="Wrap" AcceptsReturn="True" MaxHeight="150" />
+
+                    <Button Content="Guardar personalizacion" Style="{StaticResource AccentButtonStyle}"
+                            Click="OnSavePersonalization" />
+                </StackPanel>
+            </Border>
+
+            <!-- Seguridad -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8" Padding="20">
+                <StackPanel Spacing="16">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Seguridad y privacidad" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="Cifrado de datos personales y conversaciones sensibles."
+                                   FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Estado"
+                                   FontSize="13" VerticalAlignment="Center" />
+                        <TextBlock x:Name="EncryptionStatusText" Grid.Row="0" Grid.Column="1"
+                                   Text="Verificando..." FontSize="13"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Clave"
+                                   FontSize="13" VerticalAlignment="Center" Margin="0,8,0,0" />
+                        <TextBlock x:Name="EncryptionKeyText" Grid.Row="1" Grid.Column="1"
+                                   Text="" FontSize="13" Margin="0,8,0,0"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ToggleSwitch x:Name="EncryptionToggle" Header="Cifrado"
+                                      OffContent="Deshabilitado" OnContent="Habilitado"
+                                      Toggled="OnEncryptionToggled" />
+                    </StackPanel>
+
+                    <TextBlock Text="El cifrado protege datos personales extraidos por Alfred. Todos los datos se procesan localmente."
+                               FontSize="11" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </Border>
 
@@ -42,14 +138,16 @@
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="8" Padding="20">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Sistema" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="Acerca de Alfred" FontWeight="SemiBold" FontSize="16" />
 
                     <Grid ColumnSpacing="16" RowSpacing="8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
@@ -63,7 +161,22 @@
                                    FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="llama.cpp + GGUF"
                                    FontSize="13" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Interfaz"
+                                   FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="WinUI 3 + .NET 9"
+                                   FontSize="13" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Privacidad"
+                                   FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Row="3" Grid.Column="1"
+                                   Text="100% local. Sin datos enviados a la nube."
+                                   FontSize="13" TextWrapping="Wrap" />
                     </Grid>
+
+                    <TextBlock Text="Alfred es un asistente IA local que genera respuestas inteligentes y mantiene tu privacidad. Toda la inferencia se ejecuta en tu dispositivo."
+                               FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </Border>
 
