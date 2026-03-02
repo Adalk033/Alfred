@@ -33,6 +33,7 @@ struct AppConfig {
     int n_ctx           = 4096;
     int n_gpu_layers    = 99;     // Offload todas las capas a GPU
     int n_batch         = 512;
+    int n_threads       = 0;      // 0 = auto (cores fisicos)
     float temperature   = 0.7f;
     float top_p         = 0.9f;
     int max_tokens      = 2048;

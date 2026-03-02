@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cstring>
 #include <algorithm>
+#include <thread>
 
 namespace alfred {
 
@@ -77,7 +78,15 @@ bool LLMEngine::load_model(const LLMConfig& config) {
     auto ctx_params = llama_context_default_params();
     ctx_params.n_ctx = static_cast<uint32_t>(config.n_ctx);
     ctx_params.n_batch = static_cast<uint32_t>(config.n_batch);
-    ctx_params.n_threads = 4;
+
+    // Threads: si es 0, usar cores fisicos (logicos / 2, minimo 4)
+    int threads = config.n_threads;
+    if (threads <= 0) {
+        int hw = static_cast<int>(std::thread::hardware_concurrency());
+        threads = std::max(4, hw / 2);
+    }
+    ctx_params.n_threads = static_cast<uint32_t>(threads);
+    log_info("  Threads CPU: " + std::to_string(threads));
 
     ctx_ = llama_init_from_model(model_, ctx_params);
     if (!ctx_) {

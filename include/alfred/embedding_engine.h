@@ -27,6 +27,7 @@ struct EmbeddingConfig {
     std::string model_path;
     int n_gpu_layers = 99;
     int n_batch = 512;
+    int n_threads = 0;           // 0 = auto-detectar (usa cores fisicos)
     int embedding_dim = 768;    // Dimension de salida del modelo
 };
 

@@ -66,6 +66,7 @@ bool AlfredCore::initialize() {
             llm_config.n_ctx = cfg.n_ctx;
             llm_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
             llm_config.n_batch = cfg.n_batch;
+            llm_config.n_threads = cfg.n_threads;
             llm_config.temperature = cfg.temperature;
             llm_config.top_p = cfg.top_p;
             llm_config.max_tokens = cfg.max_tokens;
@@ -98,6 +99,7 @@ bool AlfredCore::initialize() {
             embed_config.model_path = embed_path;
             embed_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
             embed_config.n_batch = cfg.n_batch;
+            embed_config.n_threads = cfg.n_threads;
             embed_config.embedding_dim = cfg.embedding_dim;
 
             if (!embedder_->load_model(embed_config)) {
