@@ -12,9 +12,6 @@ public sealed partial class ModelsPage : Page
     private AlfredApiClient? _api;
     private readonly ModelDownloadService _downloader = new();
 
-    // Referencias a elementos del catalogo para actualizar estado
-    private readonly Dictionary<string, CatalogCardControls> _catalogCards = [];
-
     public ModelsPage()
     {
         InitializeComponent();
@@ -27,208 +24,101 @@ public sealed partial class ModelsPage : Page
         if (e.Parameter is AlfredApiClient api)
             _api = api;
 
-        BuildCatalogCards();
+        ModelsDirText.Text = $"Directorio de modelos: {_downloader.ModelsDirectory}";
         await LoadData();
     }
 
     // ========================================================================
-    // Catalogo de modelos recomendados
+    // Descarga por URL
     // ========================================================================
 
-    private void BuildCatalogCards()
+    private async void OnDownloadFromUrl(object sender, RoutedEventArgs e)
     {
-        CatalogPanel.Children.Clear();
-        _catalogCards.Clear();
+        string url = DownloadUrlBox.Text.Trim();
+        if (string.IsNullOrEmpty(url))
+            return;
 
-        foreach (var model in ModelDownloadService.Catalog)
+        // Extraer nombre de archivo de la URL
+        string fileName;
+        try
         {
-            bool isDownloaded = _downloader.IsModelDownloaded(model.FileName);
-
-            // Card container
-            var card = new Border
+            var uri = new Uri(url);
+            fileName = System.IO.Path.GetFileName(uri.LocalPath);
+            if (string.IsNullOrEmpty(fileName) || !fileName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
             {
-                Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(16, 12, 16, 12)
-            };
-
-            var grid = new Grid { ColumnSpacing = 12 };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            // Info column
-            var info = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-
-            var nameBlock = new TextBlock
-            {
-                Text = model.Name,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                FontSize = 14
-            };
-            info.Children.Add(nameBlock);
-
-            var descBlock = new TextBlock
-            {
-                Text = $"{model.Description} - {model.SizeLabel}",
-                FontSize = 12,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
-            };
-            info.Children.Add(descBlock);
-
-            var typeBlock = new TextBlock
-            {
-                Text = model.Type == "llm" ? "Tipo: LLM (generacion)" : "Tipo: Embedder (busqueda)",
-                FontSize = 11,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
-            };
-            info.Children.Add(typeBlock);
-
-            // Progress bar (hidden by default)
-            var progressBar = new ProgressBar
-            {
-                Minimum = 0,
-                Maximum = 100,
-                Height = 4,
-                Margin = new Thickness(0, 6, 0, 0),
-                Visibility = Visibility.Collapsed
-            };
-            info.Children.Add(progressBar);
-
-            // Progress text (hidden by default)
-            var progressText = new TextBlock
-            {
-                FontSize = 11,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                Visibility = Visibility.Collapsed
-            };
-            info.Children.Add(progressText);
-
-            Grid.SetColumn(info, 0);
-            grid.Children.Add(info);
-
-            // Action column
-            var actionPanel = new StackPanel
-            {
-                Spacing = 4,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-
-            var downloadBtn = new Button
-            {
-                Content = isDownloaded ? "Descargado" : "Descargar",
-                IsEnabled = !isDownloaded,
-                Padding = new Thickness(12, 6, 12, 6),
-                Tag = model.FileName
-            };
-            if (isDownloaded)
-            {
-                downloadBtn.Background = new SolidColorBrush(Colors.Green);
-                downloadBtn.Foreground = new SolidColorBrush(Colors.White);
+                await ShowError("La URL debe apuntar a un archivo .gguf");
+                return;
             }
-            downloadBtn.Click += OnDownloadClick;
-            actionPanel.Children.Add(downloadBtn);
-
-            var cancelBtn = new Button
-            {
-                Content = "Cancelar",
-                Padding = new Thickness(12, 4, 12, 4),
-                Visibility = Visibility.Collapsed,
-                Tag = model.FileName
-            };
-            cancelBtn.Click += OnCancelClick;
-            actionPanel.Children.Add(cancelBtn);
-
-            Grid.SetColumn(actionPanel, 1);
-            grid.Children.Add(actionPanel);
-
-            card.Child = grid;
-            CatalogPanel.Children.Add(card);
-
-            _catalogCards[model.FileName] = new CatalogCardControls
-            {
-                DownloadButton = downloadBtn,
-                CancelButton = cancelBtn,
-                ProgressBar = progressBar,
-                ProgressText = progressText
-            };
         }
-    }
-
-    private async void OnDownloadClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button btn || btn.Tag is not string fileName) return;
-
-        var model = ModelDownloadService.Catalog.Find(m => m.FileName == fileName);
-        if (model == null) return;
-
-        if (!_catalogCards.TryGetValue(fileName, out var controls)) return;
+        catch
+        {
+            await ShowError("URL no valida");
+            return;
+        }
 
         // Actualizar UI a estado de descarga
-        controls.DownloadButton.IsEnabled = false;
-        controls.DownloadButton.Content = "Descargando...";
-        controls.CancelButton.Visibility = Visibility.Visible;
-        controls.ProgressBar.Visibility = Visibility.Visible;
-        controls.ProgressBar.Value = 0;
-        controls.ProgressText.Visibility = Visibility.Visible;
-        controls.ProgressText.Text = "Iniciando descarga...";
+        DownloadButton.IsEnabled = false;
+        DownloadButton.Content = "Descargando...";
+        DownloadUrlBox.IsEnabled = false;
+        CancelDownloadButton.Visibility = Visibility.Visible;
+        DownloadProgressBar.Visibility = Visibility.Visible;
+        DownloadProgressBar.Value = 0;
+        DownloadProgressText.Visibility = Visibility.Visible;
+        DownloadProgressText.Text = "Iniciando descarga...";
 
-        bool success = await _downloader.DownloadModelAsync(model.Url, model.FileName, progress =>
+        bool success = await _downloader.DownloadModelAsync(url, fileName, progress =>
         {
             DispatcherQueue.TryEnqueue(() =>
             {
                 if (progress.Error != null)
                 {
-                    controls.ProgressText.Text = $"Error: {progress.Error}";
-                    controls.ProgressBar.Visibility = Visibility.Collapsed;
-                    controls.DownloadButton.Content = "Reintentar";
-                    controls.DownloadButton.IsEnabled = true;
-                    controls.CancelButton.Visibility = Visibility.Collapsed;
+                    DownloadProgressText.Text = $"Error: {progress.Error}";
+                    ResetDownloadUI();
                     return;
                 }
 
                 if (progress.IsCancelled)
                 {
-                    controls.ProgressText.Text = "Descarga cancelada";
-                    controls.ProgressBar.Visibility = Visibility.Collapsed;
-                    controls.DownloadButton.Content = "Reintentar";
-                    controls.DownloadButton.IsEnabled = true;
-                    controls.CancelButton.Visibility = Visibility.Collapsed;
+                    DownloadProgressText.Text = "Descarga cancelada";
+                    ResetDownloadUI();
                     return;
                 }
 
                 if (progress.IsCompleted)
                 {
-                    controls.ProgressBar.Value = 100;
-                    controls.ProgressText.Text = "Descarga completada";
-                    controls.DownloadButton.Content = "Descargado";
-                    controls.DownloadButton.IsEnabled = false;
-                    controls.DownloadButton.Background = new SolidColorBrush(Colors.Green);
-                    controls.DownloadButton.Foreground = new SolidColorBrush(Colors.White);
-                    controls.CancelButton.Visibility = Visibility.Collapsed;
-                    controls.ProgressBar.Visibility = Visibility.Collapsed;
-                    controls.ProgressText.Visibility = Visibility.Collapsed;
+                    DownloadProgressBar.Value = 100;
+                    DownloadProgressText.Text = $"{fileName} descargado correctamente";
+                    ResetDownloadUI();
                     return;
                 }
 
                 // Progreso normal
-                controls.ProgressBar.Value = progress.Percentage;
+                DownloadProgressBar.Value = progress.Percentage;
                 string downloaded = FormatBytes(progress.BytesDownloaded);
                 string total = progress.TotalBytes > 0 ? FormatBytes(progress.TotalBytes) : "?";
-                controls.ProgressText.Text = $"{downloaded} / {total} ({progress.Percentage:F1}%)";
+                DownloadProgressText.Text = $"{fileName}: {downloaded} / {total} ({progress.Percentage:F1}%)";
             });
         });
 
         if (success)
         {
-            // Recargar lista de modelos disponibles
+            DownloadUrlBox.Text = "";
             await LoadData();
         }
     }
 
-    private void OnCancelClick(object sender, RoutedEventArgs e)
+    private void OnCancelDownload(object sender, RoutedEventArgs e)
     {
         _downloader.CancelDownload();
+    }
+
+    private void ResetDownloadUI()
+    {
+        DownloadButton.IsEnabled = true;
+        DownloadButton.Content = "Descargar";
+        DownloadUrlBox.IsEnabled = true;
+        CancelDownloadButton.Visibility = Visibility.Collapsed;
+        DownloadProgressBar.Visibility = Visibility.Collapsed;
     }
 
     // ========================================================================
@@ -239,7 +129,6 @@ public sealed partial class ModelsPage : Page
     {
         if (_api == null) return;
 
-        // Estado de modelos cargados
         var status = await _api.GetModelStatusAsync();
         if (status != null)
         {
@@ -250,9 +139,11 @@ public sealed partial class ModelsPage : Page
             EmbedderStatus.Text = status.EmbedderLoaded
                 ? $"{status.EmbedderModel ?? "Cargado"} (dim={status.EmbedderDim})"
                 : "No cargado";
+
+            if (!string.IsNullOrEmpty(status.ModelsDir))
+                ModelsDirText.Text = $"Directorio de modelos: {status.ModelsDir}";
         }
 
-        // Lista de archivos GGUF disponibles
         var models = await _api.ListModelsAsync();
         ModelListView.ItemsSource = models;
         EmptyText.Visibility = models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -270,20 +161,9 @@ public sealed partial class ModelsPage : Page
         {
             bool success = await _api.ChangeModelAsync(modelPath);
             if (success)
-            {
                 await LoadData();
-            }
             else
-            {
-                var dialog = new ContentDialog
-                {
-                    Title = "Error",
-                    Content = "No se pudo cambiar el modelo.",
-                    CloseButtonText = "Aceptar",
-                    XamlRoot = this.XamlRoot
-                };
-                await dialog.ShowAsync();
-            }
+                await ShowError("No se pudo cambiar el modelo LLM.");
         }
         finally
         {
@@ -292,9 +172,44 @@ public sealed partial class ModelsPage : Page
         }
     }
 
+    private async void OnChangeEmbedder(object sender, RoutedEventArgs e)
+    {
+        if (_api == null) return;
+        if (sender is not Button btn || btn.Tag is not string modelPath) return;
+
+        btn.IsEnabled = false;
+        btn.Content = "Cargando...";
+
+        try
+        {
+            bool success = await _api.ChangeEmbedderAsync(modelPath);
+            if (success)
+                await LoadData();
+            else
+                await ShowError("No se pudo cambiar el modelo de embeddings.");
+        }
+        finally
+        {
+            btn.IsEnabled = true;
+            btn.Content = "Usar como Embedder";
+        }
+    }
+
     // ========================================================================
     // Helpers
     // ========================================================================
+
+    private async Task ShowError(string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Error",
+            Content = message,
+            CloseButtonText = "Aceptar",
+            XamlRoot = this.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
 
     private static string FormatBytes(long bytes)
     {
@@ -305,13 +220,5 @@ public sealed partial class ModelsPage : Page
             >= 1024L => $"{bytes / 1024.0:F0} KB",
             _ => $"{bytes} B"
         };
-    }
-
-    private sealed class CatalogCardControls
-    {
-        public required Button DownloadButton { get; init; }
-        public required Button CancelButton { get; init; }
-        public required ProgressBar ProgressBar { get; init; }
-        public required TextBlock ProgressText { get; init; }
     }
 }

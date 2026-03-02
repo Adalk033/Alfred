@@ -648,7 +648,41 @@ void handle_model_status(const httplib::Request& /*req*/, httplib::Response& res
     data["embedder_loaded"] = core.embedder().is_loaded();
     data["embedder_model"] = core.embedder().model_name();
     data["embedder_dim"] = core.embedder().dimension();
+    data["models_dir"] = get_config().models_dir;
     json_ok(res, data);
+}
+
+void handle_change_embedder(const httplib::Request& req, httplib::Response& res,
+                             AlfredCore& core) {
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    std::string model_path = body.value("model_path", "");
+    if (model_path.empty()) {
+        model_path = body.value("model_name", "");
+        if (!model_path.empty()) {
+            model_path = get_config().models_dir + "/" + model_path;
+        }
+    }
+
+    if (model_path.empty()) {
+        json_error(res, 400, "Campo 'model_path' o 'model_name' requerido");
+        return;
+    }
+
+    if (!std::filesystem::exists(model_path)) {
+        json_error(res, 404, "Modelo no encontrado: " + model_path);
+        return;
+    }
+
+    log_info("Cambiando modelo de embeddings a: " + model_path);
+    bool success = core.change_embedder(model_path);
+
+    if (success) {
+        json_ok(res, {{"status", "changed"}, {"model", model_path}});
+    } else {
+        json_error(res, 500, "Error cambiando modelo de embeddings");
+    }
 }
 
 // ============================================================================
@@ -826,6 +860,9 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Post("/models/change", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_change_model(req, res, core);
+    });
+    server.Post("/models/change-embedder", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_change_embedder(req, res, core);
     });
     server.Get("/models/status", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_model_status(req, res, core);

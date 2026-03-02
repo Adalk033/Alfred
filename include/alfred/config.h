@@ -27,9 +27,9 @@ struct AppConfig {
     std::string chroma_dir;
 
     // --- LLM (llama.cpp con CUDA) ---
-    // Modelos GGUF descargados de HuggingFace
-    std::string llm_model_file    = "gemma-2-9b-it-Q5_K_M.gguf";
-    std::string embed_model_file  = "nomic-embed-text-v1.5.Q5_K_M.gguf";
+    // Modelos GGUF seleccionados por el usuario (vacio = sin modelo por defecto)
+    std::string llm_model_file;
+    std::string embed_model_file;
     int n_ctx           = 4096;
     int n_gpu_layers    = 99;     // Offload todas las capas a GPU
     int n_batch         = 512;

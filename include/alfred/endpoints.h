@@ -77,6 +77,8 @@ void handle_gpu_report(const httplib::Request& req, httplib::Response& res);
 void handle_list_models(const httplib::Request& req, httplib::Response& res);
 void handle_change_model(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
+void handle_change_embedder(const httplib::Request& req, httplib::Response& res,
+                             AlfredCore& core);
 void handle_model_status(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
 

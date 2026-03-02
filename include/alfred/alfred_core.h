@@ -66,6 +66,9 @@ public:
     // Cambiar modelo LLM
     bool change_model(const std::string& model_path);
 
+    // Cambiar modelo de embeddings
+    bool change_embedder(const std::string& model_path);
+
     // Estadisticas generales
     json get_stats();
 

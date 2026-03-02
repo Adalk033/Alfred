@@ -30,28 +30,57 @@
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Text="LLM" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:ConnectionId='8' x:Name="LlmStatus" Text="Cargando..." FontSize="13" />
+                            <TextBlock x:ConnectionId='14' x:Name="LlmStatus" Text="Cargando..." FontSize="13" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Spacing="4">
                             <TextBlock Text="Embedder" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:ConnectionId='7' x:Name="EmbedderStatus" Text="Cargando..." FontSize="13" />
+                            <TextBlock x:ConnectionId='13' x:Name="EmbedderStatus" Text="Cargando..." FontSize="13" />
                         </StackPanel>
                     </Grid>
                 </StackPanel>
             </Border>
 
-            <!-- Modelos recomendados para descargar -->
-            <StackPanel Grid.Row="2" Spacing="8" Margin="0,0,0,20">
-                <TextBlock Text="Modelos recomendados" FontWeight="SemiBold" FontSize="16" />
-                <TextBlock Text="Descarga los modelos necesarios para que Alfred funcione."
-                           FontSize="12"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Margin="0,0,0,4" />
+            <!-- Descargar modelo por URL -->
+            <Border Grid.Row="2" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8" Padding="16,12" Margin="0,0,0,20">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Descargar modelo desde URL" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Text="Pega la URL directa de un archivo .gguf (ej. desde HuggingFace)"
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
-                <StackPanel x:ConnectionId='6' x:Name="CatalogPanel" Spacing="8" />
-            </StackPanel>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:ConnectionId='10' x:Name="DownloadUrlBox" Grid.Column="0"
+                                 PlaceholderText="https://huggingface.co/.../model.gguf"
+                                 VerticalAlignment="Center" />
+
+                        <Button x:ConnectionId='11' x:Name="DownloadButton" Grid.Column="1" Content="Descargar"
+                                                          Padding="12,6"
+                                VerticalAlignment="Center" />
+
+                        <Button x:ConnectionId='12' x:Name="CancelDownloadButton" Grid.Column="2" Content="Cancelar"
+                                                         Padding="12,6"
+                                VerticalAlignment="Center" Visibility="Collapsed" />
+                    </Grid>
+
+                    <ProgressBar x:ConnectionId='7' x:Name="DownloadProgressBar" Minimum="0" Maximum="100"
+                                 Height="4" Visibility="Collapsed" />
+                    <TextBlock x:ConnectionId='8' x:Name="DownloadProgressText" FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Visibility="Collapsed" />
+
+                    <TextBlock x:ConnectionId='9' x:Name="ModelsDirText" FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Border>
 
             <!-- Lista de modelos disponibles en disco -->
             <StackPanel Grid.Row="3" Spacing="8" Margin="0,0,0,8">
@@ -64,6 +93,7 @@
                         <Grid Padding="12,10" ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
@@ -83,6 +113,10 @@
 
                             <Button x:ConnectionId='5' Grid.Column="2" Content="Usar como LLM"
                                                           Tag="{Binding Path}"
+                                    Padding="12,4" VerticalAlignment="Center" />
+
+                            <Button x:ConnectionId='6' Grid.Column="3" Content="Usar como Embedder"
+                                                             Tag="{Binding Path}"
                                     Padding="12,4" VerticalAlignment="Center" />
                         </Grid>
                     </DataTemplate>

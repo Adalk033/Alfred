@@ -186,6 +186,12 @@ public sealed class AlfredApiClient : IDisposable
         return response?.IsSuccessStatusCode ?? false;
     }
 
+    public async Task<bool> ChangeEmbedderAsync(string modelPath)
+    {
+        var response = await PostRawAsync("/models/change-embedder", new { model_path = modelPath });
+        return response?.IsSuccessStatusCode ?? false;
+    }
+
     // ========================================================================
     // GPU
     // ========================================================================

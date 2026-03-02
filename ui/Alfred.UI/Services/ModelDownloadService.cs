@@ -39,27 +39,7 @@ public sealed class ModelDownloadService : IDisposable
     private CancellationTokenSource? _cts;
     private bool _disposed;
 
-    public static readonly List<RecommendedModel> Catalog =
-    [
-        new()
-        {
-            Name = "Gemma 2 9B Instruct (Q5_K_M)",
-            FileName = "gemma-2-9b-it-Q5_K_M.gguf",
-            Url = "https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q5_K_M.gguf",
-            Type = "llm",
-            SizeLabel = "~6.5 GB",
-            Description = "Modelo de lenguaje para generacion de respuestas"
-        },
-        new()
-        {
-            Name = "Nomic Embed Text v1.5 (Q5_K_M)",
-            FileName = "nomic-embed-text-v1.5.Q5_K_M.gguf",
-            Url = "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q5_K_M.gguf",
-            Type = "embedder",
-            SizeLabel = "~97 MB",
-            Description = "Modelo de embeddings para busqueda semantica"
-        }
-    ];
+    public static readonly List<RecommendedModel> Catalog = [];
 
     public bool IsDownloading { get; private set; }
 

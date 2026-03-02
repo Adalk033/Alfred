@@ -226,7 +226,7 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
         
         private void InitTypeTables()
         {
-            _typeNameTable = new string[61];
+            _typeNameTable = new string[58];
             _typeNameTable[0] = "Microsoft.UI.Xaml.Controls.XamlControlsResources";
             _typeNameTable[1] = "Microsoft.UI.Xaml.ResourceDictionary";
             _typeNameTable[2] = "Object";
@@ -280,16 +280,13 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
             _typeNameTable[50] = "Alfred.UI.Pages.ConversationsPage";
             _typeNameTable[51] = "Alfred.UI.Pages.DocumentsPage";
             _typeNameTable[52] = "Alfred.UI.Pages.HistoryPage";
-            _typeNameTable[53] = "Microsoft.UI.Xaml.Controls.ProgressBar";
-            _typeNameTable[54] = "Microsoft.UI.Xaml.Controls.Primitives.RangeBase";
-            _typeNameTable[55] = "Microsoft.UI.Xaml.Controls.ProgressBarTemplateSettings";
-            _typeNameTable[56] = "Alfred.UI.Pages.ModelsPage";
-            _typeNameTable[57] = "Alfred.UI.Pages.SettingsPage";
-            _typeNameTable[58] = "Microsoft.UI.Xaml.Controls.TreeViewNode";
-            _typeNameTable[59] = "System.Collections.Generic.IList`1<Microsoft.UI.Xaml.Controls.TreeViewNode>";
-            _typeNameTable[60] = "Int32";
+            _typeNameTable[53] = "Alfred.UI.Pages.ModelsPage";
+            _typeNameTable[54] = "Alfred.UI.Pages.SettingsPage";
+            _typeNameTable[55] = "Microsoft.UI.Xaml.Controls.TreeViewNode";
+            _typeNameTable[56] = "System.Collections.Generic.IList`1<Microsoft.UI.Xaml.Controls.TreeViewNode>";
+            _typeNameTable[57] = "Int32";
 
-            _typeTable = new global::System.Type[61];
+            _typeTable = new global::System.Type[58];
             _typeTable[0] = typeof(global::Microsoft.UI.Xaml.Controls.XamlControlsResources);
             _typeTable[1] = typeof(global::Microsoft.UI.Xaml.ResourceDictionary);
             _typeTable[2] = typeof(global::System.Object);
@@ -343,14 +340,11 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
             _typeTable[50] = typeof(global::Alfred.UI.Pages.ConversationsPage);
             _typeTable[51] = typeof(global::Alfred.UI.Pages.DocumentsPage);
             _typeTable[52] = typeof(global::Alfred.UI.Pages.HistoryPage);
-            _typeTable[53] = typeof(global::Microsoft.UI.Xaml.Controls.ProgressBar);
-            _typeTable[54] = typeof(global::Microsoft.UI.Xaml.Controls.Primitives.RangeBase);
-            _typeTable[55] = typeof(global::Microsoft.UI.Xaml.Controls.ProgressBarTemplateSettings);
-            _typeTable[56] = typeof(global::Alfred.UI.Pages.ModelsPage);
-            _typeTable[57] = typeof(global::Alfred.UI.Pages.SettingsPage);
-            _typeTable[58] = typeof(global::Microsoft.UI.Xaml.Controls.TreeViewNode);
-            _typeTable[59] = typeof(global::System.Collections.Generic.IList<global::Microsoft.UI.Xaml.Controls.TreeViewNode>);
-            _typeTable[60] = typeof(global::System.Int32);
+            _typeTable[53] = typeof(global::Alfred.UI.Pages.ModelsPage);
+            _typeTable[54] = typeof(global::Alfred.UI.Pages.SettingsPage);
+            _typeTable[55] = typeof(global::Microsoft.UI.Xaml.Controls.TreeViewNode);
+            _typeTable[56] = typeof(global::System.Collections.Generic.IList<global::Microsoft.UI.Xaml.Controls.TreeViewNode>);
+            _typeTable[57] = typeof(global::System.Int32);
         }
 
         private int LookupTypeIndexByName(string typeName)
@@ -403,10 +397,9 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
         private object Activate_50_ConversationsPage() { return new global::Alfred.UI.Pages.ConversationsPage(); }
         private object Activate_51_DocumentsPage() { return new global::Alfred.UI.Pages.DocumentsPage(); }
         private object Activate_52_HistoryPage() { return new global::Alfred.UI.Pages.HistoryPage(); }
-        private object Activate_53_ProgressBar() { return new global::Microsoft.UI.Xaml.Controls.ProgressBar(); }
-        private object Activate_56_ModelsPage() { return new global::Alfred.UI.Pages.ModelsPage(); }
-        private object Activate_57_SettingsPage() { return new global::Alfred.UI.Pages.SettingsPage(); }
-        private object Activate_58_TreeViewNode() { return new global::Microsoft.UI.Xaml.Controls.TreeViewNode(); }
+        private object Activate_53_ModelsPage() { return new global::Alfred.UI.Pages.ModelsPage(); }
+        private object Activate_54_SettingsPage() { return new global::Alfred.UI.Pages.SettingsPage(); }
+        private object Activate_55_TreeViewNode() { return new global::Microsoft.UI.Xaml.Controls.TreeViewNode(); }
         private void StaticInitializer_0_XamlControlsResources() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Microsoft.UI.Xaml.Controls.XamlControlsResources).TypeHandle);
         private void StaticInitializer_4_NavigationView() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Microsoft.UI.Xaml.Controls.NavigationView).TypeHandle);
         private void StaticInitializer_6_NavigationViewBackButtonVisible() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Microsoft.UI.Xaml.Controls.NavigationViewBackButtonVisible).TypeHandle);
@@ -439,12 +432,10 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
         private void StaticInitializer_50_ConversationsPage() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Alfred.UI.Pages.ConversationsPage).TypeHandle);
         private void StaticInitializer_51_DocumentsPage() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Alfred.UI.Pages.DocumentsPage).TypeHandle);
         private void StaticInitializer_52_HistoryPage() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Alfred.UI.Pages.HistoryPage).TypeHandle);
-        private void StaticInitializer_53_ProgressBar() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Microsoft.UI.Xaml.Controls.ProgressBar).TypeHandle);
-        private void StaticInitializer_55_ProgressBarTemplateSettings() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Microsoft.UI.Xaml.Controls.ProgressBarTemplateSettings).TypeHandle);
-        private void StaticInitializer_56_ModelsPage() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Alfred.UI.Pages.ModelsPage).TypeHandle);
-        private void StaticInitializer_57_SettingsPage() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Alfred.UI.Pages.SettingsPage).TypeHandle);
-        private void StaticInitializer_58_TreeViewNode() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Microsoft.UI.Xaml.Controls.TreeViewNode).TypeHandle);
-        private void StaticInitializer_59_IList() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::System.Collections.Generic.IList<global::Microsoft.UI.Xaml.Controls.TreeViewNode>).TypeHandle);
+        private void StaticInitializer_53_ModelsPage() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Alfred.UI.Pages.ModelsPage).TypeHandle);
+        private void StaticInitializer_54_SettingsPage() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Alfred.UI.Pages.SettingsPage).TypeHandle);
+        private void StaticInitializer_55_TreeViewNode() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::Microsoft.UI.Xaml.Controls.TreeViewNode).TypeHandle);
+        private void StaticInitializer_56_IList() => global::System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(global::System.Collections.Generic.IList<global::Microsoft.UI.Xaml.Controls.TreeViewNode>).TypeHandle);
         private void MapAdd_0_XamlControlsResources(object instance, object key, object item)
         {
             var collection = (global::System.Collections.Generic.IDictionary<global::System.Object, global::System.Object>)instance;
@@ -470,7 +461,7 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
             var newItem = (global::System.String)item;
             collection.Add(newItem);
         }
-        private void VectorAdd_59_IList(object instance, object item)
+        private void VectorAdd_56_IList(object instance, object item)
         {
             var collection = (global::System.Collections.Generic.ICollection<global::Microsoft.UI.Xaml.Controls.TreeViewNode>)instance;
             var newItem = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)item;
@@ -882,48 +873,26 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
                 xamlType = userType;
                 break;
 
-            case 53:   //  Microsoft.UI.Xaml.Controls.ProgressBar
-                userType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType(this, typeName, type, GetXamlTypeByName("Microsoft.UI.Xaml.Controls.Primitives.RangeBase"));
-                userType.Activator = Activate_53_ProgressBar;
-                userType.StaticInitializer = StaticInitializer_53_ProgressBar;
-                userType.AddMemberName("IsIndeterminate");
-                userType.AddMemberName("ShowError");
-                userType.AddMemberName("ShowPaused");
-                userType.AddMemberName("TemplateSettings");
-                xamlType = userType;
-                break;
-
-            case 54:   //  Microsoft.UI.Xaml.Controls.Primitives.RangeBase
-                xamlType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlSystemBaseType(typeName, type);
-                break;
-
-            case 55:   //  Microsoft.UI.Xaml.Controls.ProgressBarTemplateSettings
-                userType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType(this, typeName, type, GetXamlTypeByName("Microsoft.UI.Xaml.DependencyObject"));
-                userType.StaticInitializer = StaticInitializer_55_ProgressBarTemplateSettings;
-                userType.SetIsReturnTypeStub();
-                xamlType = userType;
-                break;
-
-            case 56:   //  Alfred.UI.Pages.ModelsPage
+            case 53:   //  Alfred.UI.Pages.ModelsPage
                 userType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType(this, typeName, type, GetXamlTypeByName("Microsoft.UI.Xaml.Controls.Page"));
-                userType.Activator = Activate_56_ModelsPage;
-                userType.StaticInitializer = StaticInitializer_56_ModelsPage;
+                userType.Activator = Activate_53_ModelsPage;
+                userType.StaticInitializer = StaticInitializer_53_ModelsPage;
                 userType.SetIsLocalType();
                 xamlType = userType;
                 break;
 
-            case 57:   //  Alfred.UI.Pages.SettingsPage
+            case 54:   //  Alfred.UI.Pages.SettingsPage
                 userType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType(this, typeName, type, GetXamlTypeByName("Microsoft.UI.Xaml.Controls.Page"));
-                userType.Activator = Activate_57_SettingsPage;
-                userType.StaticInitializer = StaticInitializer_57_SettingsPage;
+                userType.Activator = Activate_54_SettingsPage;
+                userType.StaticInitializer = StaticInitializer_54_SettingsPage;
                 userType.SetIsLocalType();
                 xamlType = userType;
                 break;
 
-            case 58:   //  Microsoft.UI.Xaml.Controls.TreeViewNode
+            case 55:   //  Microsoft.UI.Xaml.Controls.TreeViewNode
                 userType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType(this, typeName, type, GetXamlTypeByName("Microsoft.UI.Xaml.DependencyObject"));
-                userType.Activator = Activate_58_TreeViewNode;
-                userType.StaticInitializer = StaticInitializer_58_TreeViewNode;
+                userType.Activator = Activate_55_TreeViewNode;
+                userType.StaticInitializer = StaticInitializer_55_TreeViewNode;
                 userType.AddMemberName("Children");
                 userType.AddMemberName("Content");
                 userType.AddMemberName("Depth");
@@ -935,15 +904,15 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
                 xamlType = userType;
                 break;
 
-            case 59:   //  System.Collections.Generic.IList`1<Microsoft.UI.Xaml.Controls.TreeViewNode>
+            case 56:   //  System.Collections.Generic.IList`1<Microsoft.UI.Xaml.Controls.TreeViewNode>
                 userType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType(this, typeName, type, null);
-                userType.StaticInitializer = StaticInitializer_59_IList;
-                userType.CollectionAdd = VectorAdd_59_IList;
+                userType.StaticInitializer = StaticInitializer_56_IList;
+                userType.CollectionAdd = VectorAdd_56_IList;
                 userType.SetIsReturnTypeStub();
                 xamlType = userType;
                 break;
 
-            case 60:   //  Int32
+            case 57:   //  Int32
                 xamlType = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlSystemBaseType(typeName, type);
                 break;
             }
@@ -1610,87 +1579,52 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
             var that = (global::Alfred.UI.Pages.ChatPage)instance;
             return that.Messages;
         }
-        private object get_66_ProgressBar_IsIndeterminate(object instance)
-        {
-            var that = (global::Microsoft.UI.Xaml.Controls.ProgressBar)instance;
-            return that.IsIndeterminate;
-        }
-        private void set_66_ProgressBar_IsIndeterminate(object instance, object Value)
-        {
-            var that = (global::Microsoft.UI.Xaml.Controls.ProgressBar)instance;
-            that.IsIndeterminate = (global::System.Boolean)Value;
-        }
-        private object get_67_ProgressBar_ShowError(object instance)
-        {
-            var that = (global::Microsoft.UI.Xaml.Controls.ProgressBar)instance;
-            return that.ShowError;
-        }
-        private void set_67_ProgressBar_ShowError(object instance, object Value)
-        {
-            var that = (global::Microsoft.UI.Xaml.Controls.ProgressBar)instance;
-            that.ShowError = (global::System.Boolean)Value;
-        }
-        private object get_68_ProgressBar_ShowPaused(object instance)
-        {
-            var that = (global::Microsoft.UI.Xaml.Controls.ProgressBar)instance;
-            return that.ShowPaused;
-        }
-        private void set_68_ProgressBar_ShowPaused(object instance, object Value)
-        {
-            var that = (global::Microsoft.UI.Xaml.Controls.ProgressBar)instance;
-            that.ShowPaused = (global::System.Boolean)Value;
-        }
-        private object get_69_ProgressBar_TemplateSettings(object instance)
-        {
-            var that = (global::Microsoft.UI.Xaml.Controls.ProgressBar)instance;
-            return that.TemplateSettings;
-        }
-        private object get_70_TreeViewNode_Children(object instance)
+        private object get_66_TreeViewNode_Children(object instance)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             return that.Children;
         }
-        private object get_71_TreeViewNode_Content(object instance)
+        private object get_67_TreeViewNode_Content(object instance)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             return that.Content;
         }
-        private void set_71_TreeViewNode_Content(object instance, object Value)
+        private void set_67_TreeViewNode_Content(object instance, object Value)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             that.Content = (global::System.Object)Value;
         }
-        private object get_72_TreeViewNode_Depth(object instance)
+        private object get_68_TreeViewNode_Depth(object instance)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             return that.Depth;
         }
-        private object get_73_TreeViewNode_HasChildren(object instance)
+        private object get_69_TreeViewNode_HasChildren(object instance)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             return that.HasChildren;
         }
-        private object get_74_TreeViewNode_HasUnrealizedChildren(object instance)
+        private object get_70_TreeViewNode_HasUnrealizedChildren(object instance)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             return that.HasUnrealizedChildren;
         }
-        private void set_74_TreeViewNode_HasUnrealizedChildren(object instance, object Value)
+        private void set_70_TreeViewNode_HasUnrealizedChildren(object instance, object Value)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             that.HasUnrealizedChildren = (global::System.Boolean)Value;
         }
-        private object get_75_TreeViewNode_IsExpanded(object instance)
+        private object get_71_TreeViewNode_IsExpanded(object instance)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             return that.IsExpanded;
         }
-        private void set_75_TreeViewNode_IsExpanded(object instance, object Value)
+        private void set_71_TreeViewNode_IsExpanded(object instance, object Value)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             that.IsExpanded = (global::System.Boolean)Value;
         }
-        private object get_76_TreeViewNode_Parent(object instance)
+        private object get_72_TreeViewNode_Parent(object instance)
         {
             var that = (global::Microsoft.UI.Xaml.Controls.TreeViewNode)instance;
             return that.Parent;
@@ -2161,77 +2095,50 @@ namespace Alfred.UI.Alfred_UI_XamlTypeInfo
                 xamlMember.Getter = get_65_ChatPage_Messages;
                 xamlMember.SetIsReadOnly();
                 break;
-            case "Microsoft.UI.Xaml.Controls.ProgressBar.IsIndeterminate":
-                userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.ProgressBar");
-                xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "IsIndeterminate", "Boolean");
-                xamlMember.SetIsDependencyProperty();
-                xamlMember.Getter = get_66_ProgressBar_IsIndeterminate;
-                xamlMember.Setter = set_66_ProgressBar_IsIndeterminate;
-                break;
-            case "Microsoft.UI.Xaml.Controls.ProgressBar.ShowError":
-                userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.ProgressBar");
-                xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "ShowError", "Boolean");
-                xamlMember.SetIsDependencyProperty();
-                xamlMember.Getter = get_67_ProgressBar_ShowError;
-                xamlMember.Setter = set_67_ProgressBar_ShowError;
-                break;
-            case "Microsoft.UI.Xaml.Controls.ProgressBar.ShowPaused":
-                userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.ProgressBar");
-                xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "ShowPaused", "Boolean");
-                xamlMember.SetIsDependencyProperty();
-                xamlMember.Getter = get_68_ProgressBar_ShowPaused;
-                xamlMember.Setter = set_68_ProgressBar_ShowPaused;
-                break;
-            case "Microsoft.UI.Xaml.Controls.ProgressBar.TemplateSettings":
-                userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.ProgressBar");
-                xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "TemplateSettings", "Microsoft.UI.Xaml.Controls.ProgressBarTemplateSettings");
-                xamlMember.Getter = get_69_ProgressBar_TemplateSettings;
-                xamlMember.SetIsReadOnly();
-                break;
             case "Microsoft.UI.Xaml.Controls.TreeViewNode.Children":
                 userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.TreeViewNode");
                 xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "Children", "System.Collections.Generic.IList`1<Microsoft.UI.Xaml.Controls.TreeViewNode>");
-                xamlMember.Getter = get_70_TreeViewNode_Children;
+                xamlMember.Getter = get_66_TreeViewNode_Children;
                 xamlMember.SetIsReadOnly();
                 break;
             case "Microsoft.UI.Xaml.Controls.TreeViewNode.Content":
                 userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.TreeViewNode");
                 xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "Content", "Object");
                 xamlMember.SetIsDependencyProperty();
-                xamlMember.Getter = get_71_TreeViewNode_Content;
-                xamlMember.Setter = set_71_TreeViewNode_Content;
+                xamlMember.Getter = get_67_TreeViewNode_Content;
+                xamlMember.Setter = set_67_TreeViewNode_Content;
                 break;
             case "Microsoft.UI.Xaml.Controls.TreeViewNode.Depth":
                 userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.TreeViewNode");
                 xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "Depth", "Int32");
                 xamlMember.SetIsDependencyProperty();
-                xamlMember.Getter = get_72_TreeViewNode_Depth;
+                xamlMember.Getter = get_68_TreeViewNode_Depth;
                 xamlMember.SetIsReadOnly();
                 break;
             case "Microsoft.UI.Xaml.Controls.TreeViewNode.HasChildren":
                 userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.TreeViewNode");
                 xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "HasChildren", "Boolean");
                 xamlMember.SetIsDependencyProperty();
-                xamlMember.Getter = get_73_TreeViewNode_HasChildren;
+                xamlMember.Getter = get_69_TreeViewNode_HasChildren;
                 xamlMember.SetIsReadOnly();
                 break;
             case "Microsoft.UI.Xaml.Controls.TreeViewNode.HasUnrealizedChildren":
                 userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.TreeViewNode");
                 xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "HasUnrealizedChildren", "Boolean");
-                xamlMember.Getter = get_74_TreeViewNode_HasUnrealizedChildren;
-                xamlMember.Setter = set_74_TreeViewNode_HasUnrealizedChildren;
+                xamlMember.Getter = get_70_TreeViewNode_HasUnrealizedChildren;
+                xamlMember.Setter = set_70_TreeViewNode_HasUnrealizedChildren;
                 break;
             case "Microsoft.UI.Xaml.Controls.TreeViewNode.IsExpanded":
                 userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.TreeViewNode");
                 xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "IsExpanded", "Boolean");
                 xamlMember.SetIsDependencyProperty();
-                xamlMember.Getter = get_75_TreeViewNode_IsExpanded;
-                xamlMember.Setter = set_75_TreeViewNode_IsExpanded;
+                xamlMember.Getter = get_71_TreeViewNode_IsExpanded;
+                xamlMember.Setter = set_71_TreeViewNode_IsExpanded;
                 break;
             case "Microsoft.UI.Xaml.Controls.TreeViewNode.Parent":
                 userType = (global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlUserType)GetXamlTypeByName("Microsoft.UI.Xaml.Controls.TreeViewNode");
                 xamlMember = new global::Alfred.UI.Alfred_UI_XamlTypeInfo.XamlMember(this, "Parent", "Microsoft.UI.Xaml.Controls.TreeViewNode");
-                xamlMember.Getter = get_76_TreeViewNode_Parent;
+                xamlMember.Getter = get_72_TreeViewNode_Parent;
                 xamlMember.SetIsReadOnly();
                 break;
             }

@@ -184,6 +184,9 @@ public sealed class ModelStatus
 
     [JsonPropertyName("embedder_dim")]
     public int EmbedderDim { get; set; }
+
+    [JsonPropertyName("models_dir")]
+    public string? ModelsDir { get; set; }
 }
 
 public sealed class GpuStatus

@@ -45,44 +45,64 @@ bool AlfredCore::initialize() {
 
     // 2. Cargar modelo LLM
     log_info("Paso 2/4: Cargando modelo LLM...");
-    std::string llm_path = cfg.models_dir + "/" + cfg.llm_model_file;
+    {
+        // Restaurar ultimo modelo usado desde DB (si existe)
+        auto& db = DBManager::instance();
+        auto last_llm = db.get_model_setting("last_used_model");
+        if (last_llm && !last_llm->empty()) {
+            cfg.llm_model_file = std::filesystem::path(*last_llm).filename().string();
+        }
 
-    if (!std::filesystem::exists(llm_path)) {
-        log_error("Modelo LLM no encontrado: " + llm_path);
-        log_error("Descarga un modelo GGUF de HuggingFace y colocalo en: " + cfg.models_dir);
-        // Continuar sin LLM - la API estara disponible pero sin generacion
-    } else {
-        LLMConfig llm_config;
-        llm_config.model_path = llm_path;
-        llm_config.n_ctx = cfg.n_ctx;
-        llm_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
-        llm_config.n_batch = cfg.n_batch;
-        llm_config.temperature = cfg.temperature;
-        llm_config.top_p = cfg.top_p;
-        llm_config.max_tokens = cfg.max_tokens;
-        llm_config.seed = cfg.seed;
+        std::string llm_path;
+        if (!cfg.llm_model_file.empty()) {
+            llm_path = cfg.models_dir + "/" + cfg.llm_model_file;
+        }
 
-        if (!llm_->load_model(llm_config)) {
-            log_error("Error cargando modelo LLM");
+        if (llm_path.empty() || !std::filesystem::exists(llm_path)) {
+            log_warn("Sin modelo LLM configurado. Usa la UI para descargar y seleccionar uno.");
+        } else {
+            LLMConfig llm_config;
+            llm_config.model_path = llm_path;
+            llm_config.n_ctx = cfg.n_ctx;
+            llm_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
+            llm_config.n_batch = cfg.n_batch;
+            llm_config.temperature = cfg.temperature;
+            llm_config.top_p = cfg.top_p;
+            llm_config.max_tokens = cfg.max_tokens;
+            llm_config.seed = cfg.seed;
+
+            if (!llm_->load_model(llm_config)) {
+                log_error("Error cargando modelo LLM");
+            }
         }
     }
 
     // 3. Cargar modelo de embeddings
     log_info("Paso 3/4: Cargando modelo de embeddings...");
-    std::string embed_path = cfg.models_dir + "/" + cfg.embed_model_file;
+    {
+        auto& db = DBManager::instance();
+        auto last_embed = db.get_model_setting("last_used_embedder");
+        if (last_embed && !last_embed->empty()) {
+            cfg.embed_model_file = std::filesystem::path(*last_embed).filename().string();
+        }
 
-    if (!std::filesystem::exists(embed_path)) {
-        log_error("Modelo de embeddings no encontrado: " + embed_path);
-        log_error("Descarga un modelo GGUF de embeddings y colocalo en: " + cfg.models_dir);
-    } else {
-        EmbeddingConfig embed_config;
-        embed_config.model_path = embed_path;
-        embed_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
-        embed_config.n_batch = cfg.n_batch;
-        embed_config.embedding_dim = cfg.embedding_dim;
+        std::string embed_path;
+        if (!cfg.embed_model_file.empty()) {
+            embed_path = cfg.models_dir + "/" + cfg.embed_model_file;
+        }
 
-        if (!embedder_->load_model(embed_config)) {
-            log_error("Error cargando modelo de embeddings");
+        if (embed_path.empty() || !std::filesystem::exists(embed_path)) {
+            log_warn("Sin modelo de embeddings configurado. Usa la UI para descargar y seleccionar uno.");
+        } else {
+            EmbeddingConfig embed_config;
+            embed_config.model_path = embed_path;
+            embed_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
+            embed_config.n_batch = cfg.n_batch;
+            embed_config.embedding_dim = cfg.embedding_dim;
+
+            if (!embedder_->load_model(embed_config)) {
+                log_error("Error cargando modelo de embeddings");
+            }
         }
     }
 
@@ -558,6 +578,32 @@ bool AlfredCore::change_model(const std::string& model_path) {
         DBManager::instance().set_model_setting("last_used_model", model_path);
         // Limpiar cache
         clear_cache();
+    }
+
+    return success;
+}
+
+bool AlfredCore::change_embedder(const std::string& model_path) {
+    log_info("Cambiando modelo de embeddings a: " + model_path);
+
+    auto& cfg = get_config();
+    auto& gpu = GPUManager::instance();
+
+    EmbeddingConfig embed_config;
+    embed_config.model_path = model_path;
+    embed_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
+    embed_config.n_batch = cfg.n_batch;
+    embed_config.embedding_dim = cfg.embedding_dim;
+
+    embedder_->unload_model();
+    bool success = embedder_->load_model(embed_config);
+
+    if (success) {
+        DBManager::instance().set_model_setting("last_used_embedder", model_path);
+        // Reinicializar vector store con la nueva dimension
+        int dim = embedder_->dimension();
+        vector_store_->initialize(dim, cfg.chroma_dir);
+        retriever_ = std::make_unique<SemanticRetriever>(*vector_store_, *embedder_);
     }
 
     return success;
