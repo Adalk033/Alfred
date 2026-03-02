@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Windows.System;
 
 namespace Alfred.UI.Pages;
 
@@ -11,11 +12,16 @@ public sealed partial class ModelsPage : Page
 {
     private AlfredApiClient? _api;
     private readonly ModelDownloadService _downloader = new();
+    private readonly HuggingFaceService _hf = new();
 
     public ModelsPage()
     {
         InitializeComponent();
-        Unloaded += (_, _) => _downloader.Dispose();
+        Unloaded += (_, _) =>
+        {
+            _downloader.Dispose();
+            _hf.Dispose();
+        };
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -29,80 +35,167 @@ public sealed partial class ModelsPage : Page
     }
 
     // ========================================================================
-    // Descarga por URL
+    // Busqueda de GGUF en HuggingFace
     // ========================================================================
 
-    private async void OnDownloadFromUrl(object sender, RoutedEventArgs e)
+    private async void OnSearchClick(object sender, RoutedEventArgs e)
     {
-        string url = DownloadUrlBox.Text.Trim();
-        if (string.IsNullOrEmpty(url))
-            return;
+        await SearchGgufModels();
+    }
 
-        // Extraer nombre de archivo de la URL
-        string fileName;
+    private async void OnSearchKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter)
+        {
+            e.Handled = true;
+            await SearchGgufModels();
+        }
+    }
+
+    private async Task SearchGgufModels()
+    {
+        string query = SearchBox.Text.Trim();
+        if (string.IsNullOrEmpty(query)) return;
+
+        // Reset UI
+        SearchButton.IsEnabled = false;
+        SearchProgress.Visibility = Visibility.Visible;
+        SearchStatusText.Text = "Buscando versiones GGUF...";
+        SearchStatusText.Visibility = Visibility.Visible;
+        RepoResultsPanel.Visibility = Visibility.Collapsed;
+        FileResultsPanel.Visibility = Visibility.Collapsed;
+
         try
         {
-            var uri = new Uri(url);
-            fileName = System.IO.Path.GetFileName(uri.LocalPath);
-            if (string.IsNullOrEmpty(fileName) || !fileName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
+            var repos = await _hf.SearchGgufReposAsync(query);
+
+            if (repos.Count == 0)
             {
-                await ShowError("La URL debe apuntar a un archivo .gguf");
+                SearchStatusText.Text = "No se encontraron repositorios GGUF para este modelo.";
+                SearchProgress.Visibility = Visibility.Collapsed;
                 return;
             }
+
+            if (repos.Count == 1)
+            {
+                // Si solo hay un repo, mostrar archivos directamente
+                SearchStatusText.Text = $"Repositorio: {repos[0].Id}";
+                await LoadGgufFiles(repos[0].Id);
+            }
+            else
+            {
+                // Mostrar lista de repos para elegir
+                SearchStatusText.Text = $"{repos.Count} repositorios encontrados. Selecciona uno:";
+                var items = repos.Select(r =>
+                {
+                    string label = r.Id;
+                    if (r.Downloads > 0)
+                        label += $"  ({FormatDownloads(r.Downloads)} descargas)";
+                    return label;
+                }).ToList();
+
+                RepoListView.ItemsSource = items;
+                RepoResultsPanel.Visibility = Visibility.Visible;
+
+                // Guardar los IDs para referencia
+                RepoListView.Tag = repos;
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            await ShowError("URL no valida");
+            SearchStatusText.Text = $"Error en la busqueda: {ex.Message}";
+        }
+        finally
+        {
+            SearchProgress.Visibility = Visibility.Collapsed;
+            SearchButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnRepoSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (RepoListView.SelectedIndex < 0) return;
+        if (RepoListView.Tag is not List<HfRepoResult> repos) return;
+
+        var selected = repos[RepoListView.SelectedIndex];
+        SearchStatusText.Text = $"Cargando archivos de {selected.Id}...";
+        SearchProgress.Visibility = Visibility.Visible;
+
+        await LoadGgufFiles(selected.Id);
+
+        SearchProgress.Visibility = Visibility.Collapsed;
+    }
+
+    private async Task LoadGgufFiles(string repoId)
+    {
+        var files = await _hf.ListGgufFilesAsync(repoId);
+
+        if (files.Count == 0)
+        {
+            SearchStatusText.Text = $"No se encontraron archivos .gguf en {repoId}";
+            FileResultsPanel.Visibility = Visibility.Collapsed;
             return;
         }
 
-        // Actualizar UI a estado de descarga
-        DownloadButton.IsEnabled = false;
-        DownloadButton.Content = "Descargando...";
-        DownloadUrlBox.IsEnabled = false;
-        CancelDownloadButton.Visibility = Visibility.Visible;
+        SearchStatusText.Text = $"{files.Count} archivos GGUF en {repoId}";
+        FileResultsHeader.Text = $"Archivos en {repoId}:";
+        FileListView.ItemsSource = files;
+        FileResultsPanel.Visibility = Visibility.Visible;
+    }
+
+    // ========================================================================
+    // Descarga de archivo GGUF
+    // ========================================================================
+
+    private async void OnDownloadGgufFile(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not HfGgufFile file) return;
+
+        btn.IsEnabled = false;
+        btn.Content = "Descargando...";
+
+        // Mostrar progreso
         DownloadProgressBar.Visibility = Visibility.Visible;
         DownloadProgressBar.Value = 0;
         DownloadProgressText.Visibility = Visibility.Visible;
-        DownloadProgressText.Text = "Iniciando descarga...";
+        DownloadProgressText.Text = $"Iniciando descarga de {file.FileName}...";
+        CancelDownloadButton.Visibility = Visibility.Visible;
 
-        bool success = await _downloader.DownloadModelAsync(url, fileName, progress =>
+        bool success = await _downloader.DownloadModelAsync(file.DownloadUrl, file.FileName, progress =>
         {
             DispatcherQueue.TryEnqueue(() =>
             {
                 if (progress.Error != null)
                 {
                     DownloadProgressText.Text = $"Error: {progress.Error}";
-                    ResetDownloadUI();
+                    ResetDownloadUI(btn);
                     return;
                 }
 
                 if (progress.IsCancelled)
                 {
                     DownloadProgressText.Text = "Descarga cancelada";
-                    ResetDownloadUI();
+                    ResetDownloadUI(btn);
                     return;
                 }
 
                 if (progress.IsCompleted)
                 {
                     DownloadProgressBar.Value = 100;
-                    DownloadProgressText.Text = $"{fileName} descargado correctamente";
-                    ResetDownloadUI();
+                    DownloadProgressText.Text = $"{file.FileName} descargado correctamente";
+                    ResetDownloadUI(btn);
                     return;
                 }
 
-                // Progreso normal
                 DownloadProgressBar.Value = progress.Percentage;
                 string downloaded = FormatBytes(progress.BytesDownloaded);
                 string total = progress.TotalBytes > 0 ? FormatBytes(progress.TotalBytes) : "?";
-                DownloadProgressText.Text = $"{fileName}: {downloaded} / {total} ({progress.Percentage:F1}%)";
+                DownloadProgressText.Text = $"{file.FileName}: {downloaded} / {total} ({progress.Percentage:F1}%)";
             });
         });
 
         if (success)
         {
-            DownloadUrlBox.Text = "";
             await LoadData();
         }
     }
@@ -112,17 +205,19 @@ public sealed partial class ModelsPage : Page
         _downloader.CancelDownload();
     }
 
-    private void ResetDownloadUI()
+    private void ResetDownloadUI(Button? sourceBtn = null)
     {
-        DownloadButton.IsEnabled = true;
-        DownloadButton.Content = "Descargar";
-        DownloadUrlBox.IsEnabled = true;
         CancelDownloadButton.Visibility = Visibility.Collapsed;
         DownloadProgressBar.Visibility = Visibility.Collapsed;
+        if (sourceBtn != null)
+        {
+            sourceBtn.IsEnabled = true;
+            sourceBtn.Content = "Descargar";
+        }
     }
 
     // ========================================================================
-    // Estado y lista de modelos
+    // Estado y lista de modelos en disco
     // ========================================================================
 
     private async Task LoadData()
@@ -219,6 +314,16 @@ public sealed partial class ModelsPage : Page
             >= 1048576L => $"{bytes / 1048576.0:F1} MB",
             >= 1024L => $"{bytes / 1024.0:F0} KB",
             _ => $"{bytes} B"
+        };
+    }
+
+    private static string FormatDownloads(int downloads)
+    {
+        return downloads switch
+        {
+            >= 1000000 => $"{downloads / 1000000.0:F1}M",
+            >= 1000 => $"{downloads / 1000.0:F1}k",
+            _ => downloads.ToString()
         };
     }
 }

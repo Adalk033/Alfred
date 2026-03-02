@@ -42,40 +42,95 @@
                 </StackPanel>
             </Border>
 
-            <!-- Descargar modelo por URL -->
+            <!-- Buscar y descargar modelo desde HuggingFace -->
             <Border Grid.Row="2" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="8" Padding="16,12" Margin="0,0,0,20">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="Descargar modelo desde URL" FontWeight="SemiBold" FontSize="14" />
-                    <TextBlock Text="Pega la URL directa de un archivo .gguf (ej. desde HuggingFace)"
-                               FontSize="12"
+                    <TextBlock Text="Descargar modelo desde HuggingFace" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Text="Pega la URL o nombre del modelo (ej. google/gemma-3-4b-it, openai/gpt-oss-20b) y se buscaran las versiones GGUF disponibles."
+                               FontSize="12" TextWrapping="Wrap"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
+                    <!-- Barra de busqueda -->
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBox x:Name="DownloadUrlBox" Grid.Column="0"
-                                 PlaceholderText="https://huggingface.co/.../model.gguf"
-                                 VerticalAlignment="Center" />
+                        <TextBox x:Name="SearchBox" Grid.Column="0"
+                                 PlaceholderText="google/gemma-3-4b-it  o  https://huggingface.co/openai/gpt-oss-20b"
+                                 VerticalAlignment="Center"
+                                 KeyDown="OnSearchKeyDown" />
 
-                        <Button x:Name="DownloadButton" Grid.Column="1" Content="Descargar"
-                                Click="OnDownloadFromUrl" Padding="12,6"
+                        <Button x:Name="SearchButton" Grid.Column="1" Content="Buscar GGUF"
+                                Click="OnSearchClick" Padding="12,6"
                                 VerticalAlignment="Center" />
-
-                        <Button x:Name="CancelDownloadButton" Grid.Column="2" Content="Cancelar"
-                                Click="OnCancelDownload" Padding="12,6"
-                                VerticalAlignment="Center" Visibility="Collapsed" />
                     </Grid>
 
+                    <!-- Indicador de busqueda -->
+                    <ProgressBar x:Name="SearchProgress" IsIndeterminate="True"
+                                 Height="4" Visibility="Collapsed" />
+                    <TextBlock x:Name="SearchStatusText" FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Visibility="Collapsed" />
+
+                    <!-- Resultados: Lista de repos encontrados -->
+                    <StackPanel x:Name="RepoResultsPanel" Spacing="4" Visibility="Collapsed">
+                        <TextBlock x:Name="RepoResultsHeader" Text="Repositorios GGUF encontrados:"
+                                   FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0" />
+                        <ListView x:Name="RepoListView" SelectionMode="Single"
+                                  SelectionChanged="OnRepoSelected" MaxHeight="140" />
+                    </StackPanel>
+
+                    <!-- Archivos GGUF del repo seleccionado -->
+                    <StackPanel x:Name="FileResultsPanel" Spacing="4" Visibility="Collapsed">
+                        <TextBlock x:Name="FileResultsHeader" Text="Archivos disponibles:"
+                                   FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0" />
+                        <ListView x:Name="FileListView" SelectionMode="None" MaxHeight="350">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="8,6" ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding FileName}" FontSize="13"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Quantization}" FontSize="11"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                                   FontSize="12"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                            <Run Text="{Binding SizeGb}" />
+                                            <Run Text=" GB" />
+                                        </TextBlock>
+
+                                        <Button Grid.Column="2" Content="Descargar"
+                                                Click="OnDownloadGgufFile"
+                                                Tag="{Binding}"
+                                                Padding="10,4" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+
+                    <!-- Progreso de descarga -->
                     <ProgressBar x:Name="DownloadProgressBar" Minimum="0" Maximum="100"
                                  Height="4" Visibility="Collapsed" />
                     <TextBlock x:Name="DownloadProgressText" FontSize="11"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Visibility="Collapsed" />
+                    <Button x:Name="CancelDownloadButton" Content="Cancelar descarga"
+                            Click="OnCancelDownload" Padding="10,4"
+                            Visibility="Collapsed" />
 
                     <TextBlock x:Name="ModelsDirText" FontSize="11"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
