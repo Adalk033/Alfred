@@ -158,10 +158,15 @@ public sealed class BackendProcessManager : IDisposable
         [
             // Junto al ejecutable de la UI
             Path.Combine(appDir, "alfred.exe"),
-            // En el directorio build del proyecto
+            // En el directorio build del proyecto (generador Ninja/Makefiles)
             Path.Combine(appDir, "..", "..", "..", "..", "build", "alfred.exe"),
-            // Ruta absoluta comun de desarrollo
+            // En el directorio build del proyecto (generador Visual Studio - Debug/Release)
+            Path.Combine(appDir, "..", "..", "..", "..", "build", "Debug", "alfred.exe"),
+            Path.Combine(appDir, "..", "..", "..", "..", "build", "Release", "alfred.exe"),
+            // Rutas absolutas comunes de desarrollo
             @"F:\Projects\Alfred\build\alfred.exe",
+            @"F:\Projects\Alfred\build\Debug\alfred.exe",
+            @"F:\Projects\Alfred\build\Release\alfred.exe",
         ];
 
         foreach (string path in searchPaths)

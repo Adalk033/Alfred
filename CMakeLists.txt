@@ -15,8 +15,26 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(ALFRED_CUDA        "Habilitar soporte CUDA para inferencia LLM"  ON)
 option(ALFRED_BUILD_LEARN "Compilar modulos de aprendizaje C++"         OFF)
 
+# Habilitar lenguaje CUDA si esta solicitado y disponible
+if(ALFRED_CUDA)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(CMAKE_CUDA_COMPILER)
+        enable_language(CUDA)
+        message(STATUS "CUDA habilitado: ${CMAKE_CUDA_COMPILER}")
+    else()
+        message(WARNING "CUDA solicitado pero no se encontro compilador CUDA. Deshabilitando CUDA.")
+        set(ALFRED_CUDA OFF)
+    endif()
+endif()
+
 if(MSVC)
-    add_compile_options(/W4 /permissive- /utf-8)
+    # Usar generator expressions para no pasar flags MSVC a nvcc (CUDA)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:CXX>:/W4>
+        $<$<COMPILE_LANGUAGE:CXX>:/permissive->
+        $<$<COMPILE_LANGUAGE:CXX>:/utf-8>
+    )
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow -Wconversion)
 endif()
@@ -35,6 +53,11 @@ set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
+# Usar arquitectura CUDA nativa para generar codigo optimizado para la GPU real
+if(ALFRED_CUDA)
+    set(CMAKE_CUDA_ARCHITECTURES native CACHE STRING "CUDA architectures" FORCE)
+endif()
+
 FetchContent_Declare(llama_cpp
     GIT_REPOSITORY https://github.com/ggml-org/llama.cpp
     GIT_TAG        b8184
@@ -42,7 +65,16 @@ FetchContent_Declare(llama_cpp
 )
 FetchContent_MakeAvailable(llama_cpp)
 
-# --- cpp-httplib (servidor HTTP ligero, reemplaza FastAPI) ---
+# Fix: llama.cpp usa u8"" literales que en C++20 MSVC son char8_t incompatible
+# con const char*. Desactivamos char8_t para targets de llama.cpp.
+if(MSVC)
+    if(TARGET llama)
+        target_compile_options(llama PRIVATE /Zc:char8_t-)
+    endif()
+    if(TARGET ggml)
+        target_compile_options(ggml PRIVATE /Zc:char8_t-)
+    endif()
+endif()
 set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(httplib
     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
