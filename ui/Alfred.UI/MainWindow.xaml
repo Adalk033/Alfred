@@ -61,11 +61,6 @@
                         <FontIcon Glyph="&#xE81C;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="Documentos" Tag="documents">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE8B7;" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
                 <NavigationViewItem Content="Modelos" Tag="models">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE950;" />
@@ -81,7 +76,13 @@
                 </NavigationViewItem>
             </NavigationView.FooterMenuItems>
 
-            <Frame x:Name="ContentFrame" />
+            <Frame x:Name="ContentFrame" Navigated="OnContentFrameNavigated" />
         </NavigationView>
+
+        <!-- Notificacion global (overlay sobre todo el contenido) -->
+        <InfoBar x:Name="GlobalNotificationBar" Grid.Row="1"
+                 IsOpen="False" IsClosable="True"
+                 VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                 Margin="60,8,24,0" />
     </Grid>
 </Window>

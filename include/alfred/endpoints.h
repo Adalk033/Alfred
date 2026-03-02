@@ -38,23 +38,12 @@ void handle_clear_messages(const httplib::Request& req, httplib::Response& res);
 void handle_conversation_query(const httplib::Request& req, httplib::Response& res,
                                 AlfredCore& core);
 
-// Documentos
-void handle_list_document_paths(const httplib::Request& req, httplib::Response& res);
-void handle_add_document_path(const httplib::Request& req, httplib::Response& res);
-void handle_update_document_path(const httplib::Request& req, httplib::Response& res);
-void handle_delete_document_path(const httplib::Request& req, httplib::Response& res);
-void handle_reindex_documents(const httplib::Request& req, httplib::Response& res,
-                               AlfredCore& core);
-void handle_document_stats(const httplib::Request& req, httplib::Response& res);
-
 // Historial Q&A
 void handle_search_history(const httplib::Request& req, httplib::Response& res);
 void handle_list_history(const httplib::Request& req, httplib::Response& res);
 void handle_delete_history(const httplib::Request& req, httplib::Response& res);
 
 // Seguridad
-void handle_welcome_status(const httplib::Request& req, httplib::Response& res);
-void handle_welcome_complete(const httplib::Request& req, httplib::Response& res);
 void handle_encryption_status(const httplib::Request& req, httplib::Response& res);
 void handle_encryption_key(const httplib::Request& req, httplib::Response& res);
 void handle_encryption_setup(const httplib::Request& req, httplib::Response& res);
@@ -77,19 +66,11 @@ void handle_gpu_report(const httplib::Request& req, httplib::Response& res);
 void handle_list_models(const httplib::Request& req, httplib::Response& res);
 void handle_change_model(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
-void handle_change_embedder(const httplib::Request& req, httplib::Response& res,
-                             AlfredCore& core);
 void handle_model_status(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
 
 // Optimizaciones
 void handle_optimization_stats(const httplib::Request& req, httplib::Response& res,
                                 AlfredCore& core);
-
-// Mantenimiento
-void handle_reload_documents(const httplib::Request& req, httplib::Response& res,
-                              AlfredCore& core);
-void handle_test_search(const httplib::Request& req, httplib::Response& res,
-                         AlfredCore& core);
 
 } // namespace alfred

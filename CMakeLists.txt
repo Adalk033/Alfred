@@ -100,14 +100,6 @@ FetchContent_Declare(spdlog
 )
 FetchContent_MakeAvailable(spdlog)
 
-# --- hnswlib (busqueda vectorial, reemplaza ChromaDB) ---
-FetchContent_Declare(hnswlib
-    GIT_REPOSITORY https://github.com/nmslib/hnswlib
-    GIT_TAG        v0.8.0
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(hnswlib)
-
 # --- SQLiteCpp (wrapper SQLite para C++) ---
 set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
@@ -135,16 +127,10 @@ set(ALFRED_SOURCES
     src/app/logger.cpp
     src/app/gpu_manager.cpp
     src/app/encryption.cpp
-    src/app/path_validator.cpp
     src/app/db_manager.cpp
     src/app/conversation_manager.cpp
     src/app/history_manager.cpp
     src/app/llm_engine.cpp
-    src/app/embedding_engine.cpp
-    src/app/document_loader.cpp
-    src/app/chunking.cpp
-    src/app/vector_store.cpp
-    src/app/retriever.cpp
     src/app/alfred_core.cpp
     src/app/endpoints.cpp
     src/app/http_server.cpp
@@ -154,7 +140,6 @@ add_executable(alfred src/main.cpp ${ALFRED_SOURCES})
 
 target_include_directories(alfred PRIVATE
     ${CMAKE_SOURCE_DIR}/include
-    ${hnswlib_SOURCE_DIR}
 )
 
 target_link_libraries(alfred PRIVATE

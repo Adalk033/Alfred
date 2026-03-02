@@ -22,7 +22,6 @@ fs::path get_db_path();
 fs::path get_models_dir();
 fs::path get_docs_dir();
 fs::path get_logs_dir();
-fs::path get_vector_store_dir();
 fs::path get_encryption_key_path();
 
 // Inicializar todas las rutas (crear directorios si no existen)

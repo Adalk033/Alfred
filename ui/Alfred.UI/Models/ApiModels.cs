@@ -22,18 +22,39 @@ public sealed class QueryRequest
 
     [JsonPropertyName("use_history")]
     public bool UseHistory { get; set; } = true;
+}
 
-    [JsonPropertyName("search_documents")]
-    public bool SearchDocuments { get; set; } = true;
+/// <summary>
+/// Request que incluye archivos adjuntos (PDF, DOCX, etc.) como contenido inline.
+/// </summary>
+public sealed class QueryWithAttachmentRequest
+{
+    [JsonPropertyName("question")]
+    public string Question { get; set; } = "";
+
+    [JsonPropertyName("use_history")]
+    public bool UseHistory { get; set; } = true;
+
+    [JsonPropertyName("attached_files")]
+    public List<AttachedFileData>? AttachedFiles { get; set; }
+}
+
+/// <summary>
+/// Archivo adjunto con nombre y contenido (texto plano o base64 para binarios).
+/// </summary>
+public sealed class AttachedFileData
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("content")]
+    public string Content { get; set; } = "";
 }
 
 public sealed class QueryResponse
 {
     [JsonPropertyName("answer")]
     public string Answer { get; set; } = "";
-
-    [JsonPropertyName("sources")]
-    public object? Sources { get; set; }
 
     [JsonPropertyName("personal_data")]
     public object? PersonalData { get; set; }
@@ -107,26 +128,8 @@ public sealed class ConversationQueryRequest
     [JsonPropertyName("use_history")]
     public bool UseHistory { get; set; } = true;
 
-    [JsonPropertyName("search_documents")]
-    public bool SearchDocuments { get; set; } = true;
-}
-
-public sealed class DocumentPathInfo
-{
-    [JsonPropertyName("id")]
-    public long Id { get; set; }
-
-    [JsonPropertyName("path")]
-    public string Path { get; set; } = "";
-
-    [JsonPropertyName("enabled")]
-    public bool Enabled { get; set; } = true;
-
-    [JsonPropertyName("documents_count")]
-    public int DocumentsCount { get; set; }
-
-    [JsonPropertyName("added_at")]
-    public string AddedAt { get; set; } = "";
+    [JsonPropertyName("attached_files")]
+    public List<AttachedFileData>? AttachedFiles { get; set; }
 }
 
 public sealed class HistoryEntry
@@ -148,9 +151,6 @@ public sealed class HistoryEntry
 
     [JsonPropertyName("personal_data")]
     public object? PersonalData { get; set; }
-
-    [JsonPropertyName("sources")]
-    public object? Sources { get; set; }
 }
 
 public sealed class ModelInfo
@@ -175,15 +175,6 @@ public sealed class ModelStatus
 
     [JsonPropertyName("llm_model")]
     public string? LlmModel { get; set; }
-
-    [JsonPropertyName("embedder_loaded")]
-    public bool EmbedderLoaded { get; set; }
-
-    [JsonPropertyName("embedder_model")]
-    public string? EmbedderModel { get; set; }
-
-    [JsonPropertyName("embedder_dim")]
-    public int EmbedderDim { get; set; }
 
     [JsonPropertyName("models_dir")]
     public string? ModelsDir { get; set; }
@@ -220,6 +211,15 @@ public sealed class SettingItem
 
     [JsonPropertyName("value")]
     public string Value { get; set; } = "";
+}
+
+public sealed class EncryptionStatus
+{
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; set; }
+
+    [JsonPropertyName("has_key")]
+    public bool HasKey { get; set; }
 }
 
 public sealed class ErrorResponse

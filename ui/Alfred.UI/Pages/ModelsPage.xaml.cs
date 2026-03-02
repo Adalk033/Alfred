@@ -231,10 +231,6 @@ public sealed partial class ModelsPage : Page
                 ? (status.LlmModel ?? "Cargado")
                 : "No cargado";
 
-            EmbedderStatus.Text = status.EmbedderLoaded
-                ? $"{status.EmbedderModel ?? "Cargado"} (dim={status.EmbedderDim})"
-                : "No cargado";
-
             if (!string.IsNullOrEmpty(status.ModelsDir))
                 ModelsDirText.Text = $"Directorio de modelos: {status.ModelsDir}";
         }
@@ -264,29 +260,6 @@ public sealed partial class ModelsPage : Page
         {
             btn.IsEnabled = true;
             btn.Content = "Usar como LLM";
-        }
-    }
-
-    private async void OnChangeEmbedder(object sender, RoutedEventArgs e)
-    {
-        if (_api == null) return;
-        if (sender is not Button btn || btn.Tag is not string modelPath) return;
-
-        btn.IsEnabled = false;
-        btn.Content = "Cargando...";
-
-        try
-        {
-            bool success = await _api.ChangeEmbedderAsync(modelPath);
-            if (success)
-                await LoadData();
-            else
-                await ShowError("No se pudo cambiar el modelo de embeddings.");
-        }
-        finally
-        {
-            btn.IsEnabled = true;
-            btn.Content = "Usar como Embedder";
         }
     }
 
