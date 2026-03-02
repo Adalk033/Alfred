@@ -1,0 +1,77 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: Configure",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["-S", ".", "-B", "build"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: Build All",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build", "--config", "Debug"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOn": "CMake: Configure",
+            "problemMatcher": ["$msCompile", "$gcc"]
+        },
+        {
+            "label": "CMake: Build Release",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build", "--config", "Release"],
+            "group": "build",
+            "dependsOn": "CMake: Configure",
+            "problemMatcher": ["$msCompile", "$gcc"]
+        },
+        {
+            "label": "CMake: Clean",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build", "--target", "clean"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "UI: Build Debug",
+            "type": "shell",
+            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "args": [
+                "ui/Alfred.UI/Alfred.UI.csproj",
+                "-restore",
+                "-p:Configuration=Debug",
+                "-p:Platform=x64",
+                "-verbosity:minimal"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "UI: Build Release",
+            "type": "shell",
+            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "args": [
+                "ui/Alfred.UI/Alfred.UI.csproj",
+                "-restore",
+                "-p:Configuration=Release",
+                "-p:Platform=x64",
+                "-verbosity:minimal"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "UI: Run",
+            "type": "shell",
+            "command": "ui/Alfred.UI/bin/x64/Debug/net9.0-windows10.0.19041.0/Alfred.UI.exe",
+            "dependsOn": "UI: Build Debug",
+            "problemMatcher": []
+        }
+    ]
+}

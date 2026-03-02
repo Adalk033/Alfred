@@ -1,160 +1,32 @@
-# ============================================================================
-# .gitignore para Alfred - Asistente Personal Inteligente
-# ============================================================================
-
-# === Directorios del Sistema ===
-**/%AppData%/
-**/.alfred/
-
-# === Modelos de Machine Learning ===
-*.bin
-*.pt
-*.gguf
-*.onnx
-
-# === Configuración Local ===
-.env
-.env.local
-.env.*.local
-config.local.json
-
-# === Entornos Virtuales Python ===
-backend/venv/
-venv/
-.venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-
-# === Python Portable - Excluir paquetes instalados ===
-# Mantener Python base pero no los paquetes (se instalan en build)
-backend/python-portable/Lib/site-packages/*
-!backend/python-portable/Lib/site-packages/.gitkeep
-backend/python-portable/Scripts/*
-!backend/python-portable/Scripts/.gitkeep
-backend/python-portable/.packages_installed
-
-# === Dependencias Node.js ===
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# === Archivos Python ===
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
+# Build
 build/
-*.egg
-
-# === Bases de Datos ===
-*.db
-*.sqlite
-*.sqlite3
-chroma_db/
-db/
-*.db-journal
-backend/chroma_db/
-backend/db/
-
-# === Archivos de Log ===
-logs/
-*.log
-*.log.*
-backend/logs/
-
-# === Datos Sensibles ===
-*.key
-secret.key
-.notReadable
-alfred_qa_history.json
-alfred_qa_history_backup_*.json
-conversations/*.json
-backend/%AppData%/
-
-# === Información de GPU ===
-backend/gpu/gpu_info.json
-
-# === Build y Dist ===
-dist/
-build/
+cmake-build-*/
 out/
-.electron/
 
-# === IDEs y Editores ===
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.project
-.classpath
-.settings/
-*.sublime-project
-*.sublime-workspace
+# Compilados
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.pdb
+*.ilk
+*.exp
 
-# === Sistema Operativo ===
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
+# IDE
+.vs/
+*.user
+*.suo
+CMakeSettings.json
+compile_commands.json
+
+# OS
 Thumbs.db
-desktop.ini
+.DS_Store
 
-# === Archivos Temporales ===
+# Temporales
 *.tmp
-*.temp
-*.bak
-*.backup
-*~
-*.conf
-backend/temp/
-temp/
-
-# === Certificados y Claves ===
-*.pem
-*.key
-*.crt
-*.cer
-
-# === Testing ===
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# === Jupyter Notebooks ===
-.ipynb_checkpoints/
-
-# === Documentos de Usuario ===
-# No versionar documentos personales de prueba
-test_docs/
-sample_docs/
-
-# === Cache ===
-.cache/
-*.cache
-.parcel-cache/
-
-# === Archivos Grandes ===
-*.mp4
-*.avi
-*.mov
-*.zip
-*.tar
-*.gz
-*.rar
-
-# ============================================================================
-# IMPORTANTE: Archivos a NO Ignorar (mantener en repositorio)
-# ============================================================================
-# !.env.template
-# !.gitkeep
-# !README.md
+*.log

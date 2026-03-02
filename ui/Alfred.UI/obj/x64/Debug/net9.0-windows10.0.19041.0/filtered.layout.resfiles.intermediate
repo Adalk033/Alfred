@@ -1,0 +1,9 @@
+runtimes\win-x64\native\WebView2Loader.dll
+App.xbf
+MainWindow.xbf
+Pages\ChatPage.xbf
+Pages\ConversationsPage.xbf
+Pages\DocumentsPage.xbf
+Pages\HistoryPage.xbf
+Pages\ModelsPage.xbf
+Pages\SettingsPage.xbf
