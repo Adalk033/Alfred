@@ -169,7 +169,99 @@ void DBManager::create_tables() {
 }
 
 void DBManager::run_migrations() {
-    // Placeholder para migraciones futuras
+    // -------------------------------------------------------------------------
+    // Migracion: tablas heredadas del viejo backend Python
+    // Las tablas model_settings y user_settings usaban "setting_key"/"setting_value"
+    // en lugar de "key"/"value". La tabla memory tenia "id" como PK en vez de "key".
+    // Recreamos las tablas con el esquema correcto, preservando los datos.
+    // -------------------------------------------------------------------------
+
+    auto has_column = [&](const std::string& table, const std::string& column) -> bool {
+        SQLite::Statement q(*g_db, "PRAGMA table_info(" + table + ")");
+        while (q.executeStep()) {
+            if (q.getColumn(1).getString() == column)
+                return true;
+        }
+        return false;
+    };
+
+    // --- model_settings: setting_key/setting_value -> key/value ---
+    if (has_column("model_settings", "setting_key")) {
+        log_info("Migrando tabla model_settings (setting_key -> key)");
+        g_db->exec(R"(
+            CREATE TABLE model_settings_new (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        )");
+        g_db->exec(R"(
+            INSERT OR IGNORE INTO model_settings_new (key, value)
+            SELECT setting_key, COALESCE(setting_value, '') FROM model_settings
+        )");
+        g_db->exec("DROP TABLE model_settings");
+        g_db->exec("ALTER TABLE model_settings_new RENAME TO model_settings");
+    }
+
+    // --- user_settings: setting_key/setting_value -> key/value ---
+    if (has_column("user_settings", "setting_key")) {
+        log_info("Migrando tabla user_settings (setting_key -> key)");
+        g_db->exec(R"(
+            CREATE TABLE user_settings_new (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        )");
+        g_db->exec(R"(
+            INSERT OR IGNORE INTO user_settings_new (key, value)
+            SELECT setting_key, COALESCE(setting_value, '') FROM user_settings
+        )");
+        g_db->exec("DROP TABLE user_settings");
+        g_db->exec("ALTER TABLE user_settings_new RENAME TO user_settings");
+    }
+
+    // --- memory: si tiene columna "id" como PK separada, reconstruir con key como PK ---
+    if (has_column("memory", "id") && has_column("memory", "key")) {
+        log_info("Migrando tabla memory (id PK -> key PK)");
+        g_db->exec(R"(
+            CREATE TABLE memory_new (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        )");
+        g_db->exec(R"(
+            INSERT OR IGNORE INTO memory_new (key, value)
+            SELECT key, COALESCE(value, '') FROM memory WHERE key IS NOT NULL
+        )");
+        g_db->exec("DROP TABLE memory");
+        g_db->exec("ALTER TABLE memory_new RENAME TO memory");
+    }
+
+    // --- documents_meta: schema viejo tiene columnas extra NOT NULL ---
+    // Si la tabla tiene columnas del viejo esquema (file_size, last_modified),
+    // reconstruir con el esquema del C++.
+    if (has_column("documents_meta", "file_size")) {
+        log_info("Migrando tabla documents_meta (esquema viejo -> nuevo)");
+        g_db->exec(R"(
+            CREATE TABLE documents_meta_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_path TEXT NOT NULL UNIQUE,
+                file_hash TEXT NOT NULL,
+                chunk_count INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'indexed',
+                indexed_at TEXT NOT NULL
+            )
+        )");
+        g_db->exec(R"(
+            INSERT OR IGNORE INTO documents_meta_new (file_path, file_hash, chunk_count, status, indexed_at)
+            SELECT file_path, COALESCE(file_hash, ''), COALESCE(chunk_count, 0),
+                   COALESCE(status, 'indexed'), COALESCE(indexed_at, datetime('now'))
+            FROM documents_meta
+        )");
+        g_db->exec("DROP TABLE documents_meta");
+        g_db->exec("ALTER TABLE documents_meta_new RENAME TO documents_meta");
+        g_db->exec("CREATE INDEX IF NOT EXISTS idx_docs_path ON documents_meta(file_path)");
+    }
+
     log_debug("Migraciones de DB completadas");
 }
 
