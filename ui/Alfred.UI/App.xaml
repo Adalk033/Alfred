@@ -1,0 +1,19 @@
+<Application
+    x:Class="Alfred.UI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <SolidColorBrush x:Key="AlfredAccent" Color="#6366F1" />
+            <SolidColorBrush x:Key="AlfredSuccess" Color="#10B981" />
+            <SolidColorBrush x:Key="AlfredWarning" Color="#F59E0B" />
+            <SolidColorBrush x:Key="AlfredError" Color="#EF4444" />
+            <SolidColorBrush x:Key="UserBubble" Color="#6366F1" />
+            <SolidColorBrush x:Key="AssistantBubble" Color="#1F2937" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
