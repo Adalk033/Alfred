@@ -202,7 +202,7 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
     }
 
     // Limpiar estado previo del contexto
-    llama_kv_cache_clear(ctx_);
+    llama_memory_clear(llama_get_memory(ctx_), true);
 
     // Crear batch y procesar tokens del prompt
     llama_batch batch = llama_batch_init(config_.n_batch, 0, 1);

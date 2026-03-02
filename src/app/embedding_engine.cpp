@@ -66,7 +66,7 @@ bool EmbeddingEngine::load_model(const EmbeddingConfig& config) {
     }
 
     // Determinar dimension real de embeddings
-    actual_dim_ = llama_n_embd(model_);
+    actual_dim_ = llama_model_n_embd(model_);
     if (actual_dim_ <= 0) {
         actual_dim_ = config.embedding_dim;
     }
@@ -124,7 +124,7 @@ std::vector<float> EmbeddingEngine::embed(const std::string& text) {
     if (tokens.empty()) return {};
 
     // Limpiar estado
-    llama_kv_cache_clear(ctx_);
+    llama_memory_clear(llama_get_memory(ctx_), true);
 
     // Crear batch con los tokens
     llama_batch batch = llama_batch_init(config_.n_batch, 0, 1);
