@@ -10,7 +10,7 @@ on:
         required: true
 
 env:
-  DOTNET_VERSION: '8.0.400'
+  DOTNET_VERSION: '9.0.x'
   CUDA_VERSION: '12.4.0'
 
 jobs:
