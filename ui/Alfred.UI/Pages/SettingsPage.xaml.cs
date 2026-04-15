@@ -82,6 +82,13 @@ public sealed partial class SettingsPage : Page
             GpuStatusText.Text = "No se pudo obtener info de GPU";
         }
 
+        // Cargar timeout de descarga del modelo
+        var timeoutStr = await _api.GetAppSettingAsync("model_idle_timeout_sec");
+        if (int.TryParse(timeoutStr, out int idleTimeout))
+            IdleTimeoutBox.Value = idleTimeout;
+        else
+            IdleTimeoutBox.Value = 10;
+
         // Cargar estado de cifrado
         await LoadEncryptionStatus();
     }
@@ -292,6 +299,20 @@ public sealed partial class SettingsPage : Page
             if (sender is Button b)
                 b.IsEnabled = true;
         }
+    }
+
+    // ========================================================================
+    // Modelo LLM
+    // ========================================================================
+
+    private async void OnIdleTimeoutChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_api == null || double.IsNaN(args.NewValue)) return;
+        int secs = (int)args.NewValue;
+        await _api.SetAppSettingAsync("model_idle_timeout_sec", secs.ToString());
+        IdleTimeoutHint.Text = secs == 0
+            ? "El modelo permanecera cargado hasta que cierres la app"
+            : $"El modelo se descargara tras {secs} segundos sin consultas";
     }
 
     // ========================================================================
