@@ -68,6 +68,9 @@ jobs:
       - name: Restaurar dependencias NuGet
         run: dotnet restore ui/Alfred.UI/Alfred.UI.csproj
 
+      - name: Ver SDK usado
+        run: dotnet --info
+
       - name: Publicar UI
         run: |
           dotnet publish ui/Alfred.UI/Alfred.UI.csproj `
