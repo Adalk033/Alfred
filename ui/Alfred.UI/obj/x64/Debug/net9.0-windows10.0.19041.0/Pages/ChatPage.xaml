@@ -1,4 +1,4 @@
-﻿<Page x:ConnectionId='1'
+﻿<Page
     x:Class="Alfred.UI.Pages.ChatPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -13,95 +13,134 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Lista de mensajes -->
         <ScrollViewer x:ConnectionId='2' x:Name="ChatScroll" Grid.Row="0" VerticalScrollBarVisibility="Auto"
                       Padding="24,16,24,8">
-            <ItemsRepeater x:ConnectionId='9' x:Name="MessageList"                                >
-                <ItemsRepeater.Layout>
-                    <StackLayout Spacing="12" />
-                </ItemsRepeater.Layout>
-                <ItemsRepeater.ItemTemplate>
-                    <DataTemplate                      >
-                        <!-- Se usa como placeholder; los items se crean en code-behind -->
-                        <TextBlock x:ConnectionId='11'                 TextWrapping="Wrap" />
-                    </DataTemplate>
-                </ItemsRepeater.ItemTemplate>
-            </ItemsRepeater>
+            <StackPanel x:ConnectionId='13' x:Name="MessagesPanel" Spacing="12" />
         </ScrollViewer>
 
         <!-- Panel de bienvenida (visible cuando no hay mensajes) -->
         <StackPanel x:ConnectionId='3' x:Name="WelcomePanel" Grid.Row="0"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Spacing="12" MaxWidth="500">
+                    Spacing="12" MaxWidth="600">
             <TextBlock Text="Alfred" FontSize="32" FontWeight="Bold"
                        HorizontalAlignment="Center"
                        Foreground="{StaticResource AlfredAccent}" />
-            <TextBlock Text="Asistente IA local con busqueda en documentos"
+            <TextBlock Text="Asistente IA local con privacidad total"
                        FontSize="14" HorizontalAlignment="Center"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16" Margin="0,16,0,0">
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="8" Padding="16,12" MinWidth="140">
+                        CornerRadius="8" Padding="16,12" MinWidth="150">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="Preguntame algo" FontWeight="SemiBold" FontSize="13" />
-                        <TextBlock Text="Sobre tus documentos" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <FontIcon Glyph="&#xE8BD;" FontSize="20" Foreground="{StaticResource AlfredAccent}" />
+                        <TextBlock Text="Respuestas Inteligentes" FontWeight="SemiBold" FontSize="13" />
+                        <TextBlock Text="Precision con contexto local" FontSize="11"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="8" Padding="16,12" MinWidth="140">
+                        CornerRadius="8" Padding="16,12" MinWidth="150">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="100% local" FontWeight="SemiBold" FontSize="13" />
-                        <TextBlock Text="Privacidad total" FontSize="11"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <FontIcon Glyph="&#xE7BA;" FontSize="20" Foreground="{StaticResource AlfredAccent}" />
+                        <TextBlock Text="Adjuntar Archivos" FontWeight="SemiBold" FontSize="13" />
+                        <TextBlock Text="PDF, DOCX, TXT y mas" FontSize="11"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
             </StackPanel>
+            <TextBlock Text="Escribe tu pregunta o adjunta un archivo" FontSize="13"
+                       HorizontalAlignment="Center" Margin="0,8,0,0"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+
+        <!-- Indicador de carga y panel de adjuntos -->
+        <StackPanel Grid.Row="1" Spacing="4" Margin="24,0,24,4">
+            <!-- Indicador de carga -->
+            <Border x:ConnectionId='8' x:Name="LoadingIndicator"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8" Padding="12,8"
+                    Visibility="Collapsed" HorizontalAlignment="Left" MaxWidth="300">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ProgressRing IsActive="True" Width="16" Height="16" />
+                    <TextBlock x:ConnectionId='12' x:Name="LoadingText" Text="Alfred esta pensando..." FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Panel de archivos adjuntos -->
+            <Border x:ConnectionId='9' x:Name="AttachmentPanel"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8" Padding="12,8"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Grid.Column="0" Glyph="&#xE723;" FontSize="14" Margin="0,0,8,0"
+                              VerticalAlignment="Center"
+                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ItemsRepeater x:ConnectionId='10' x:Name="AttachmentList" Grid.Column="1">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Horizontal" Spacing="8" />
+                        </ItemsRepeater.Layout>
+                    </ItemsRepeater>
+                    <Button x:ConnectionId='11' Grid.Column="2"                                Padding="6,4"
+                            ToolTipService.ToolTip="Quitar todos los archivos">
+                        <FontIcon Glyph="&#xE711;" FontSize="12" />
+                    </Button>
+                </Grid>
+            </Border>
         </StackPanel>
 
         <!-- Barra de entrada -->
-        <Grid Grid.Row="1" Padding="24,8,24,16">
+        <Grid Grid.Row="2" Padding="24,4,24,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <ToggleButton x:ConnectionId='6' x:Name="DocSearchToggle" Grid.Column="0" IsChecked="True"
-                          ToolTipService.ToolTip="Buscar en documentos" Margin="0,0,8,0"
-                          VerticalAlignment="Bottom" Width="38" Height="38">
-                <FontIcon Glyph="&#xE8B7;" FontSize="16" />
-            </ToggleButton>
+            <!-- Boton adjuntar archivo -->
+            <Button x:ConnectionId='5' x:Name="AttachButton" Grid.Column="0"
+                                        
+                    ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)"
+                    Margin="0,0,4,0"
+                    VerticalAlignment="Bottom" Width="38" Height="38">
+                <FontIcon Glyph="&#xE723;" FontSize="16" />
+            </Button>
 
-            <TextBox x:ConnectionId='7' x:Name="InputBox" Grid.Column="1"
+            <TextBox x:ConnectionId='6' x:Name="InputBox" Grid.Column="1"
                      PlaceholderText="Escribe tu pregunta..."
                      AcceptsReturn="False"
                      MaxHeight="120"
                      TextWrapping="Wrap"
                                              
+                                                     
+                     AllowDrop="True"
+                                          
+                                  
                      VerticalAlignment="Bottom" />
 
-            <Button x:ConnectionId='8' x:Name="SendButton" Grid.Column="2"
+            <Button x:ConnectionId='7' x:Name="SendButton" Grid.Column="2"
                     Style="{StaticResource AccentButtonStyle}"
                                         Margin="8,0,0,0"
                     VerticalAlignment="Bottom" Width="38" Height="38"
-                    IsEnabled="True">
+                    IsEnabled="False">
                 <FontIcon Glyph="&#xE724;" FontSize="16" />
             </Button>
         </Grid>
 
-        <!-- Indicador de carga -->
-        <StackPanel x:ConnectionId='4' x:Name="LoadingIndicator" Grid.Row="1"
-                    Orientation="Horizontal" Spacing="8"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Top" Margin="0,-32,0,0"
-                    Visibility="Collapsed">
-            <ProgressRing IsActive="True" Width="16" Height="16" />
-            <TextBlock x:ConnectionId='5' x:Name="LoadingText" Text="Pensando..." FontSize="12"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-        </StackPanel>
+        <!-- InfoBar para notificaciones -->
+        <InfoBar x:ConnectionId='4' x:Name="NotificationBar" Grid.Row="0"
+                 IsOpen="False" IsClosable="True"
+                 VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                 Margin="24,8,24,0" />
     </Grid>
 </Page>
 

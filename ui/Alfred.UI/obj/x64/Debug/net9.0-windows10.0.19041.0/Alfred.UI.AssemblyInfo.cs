@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Alfred.UI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0e8be039963c30eea80121da0a3978b8370e6ee3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d297c3499f78e45bb3b3272e3f6eb6ee179ed81a")]
 [assembly: System.Reflection.AssemblyProductAttribute("Alfred.UI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Alfred.UI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

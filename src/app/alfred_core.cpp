@@ -25,7 +25,9 @@ namespace alfred {
 AlfredCore::AlfredCore()
     : llm_(std::make_unique<LLMEngine>()) {}
 
-AlfredCore::~AlfredCore() = default;
+AlfredCore::~AlfredCore() {
+    stop_idle_monitor();
+}
 
 bool AlfredCore::initialize() {
     log_info("=== Inicializando Alfred Core ===");
@@ -42,38 +44,37 @@ bool AlfredCore::initialize() {
     }
 
     // 2. Cargar modelo LLM
-    log_info("Paso 2/2: Cargando modelo LLM...");
+    log_info("Paso 2/2: Configurando modelo LLM...");
     {
-        // Restaurar ultimo modelo usado desde DB (si existe)
+        // Determinar ruta del modelo
         auto& db = DBManager::instance();
         auto last_llm = db.get_model_setting("last_used_model");
-        if (last_llm && !last_llm->empty()) {
+        if (last_llm && !last_llm->empty())
             cfg.llm_model_file = std::filesystem::path(*last_llm).filename().string();
-        }
 
         std::string llm_path;
-        if (!cfg.llm_model_file.empty()) {
+        if (!cfg.llm_model_file.empty())
             llm_path = cfg.models_dir + "/" + cfg.llm_model_file;
+
+        // Cargar timeout desde DB si esta persistido
+        auto saved_timeout = db.get_app_setting("model_idle_timeout_sec");
+        if (saved_timeout) {
+            try { cfg.model_idle_timeout_sec = std::stoi(*saved_timeout); } catch (...) {}
         }
 
         if (llm_path.empty() || !std::filesystem::exists(llm_path)) {
             log_warn("Sin modelo LLM configurado. Usa la UI para descargar y seleccionar uno.");
+        } else if (cfg.model_lazy_load) {
+            pending_model_path_ = llm_path;
+            log_info("Modelo configurado para carga lazy: " + pending_model_path_);
         } else {
-            LLMConfig llm_config;
-            llm_config.model_path = llm_path;
-            llm_config.n_ctx = cfg.n_ctx;
-            llm_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
-            llm_config.n_batch = cfg.n_batch;
-            llm_config.n_threads = cfg.n_threads;
-            llm_config.temperature = cfg.temperature;
-            llm_config.top_p = cfg.top_p;
-            llm_config.max_tokens = cfg.max_tokens;
-            llm_config.seed = cfg.seed;
-
-            if (!llm_->load_model(llm_config)) {
+            // Carga inmediata (comportamiento legacy)
+            if (!llm_->load_model(build_llm_config(llm_path)))
                 log_error("Error cargando modelo LLM");
-            }
         }
+
+        // Arrancar monitor de inactividad en ambos modos
+        start_idle_monitor();
     }
 
     // Cargar perfil de usuario desde DB
@@ -90,6 +91,66 @@ bool AlfredCore::initialize() {
     initialized_ = true;
     log_info("=== Alfred Core inicializado correctamente ===");
     return true;
+}
+
+// ============================================================================
+// Lazy loading del modelo
+// ============================================================================
+LLMConfig AlfredCore::build_llm_config(const std::string& model_path) {
+    auto& cfg = get_config();
+    auto& gpu = GPUManager::instance();
+    LLMConfig c;
+    c.model_path   = model_path;
+    c.n_ctx        = cfg.n_ctx;
+    c.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
+    c.n_batch      = cfg.n_batch;
+    c.n_threads    = cfg.n_threads;
+    c.temperature  = cfg.temperature;
+    c.top_p        = cfg.top_p;
+    c.max_tokens   = cfg.max_tokens;
+    c.seed         = cfg.seed;
+    return c;
+}
+
+void AlfredCore::ensure_model_loaded() {
+    std::lock_guard<std::mutex> lock(model_load_mutex_);
+    if (llm_->is_loaded() || pending_model_path_.empty()) return;
+
+    log_info("Cargando modelo en demanda: " + pending_model_path_);
+    if (!llm_->load_model(build_llm_config(pending_model_path_)))
+        log_error("Error en carga lazy del modelo LLM");
+}
+
+void AlfredCore::start_idle_monitor() {
+    last_query_ns_ = std::chrono::steady_clock::now().time_since_epoch().count();
+    stop_monitor_  = false;
+    idle_monitor_thread_ = std::thread([this]() {
+        while (!stop_monitor_) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            if (stop_monitor_) break;
+
+            auto& cfg = get_config();
+            if (cfg.model_idle_timeout_sec <= 0) continue;
+
+            std::lock_guard<std::mutex> lock(model_load_mutex_);
+            if (!llm_->is_loaded()) continue;
+
+            auto now_ns  = std::chrono::steady_clock::now().time_since_epoch().count();
+            auto idle_sec = (now_ns - last_query_ns_.load()) / 1'000'000'000LL;
+
+            if (idle_sec >= cfg.model_idle_timeout_sec) {
+                log_info("Modelo inactivo " + std::to_string(idle_sec) +
+                         "s, descargando recursos...");
+                llm_->unload_model();
+            }
+        }
+    });
+}
+
+void AlfredCore::stop_idle_monitor() {
+    stop_monitor_ = true;
+    if (idle_monitor_thread_.joinable())
+        idle_monitor_thread_.join();
 }
 
 // ============================================================================
@@ -235,6 +296,8 @@ QueryResult AlfredCore::generate_response(
 QueryResult AlfredCore::query(const std::string& question,
                                bool use_history,
                                const std::string& conversation_id) {
+    ensure_model_loaded();
+
     auto start = std::chrono::steady_clock::now();
     QueryResult result;
 
@@ -282,6 +345,7 @@ QueryResult AlfredCore::query(const std::string& question,
         HistoryManager::instance().save(question, result.answer,
                                          result.personal_data, "");
         cache_insert(question, result);
+        last_query_ns_ = std::chrono::steady_clock::now().time_since_epoch().count();
     }
 
     return result;
@@ -289,39 +353,37 @@ QueryResult AlfredCore::query(const std::string& question,
 
 bool AlfredCore::change_model(const std::string& model_path) {
     log_info("Cambiando modelo LLM a: " + model_path);
-
     auto& cfg = get_config();
-    auto& gpu = GPUManager::instance();
 
-    LLMConfig llm_config;
-    llm_config.model_path = model_path;
-    llm_config.n_ctx = cfg.n_ctx;
-    llm_config.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
-    llm_config.n_batch = cfg.n_batch;
-    llm_config.temperature = cfg.temperature;
-    llm_config.top_p = cfg.top_p;
-    llm_config.max_tokens = cfg.max_tokens;
-
+    std::lock_guard<std::mutex> lock(model_load_mutex_);
     llm_->unload_model();
-    bool success = llm_->load_model(llm_config);
 
-    if (success) {
-        // Persistir en DB
+    if (cfg.model_lazy_load) {
+        pending_model_path_ = model_path;
         DBManager::instance().set_model_setting("last_used_model", model_path);
-        // Limpiar cache
         clear_cache();
+        log_info("Modelo configurado para carga lazy: " + model_path);
+        return true;
     }
 
+    bool success = llm_->load_model(build_llm_config(model_path));
+    if (success) {
+        pending_model_path_ = model_path;
+        DBManager::instance().set_model_setting("last_used_model", model_path);
+        clear_cache();
+    }
     return success;
 }
 
 json AlfredCore::get_stats() {
     json stats;
-    stats["initialized"] = initialized_;
-    stats["llm_loaded"] = llm_->is_loaded();
-    stats["llm_model"] = llm_->model_name();
-    stats["cache_size"] = query_cache_.size();
-    stats["gpu"] = json::parse(GPUManager::instance().status_json());
+    stats["initialized"]            = initialized_;
+    stats["model_loaded"]           = llm_->is_loaded();
+    stats["model_idle_timeout_sec"] = get_config().model_idle_timeout_sec;
+    stats["model_lazy_load"]        = get_config().model_lazy_load;
+    stats["llm_model"]              = llm_->model_name();
+    stats["cache_size"]             = query_cache_.size();
+    stats["gpu"]                    = json::parse(GPUManager::instance().status_json());
     return stats;
 }
 

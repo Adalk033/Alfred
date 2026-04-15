@@ -9,11 +9,20 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Build type por defecto: Release (aplica a generadores de config unica como Ninja/Make)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Tipo de build (Debug, Release, RelWithDebInfo, MinSizeRel)" FORCE)
+    message(STATUS "CMAKE_BUILD_TYPE no especificado, usando Release por defecto")
+endif()
+
 # ============================================================================
 # Opciones de compilacion
 # ============================================================================
 option(ALFRED_CUDA        "Habilitar soporte CUDA para inferencia LLM"  ON)
 option(ALFRED_BUILD_LEARN "Compilar modulos de aprendizaje C++"         OFF)
+# Arquitecturas CUDA objetivo: 75=Turing (RTX 20xx), 86=Ampere (RTX 30xx/A-series), 89=Ada (RTX 40xx)
+# Para compilar solo para la GPU local, usar: -DALFRED_CUDA_ARCH=native
+set(ALFRED_CUDA_ARCH "75;86;89" CACHE STRING "Arquitecturas CUDA objetivo para distribucion")
 
 # Habilitar lenguaje CUDA si esta solicitado y disponible
 if(ALFRED_CUDA)
@@ -53,9 +62,10 @@ set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-# Usar arquitectura CUDA nativa para generar codigo optimizado para la GPU real
+# Arquitecturas CUDA configurables para distribucion multiplataforma
 if(ALFRED_CUDA)
-    set(CMAKE_CUDA_ARCHITECTURES native CACHE STRING "CUDA architectures" FORCE)
+    set(CMAKE_CUDA_ARCHITECTURES ${ALFRED_CUDA_ARCH} CACHE STRING "CUDA architectures" FORCE)
+    message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 endif()
 
 FetchContent_Declare(llama_cpp
@@ -157,6 +167,22 @@ endif()
 # Threads requerido por varios componentes
 find_package(Threads REQUIRED)
 target_link_libraries(alfred PRIVATE Threads::Threads)
+
+# Version como define del compilador (accesible via ALFRED_VERSION en el codigo)
+target_compile_definitions(alfred PRIVATE ALFRED_VERSION="${PROJECT_VERSION}")
+
+# Whole Program Optimization + Link-Time Code Generation en Release (MSVC)
+# Las demas flags de Release/Debug las gestiona CMake automaticamente
+if(MSVC)
+    target_compile_options(alfred PRIVATE $<$<CONFIG:Release>:/GL>)
+    target_link_options(alfred PRIVATE $<$<CONFIG:Release>:/LTCG>)
+endif()
+
+# Install target para distribucion y CI/CD
+install(TARGETS alfred
+    RUNTIME DESTINATION bin
+    COMPONENT Runtime
+)
 
 # ============================================================================
 # Modulos de aprendizaje (opcionales, para estudio de C++)

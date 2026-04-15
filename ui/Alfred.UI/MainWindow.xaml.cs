@@ -206,8 +206,10 @@ public sealed partial class MainWindow : Window
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
         _healthTimer.Stop();
+        _backend.StatusChanged -= OnBackendStatusChanged;
         NotificationService.Instance.NotificationRequested -= OnNotificationRequested;
         _backend.StopAsync().GetAwaiter().GetResult();
+        _backend.Dispose();
         _api.Dispose();
     }
 }

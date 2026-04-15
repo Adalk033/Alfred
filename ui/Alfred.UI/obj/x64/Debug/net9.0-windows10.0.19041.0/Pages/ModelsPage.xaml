@@ -24,19 +24,12 @@
                     <Grid ColumnSpacing="24">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Text="LLM" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:ConnectionId='24' x:Name="LlmStatus" Text="Cargando..." FontSize="13" />
-                        </StackPanel>
-
-                        <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="Embedder" FontSize="12" FontWeight="SemiBold"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <TextBlock x:ConnectionId='23' x:Name="EmbedderStatus" Text="Cargando..." FontSize="13" />
+                            <TextBlock x:ConnectionId='22' x:Name="LlmStatus" Text="Cargando..." FontSize="13" />
                         </StackPanel>
                     </Grid>
                 </StackPanel>
@@ -58,36 +51,36 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBox x:ConnectionId='21' x:Name="SearchBox" Grid.Column="0"
+                        <TextBox x:ConnectionId='20' x:Name="SearchBox" Grid.Column="0"
                                  PlaceholderText="google/gemma-3-4b-it  o  https://huggingface.co/openai/gpt-oss-20b"
                                  VerticalAlignment="Center"
                                                            />
 
-                        <Button x:ConnectionId='22' x:Name="SearchButton" Grid.Column="1" Content="Buscar GGUF"
+                        <Button x:ConnectionId='21' x:Name="SearchButton" Grid.Column="1" Content="Buscar GGUF"
                                                       Padding="12,6"
                                 VerticalAlignment="Center" />
                     </Grid>
 
                     <!-- Indicador de busqueda -->
-                    <ProgressBar x:ConnectionId='7' x:Name="SearchProgress" IsIndeterminate="True"
+                    <ProgressBar x:ConnectionId='6' x:Name="SearchProgress" IsIndeterminate="True"
                                  Height="4" Visibility="Collapsed" />
-                    <TextBlock x:ConnectionId='8' x:Name="SearchStatusText" FontSize="11"
+                    <TextBlock x:ConnectionId='7' x:Name="SearchStatusText" FontSize="11"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Visibility="Collapsed" />
 
                     <!-- Resultados: Lista de repos encontrados -->
-                    <StackPanel x:ConnectionId='9' x:Name="RepoResultsPanel" Spacing="4" Visibility="Collapsed">
-                        <TextBlock x:ConnectionId='19' x:Name="RepoResultsHeader" Text="Repositorios GGUF encontrados:"
+                    <StackPanel x:ConnectionId='8' x:Name="RepoResultsPanel" Spacing="4" Visibility="Collapsed">
+                        <TextBlock x:ConnectionId='18' x:Name="RepoResultsHeader" Text="Repositorios GGUF encontrados:"
                                    FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0" />
-                        <ListView x:ConnectionId='20' x:Name="RepoListView" SelectionMode="Single"
+                        <ListView x:ConnectionId='19' x:Name="RepoListView" SelectionMode="Single"
                                                                     MaxHeight="140" />
                     </StackPanel>
 
                     <!-- Archivos GGUF del repo seleccionado -->
-                    <StackPanel x:ConnectionId='10' x:Name="FileResultsPanel" Spacing="4" Visibility="Collapsed">
-                        <TextBlock x:ConnectionId='15' x:Name="FileResultsHeader" Text="Archivos disponibles:"
+                    <StackPanel x:ConnectionId='9' x:Name="FileResultsPanel" Spacing="4" Visibility="Collapsed">
+                        <TextBlock x:ConnectionId='14' x:Name="FileResultsHeader" Text="Archivos disponibles:"
                                    FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0" />
-                        <ListView x:ConnectionId='16' x:Name="FileListView" SelectionMode="None" MaxHeight="350">
+                        <ListView x:ConnectionId='15' x:Name="FileListView" SelectionMode="None" MaxHeight="350">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Padding="8,6" ColumnSpacing="10">
@@ -112,7 +105,7 @@
                                             <Run Text=" GB" />
                                         </TextBlock>
 
-                                        <Button x:ConnectionId='18' Grid.Column="2" Content="Descargar"
+                                        <Button x:ConnectionId='17' Grid.Column="2" Content="Descargar"
                                                                           
                                                 Tag="{Binding}"
                                                 Padding="10,4" VerticalAlignment="Center" />
@@ -123,16 +116,16 @@
                     </StackPanel>
 
                     <!-- Progreso de descarga -->
-                    <ProgressBar x:ConnectionId='11' x:Name="DownloadProgressBar" Minimum="0" Maximum="100"
+                    <ProgressBar x:ConnectionId='10' x:Name="DownloadProgressBar" Minimum="0" Maximum="100"
                                  Height="4" Visibility="Collapsed" />
-                    <TextBlock x:ConnectionId='12' x:Name="DownloadProgressText" FontSize="11"
+                    <TextBlock x:ConnectionId='11' x:Name="DownloadProgressText" FontSize="11"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Visibility="Collapsed" />
-                    <Button x:ConnectionId='13' x:Name="CancelDownloadButton" Content="Cancelar descarga"
+                    <Button x:ConnectionId='12' x:Name="CancelDownloadButton" Content="Cancelar descarga"
                                                      Padding="10,4"
                             Visibility="Collapsed" />
 
-                    <TextBlock x:ConnectionId='14' x:Name="ModelsDirText" FontSize="11"
+                    <TextBlock x:ConnectionId='13' x:Name="ModelsDirText" FontSize="11"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </Border>
@@ -148,7 +141,6 @@
                         <Grid Padding="12,10" ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
@@ -168,10 +160,6 @@
 
                             <Button x:ConnectionId='5' Grid.Column="2" Content="Usar como LLM"
                                                           Tag="{Binding Path}"
-                                    Padding="12,4" VerticalAlignment="Center" />
-
-                            <Button x:ConnectionId='6' Grid.Column="3" Content="Usar como Embedder"
-                                                             Tag="{Binding Path}"
                                     Padding="12,4" VerticalAlignment="Center" />
                         </Grid>
                     </DataTemplate>

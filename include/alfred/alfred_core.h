@@ -10,6 +10,9 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <atomic>
+#include <thread>
+#include <chrono>
 #include <nlohmann/json.hpp>
 
 #include "alfred/llm_engine.h"
@@ -84,6 +87,18 @@ private:
     std::optional<QueryResult> cache_lookup(const std::string& question);
     void cache_insert(const std::string& question, const QueryResult& result);
     void cache_evict_expired();
+
+    // --- Lazy loading del modelo ---
+    std::string             pending_model_path_;       // ruta del modelo a cargar en demanda
+    std::mutex              model_load_mutex_;          // protege carga/descarga concurrente del modelo
+    std::thread             idle_monitor_thread_;       // hilo que vigila inactividad
+    std::atomic<bool>       stop_monitor_{ false };     // senal de parada para el hilo monitor
+    std::atomic<int64_t>    last_query_ns_{ 0 };        // timestamp (ns) del ultimo query exitoso
+
+    LLMConfig build_llm_config(const std::string& model_path);  // construye config del LLM
+    void ensure_model_loaded();   // carga el modelo si no esta cargado
+    void start_idle_monitor();    // arranca el hilo monitor
+    void stop_idle_monitor();     // para y une el hilo monitor
 };
 
 } // namespace alfred

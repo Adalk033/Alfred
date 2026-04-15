@@ -1,0 +1,160 @@
+name: Build and Release Alfred (CUDA)
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (ej: 0.2.1)'
+        required: true
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  CUDA_VERSION: '12.4.0'
+
+jobs:
+
+  # ============================================================
+  # Job 1: Compilar backend C++ con CUDA (Windows)
+  # ============================================================
+  build-backend:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Instalar CUDA Toolkit ${{ env.CUDA_VERSION }}
+        uses: Jimver/cuda-toolkit@v0.2.15
+        with:
+          cuda: ${{ env.CUDA_VERSION }}
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cufft"]'
+
+      - name: Configurar CMake (Release + CUDA)
+        run: |
+          cmake -S . -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DALFRED_CUDA=ON `
+            -DALFRED_CUDA_ARCH="75;86;89"
+
+      - name: Compilar
+        run: cmake --build build --config Release --parallel
+
+      - name: Subir artifact del backend
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-backend
+          path: |
+            build/Release/alfred.exe
+            build/Release/*.dll
+          if-no-files-found: error
+
+  # ============================================================
+  # Job 2: Compilar frontend WinUI 3 (Windows)
+  # ============================================================
+  build-frontend:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restaurar dependencias NuGet
+        run: dotnet restore ui/Alfred.UI/Alfred.UI.csproj
+
+      - name: Publicar UI
+        run: |
+          dotnet publish ui/Alfred.UI/Alfred.UI.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output publish/Alfred.UI `
+            /p:WindowsPackageType=None `
+            /p:PublishSingleFile=false
+
+      - name: Subir artifact del frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-frontend
+          path: publish/Alfred.UI/
+          if-no-files-found: error
+
+  # ============================================================
+  # Job 3: Empaquetar y crear GitHub Release
+  # ============================================================
+  package-release:
+    runs-on: windows-latest
+    needs: [build-backend, build-frontend]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Obtener version
+        id: version
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            echo "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV
+          } else {
+            $tag = "${{ github.ref_name }}"
+            echo "VERSION=$($tag.TrimStart('v'))" >> $env:GITHUB_ENV
+          }
+
+      - name: Descargar artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Crear estructura de distribucion
+        run: |
+          $dist = "Alfred-v${{ env.VERSION }}"
+          New-Item -ItemType Directory -Path $dist
+          Copy-Item -Path "artifacts/alfred-backend/*"  -Destination $dist -Recurse
+          Copy-Item -Path "artifacts/alfred-frontend/*" -Destination $dist -Recurse
+          @"
+          Alfred v${{ env.VERSION }}
+          ========================
+          Asistente de IA local para Windows.
+
+          Requisitos:
+          - Windows 10 (19041) o superior
+          - GPU NVIDIA con CUDA (RTX 20xx, 30xx o 40xx) recomendado
+          - Sin GPU: usa la variante alfred-cpu
+
+          Uso:
+          1. Ejecutar Alfred.UI.exe
+          2. Ir a Modelos y descargar un modelo GGUF de HuggingFace
+          3. Seleccionar el modelo y empezar a chatear
+
+          Los datos se guardan en: %APPDATA%\Alfred\
+          "@ | Out-File "$dist\LEEME.txt" -Encoding UTF8
+
+      - name: Comprimir
+        run: Compress-Archive -Path "Alfred-v${{ env.VERSION }}" -DestinationPath "Alfred-v${{ env.VERSION }}-win-x64.zip"
+
+      - name: Crear GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Alfred v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          files: Alfred-v${{ env.VERSION }}-win-x64.zip
+          body: |
+            ## Alfred v${{ env.VERSION }}
+
+            ### Instalacion
+            1. Descargar `Alfred-v${{ env.VERSION }}-win-x64.zip`
+            2. Extraer en cualquier carpeta
+            3. Ejecutar `Alfred.UI.exe`
+            4. En la pantalla de Modelos, descargar un modelo GGUF
+
+            ### Requisitos
+            - Windows 10 (19041+) o Windows 11
+            - GPU NVIDIA (RTX 20xx/30xx/40xx) para aceleracion CUDA
+            - Sin GPU: usa la variante `-cpu` de esta misma release

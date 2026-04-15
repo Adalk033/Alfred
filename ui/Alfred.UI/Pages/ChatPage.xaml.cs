@@ -345,6 +345,16 @@ public sealed partial class ChatPage : Page
 
     private void UpdateAttachmentPanel()
     {
+        // Desuscribir handlers de chips anteriores para evitar leaks
+        if (AttachmentList.ItemsSource is List<UIElement> oldChips)
+        {
+            foreach (var elem in oldChips)
+                if (elem is Border { Child: StackPanel sp })
+                    foreach (var btn in sp.Children.OfType<Button>())
+                        btn.Click -= OnRemoveSingleAttachment;
+        }
+        AttachmentList.ItemsSource = null;
+
         if (_attachedFiles.Count == 0)
         {
             AttachmentPanel.Visibility = Visibility.Collapsed;

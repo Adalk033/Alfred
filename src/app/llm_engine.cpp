@@ -13,6 +13,7 @@
 #include <cstring>
 #include <algorithm>
 #include <thread>
+#include <filesystem>
 
 namespace alfred {
 
@@ -99,11 +100,7 @@ bool LLMEngine::load_model(const LLMConfig& config) {
     auto end = std::chrono::steady_clock::now();
     double ms = std::chrono::duration<double, std::milli>(end - start).count();
 
-    // Extraer nombre del modelo del path
-    auto pos = config.model_path.find_last_of("/\\");
-    model_name_ = (pos != std::string::npos)
-        ? config.model_path.substr(pos + 1)
-        : config.model_path;
+    model_name_ = std::filesystem::path(config.model_path).filename().string();
 
     log_info("Modelo LLM cargado en " + std::to_string(static_cast<int>(ms)) + "ms: " + model_name_);
     return true;
@@ -247,8 +244,9 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
         }
     }
 
-    // Crear sampler
-    llama_sampler* smpl = create_sampler();
+    // Crear sampler con RAII para garantizar liberacion ante cualquier salida
+    auto smpl = std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)>(
+        create_sampler(), llama_sampler_free);
 
     // Generar tokens
     int n_generated = 0;
@@ -258,8 +256,8 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
 
     for (int i = 0; i < max_tokens; ++i) {
         // Samplear siguiente token
-        llama_token new_token = llama_sampler_sample(smpl, ctx_, -1);
-        llama_sampler_accept(smpl, new_token);
+        llama_token new_token = llama_sampler_sample(smpl.get(), ctx_, -1);
+        llama_sampler_accept(smpl.get(), new_token);
 
         // Verificar fin de secuencia
         if (llama_vocab_is_eog(vocab, new_token) || new_token == eos) {
@@ -294,7 +292,6 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
         }
     }
 
-    llama_sampler_free(smpl);
     llama_batch_free(batch);
 
     auto end = std::chrono::steady_clock::now();
@@ -312,11 +309,6 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
 }
 
 std::string LLMEngine::model_name() const { return model_name_; }
-
-size_t LLMEngine::model_size_mb() const {
-    // Estimacion basica - no hay API directa para esto en llama.cpp
-    return 0;
-}
 
 int LLMEngine::context_length() const {
     if (ctx_) return llama_n_ctx(ctx_);

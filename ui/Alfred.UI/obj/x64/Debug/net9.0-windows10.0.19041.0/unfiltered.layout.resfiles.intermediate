@@ -1,9 +1,14 @@
 runtimes\win-x64\native\WebView2Loader.dll
+Assets\icon.icns
+Assets\icon.ico
+Assets\icon.ico
+Assets\icon.png
+Assets\icon.png
+Assets\icon.svg
 App.xbf
 MainWindow.xbf
 Pages\ChatPage.xbf
 Pages\ConversationsPage.xbf
-Pages\DocumentsPage.xbf
 Pages\HistoryPage.xbf
 Pages\ModelsPage.xbf
 Pages\SettingsPage.xbf

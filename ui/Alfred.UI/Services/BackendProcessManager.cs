@@ -34,7 +34,7 @@ public sealed class BackendProcessManager : IDisposable
         string exePath = FindAlfredExe();
         if (string.IsNullOrEmpty(exePath))
         {
-            StatusChanged?.Invoke(this, "error: alfred.exe no encontrado");
+            StatusChanged?.Invoke(this, "error: alfred.exe no encontrado. Reinstala la aplicacion.");
             return false;
         }
 
@@ -52,20 +52,9 @@ public sealed class BackendProcessManager : IDisposable
             };
 
             _process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-            _process.OutputDataReceived += (_, e) =>
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                    OutputReceived?.Invoke(this, e.Data);
-            };
-            _process.ErrorDataReceived += (_, e) =>
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                    OutputReceived?.Invoke(this, e.Data);
-            };
-            _process.Exited += (_, _) =>
-            {
-                StatusChanged?.Invoke(this, "stopped");
-            };
+            _process.OutputDataReceived += OnOutputData;
+            _process.ErrorDataReceived  += OnErrorData;
+            _process.Exited             += OnExited;
 
             _process.Start();
             _process.BeginOutputReadLine();
@@ -156,17 +145,16 @@ public sealed class BackendProcessManager : IDisposable
         string appDir = AppContext.BaseDirectory;
         string[] searchPaths =
         [
-            // Junto al ejecutable de la UI
+            // Produccion: junto al ejecutable de la UI
             Path.Combine(appDir, "alfred.exe"),
-            // En el directorio build del proyecto (generador Ninja/Makefiles)
+            // Estructura de instalador: backend/ junto a la UI
+            Path.Combine(appDir, "backend", "alfred.exe"),
+            // Desarrollo: build en raiz del repo (Ninja/Make)
             Path.Combine(appDir, "..", "..", "..", "..", "build", "alfred.exe"),
-            // En el directorio build del proyecto (generador Visual Studio - Debug/Release)
+            // Desarrollo: build Visual Studio Debug
             Path.Combine(appDir, "..", "..", "..", "..", "build", "Debug", "alfred.exe"),
+            // Desarrollo: build Visual Studio Release
             Path.Combine(appDir, "..", "..", "..", "..", "build", "Release", "alfred.exe"),
-            // Rutas absolutas comunes de desarrollo
-            @"F:\Projects\Alfred\build\alfred.exe",
-            @"F:\Projects\Alfred\build\Debug\alfred.exe",
-            @"F:\Projects\Alfred\build\Release\alfred.exe",
         ];
 
         foreach (string path in searchPaths)
@@ -179,15 +167,40 @@ public sealed class BackendProcessManager : IDisposable
         return "";
     }
 
+    private void OnOutputData(object sender, DataReceivedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(e.Data))
+            OutputReceived?.Invoke(this, e.Data);
+    }
+
+    private void OnErrorData(object sender, DataReceivedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(e.Data))
+            OutputReceived?.Invoke(this, e.Data);
+    }
+
+    private void OnExited(object? sender, EventArgs e)
+    {
+        StatusChanged?.Invoke(this, "stopped");
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
-        if (_process is { HasExited: false })
+        if (_process != null)
         {
-            try { _process.Kill(entireProcessTree: true); } catch { /* Ignorar */ }
+            // Desuscribir para evitar fires post-dispose
+            _process.OutputDataReceived -= OnOutputData;
+            _process.ErrorDataReceived  -= OnErrorData;
+            _process.Exited             -= OnExited;
+
+            if (!_process.HasExited)
+                try { _process.Kill(entireProcessTree: true); } catch { }
+
+            _process.Dispose();
+            _process = null;
         }
-        _process?.Dispose();
     }
 }

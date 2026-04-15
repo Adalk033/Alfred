@@ -23,7 +23,7 @@ public sealed class AlfredApiClient : IDisposable
         _http = new HttpClient
         {
             BaseAddress = new Uri(_baseUrl),
-            Timeout = TimeSpan.FromSeconds(300)
+            Timeout = Timeout.InfiniteTimeSpan   // cada metodo controla su propio timeout via CTS
         };
     }
 
@@ -33,10 +33,15 @@ public sealed class AlfredApiClient : IDisposable
 
     public async Task<bool> IsHealthyAsync()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
-            var response = await _http.GetAsync("/health");
+            var response = await _http.GetAsync("/health", cts.Token);
             return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
         catch
         {
@@ -46,7 +51,7 @@ public sealed class AlfredApiClient : IDisposable
 
     public async Task<HealthResponse?> GetHealthAsync()
     {
-        return await GetAsync<HealthResponse>("/health");
+        return await GetAsync<HealthResponse>("/health", 5);
     }
 
     // ========================================================================
@@ -60,7 +65,7 @@ public sealed class AlfredApiClient : IDisposable
             Question = question,
             UseHistory = useHistory
         };
-        return await PostAsync<QueryResponse>("/query", request);
+        return await PostAsync<QueryResponse>("/query", request, 180);
     }
 
     /// <summary>
@@ -78,7 +83,7 @@ public sealed class AlfredApiClient : IDisposable
             UseHistory = useHistory,
             AttachedFiles = attachedFiles
         };
-        return await PostAsync<QueryResponse>("/query", request);
+        return await PostAsync<QueryResponse>("/query", request, 180);
     }
 
     /// <summary>
@@ -96,7 +101,7 @@ public sealed class AlfredApiClient : IDisposable
             UseHistory = useHistory,
             AttachedFiles = attachedFiles
         };
-        return await PostAsync<QueryResponse>($"/conversations/{conversationId}/query", request);
+        return await PostAsync<QueryResponse>($"/conversations/{conversationId}/query", request, 180);
     }
 
     // ========================================================================
@@ -123,8 +128,7 @@ public sealed class AlfredApiClient : IDisposable
 
     public async Task<bool> UpdateConversationTitleAsync(string id, string title)
     {
-        var response = await PutAsync($"/conversations/{id}/title", new { title });
-        return response;
+        return await PutAsync($"/conversations/{id}/title", new { title });
     }
 
     public async Task<bool> DeleteConversationAsync(string id)
@@ -164,10 +168,18 @@ public sealed class AlfredApiClient : IDisposable
 
     public async Task<bool> DeleteHistoryAsync(string timestamp)
     {
-        var content = ToJsonContent(new { timestamp });
-        var request = new HttpRequestMessage(HttpMethod.Delete, "/history") { Content = content };
-        var response = await _http.SendAsync(request);
-        return response.IsSuccessStatusCode;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try
+        {
+            var content = ToJsonContent(new { timestamp });
+            var request = new HttpRequestMessage(HttpMethod.Delete, "/history") { Content = content };
+            var response = await _http.SendAsync(request, cts.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     // ========================================================================
@@ -176,17 +188,17 @@ public sealed class AlfredApiClient : IDisposable
 
     public async Task<List<ModelInfo>> ListModelsAsync()
     {
-        return await GetAsync<List<ModelInfo>>("/models") ?? [];
+        return await GetAsync<List<ModelInfo>>("/models", 10) ?? [];
     }
 
     public async Task<ModelStatus?> GetModelStatusAsync()
     {
-        return await GetAsync<ModelStatus>("/models/status");
+        return await GetAsync<ModelStatus>("/models/status", 10);
     }
 
     public async Task<bool> ChangeModelAsync(string modelPath)
     {
-        var response = await PostRawAsync("/models/change", new { model_path = modelPath });
+        var response = await PostRawAsync("/models/change", new { model_path = modelPath }, 300);
         return response?.IsSuccessStatusCode ?? false;
     }
 
@@ -196,12 +208,12 @@ public sealed class AlfredApiClient : IDisposable
 
     public async Task<GpuStatus?> GetGpuStatusAsync()
     {
-        return await GetAsync<GpuStatus>("/gpu/status");
+        return await GetAsync<GpuStatus>("/gpu/status", 10);
     }
 
     public async Task<GpuReport?> GetGpuReportAsync()
     {
-        return await GetAsync<GpuReport>("/gpu/report");
+        return await GetAsync<GpuReport>("/gpu/report", 10);
     }
 
     // ========================================================================
@@ -236,7 +248,7 @@ public sealed class AlfredApiClient : IDisposable
 
     public async Task<EncryptionStatus?> GetEncryptionStatusAsync()
     {
-        return await GetAsync<EncryptionStatus>("/encryption/status");
+        return await GetAsync<EncryptionStatus>("/encryption/status", 10);
     }
 
     public async Task<bool> SetupEncryptionAsync(bool enabled, string key = "")
@@ -265,41 +277,71 @@ public sealed class AlfredApiClient : IDisposable
     // Helpers HTTP internos
     // ========================================================================
 
-    private async Task<T?> GetAsync<T>(string endpoint)
+    private async Task<T?> GetAsync<T>(string endpoint, int timeoutSec = 15)
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.GetAsync(endpoint);
+            var response = await _http.GetAsync(endpoint, cts.Token);
             if (!response.IsSuccessStatusCode) return default;
-            var json = await response.Content.ReadAsStringAsync();
+            var json = await response.Content.ReadAsStringAsync(cts.Token);
             return JsonSerializer.Deserialize<T>(json, JsonOptions);
         }
-        catch
+        catch (OperationCanceledException)
         {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Timeout GET {endpoint}");
+            return default;
+        }
+        catch (HttpRequestException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Conexion GET {endpoint}: {ex.Message}");
+            return default;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Error GET {endpoint}: {ex.Message}");
             return default;
         }
     }
 
-    private async Task<T?> PostAsync<T>(string endpoint, object body)
+    private async Task<T?> PostAsync<T>(string endpoint, object body, int timeoutSec = 15)
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.PostAsync(endpoint, ToJsonContent(body));
+            var response = await _http.PostAsync(endpoint, ToJsonContent(body), cts.Token);
             if (!response.IsSuccessStatusCode) return default;
-            var json = await response.Content.ReadAsStringAsync();
+            var json = await response.Content.ReadAsStringAsync(cts.Token);
             return JsonSerializer.Deserialize<T>(json, JsonOptions);
         }
-        catch
+        catch (OperationCanceledException)
         {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Timeout POST {endpoint}");
+            return default;
+        }
+        catch (HttpRequestException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Conexion POST {endpoint}: {ex.Message}");
+            return default;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Error POST {endpoint}: {ex.Message}");
             return default;
         }
     }
 
-    private async Task<HttpResponseMessage?> PostRawAsync(string endpoint, object body)
+    private async Task<HttpResponseMessage?> PostRawAsync(string endpoint, object body, int timeoutSec = 15)
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            return await _http.PostAsync(endpoint, ToJsonContent(body));
+            return await _http.PostAsync(endpoint, ToJsonContent(body), cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Timeout POST {endpoint}");
+            return null;
         }
         catch
         {
@@ -307,11 +349,12 @@ public sealed class AlfredApiClient : IDisposable
         }
     }
 
-    private async Task<bool> PutAsync(string endpoint, object body)
+    private async Task<bool> PutAsync(string endpoint, object body, int timeoutSec = 15)
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.PutAsync(endpoint, ToJsonContent(body));
+            var response = await _http.PutAsync(endpoint, ToJsonContent(body), cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -320,11 +363,12 @@ public sealed class AlfredApiClient : IDisposable
         }
     }
 
-    private async Task<bool> DeleteAsync(string endpoint)
+    private async Task<bool> DeleteAsync(string endpoint, int timeoutSec = 15)
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.DeleteAsync(endpoint);
+            var response = await _http.DeleteAsync(endpoint, cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch

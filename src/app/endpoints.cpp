@@ -18,6 +18,7 @@
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include <chrono>
+#include <algorithm>
 
 namespace alfred {
 
@@ -63,13 +64,42 @@ static std::string path_param(const httplib::Request& req, const std::string& na
     return "";
 }
 
+// Helper: parsear parametro entero de query string con clamping de rango
+// Retorna false (y escribe error 400) si el valor no es un entero valido
+static bool get_int_param(const httplib::Request& req, httplib::Response& res,
+                           const std::string& name, int& out, int min_val, int max_val) {
+    if (!req.has_param(name)) return true;
+    try {
+        out = std::stoi(req.get_param_value(name));
+    } catch (const std::exception&) {
+        json_error(res, 400, "Parametro '" + name + "' invalido (debe ser un entero)");
+        return false;
+    }
+    out = std::max(min_val, std::min(max_val, out));
+    return true;
+}
+
+// Helper: parsear parametro float de query string con clamping de rango
+static bool get_float_param(const httplib::Request& req, httplib::Response& res,
+                             const std::string& name, float& out, float min_val, float max_val) {
+    if (!req.has_param(name)) return true;
+    try {
+        out = std::stof(req.get_param_value(name));
+    } catch (const std::exception&) {
+        json_error(res, 400, "Parametro '" + name + "' invalido (debe ser un numero)");
+        return false;
+    }
+    out = std::max(min_val, std::min(max_val, out));
+    return true;
+}
+
 // ============================================================================
 // Root y salud
 // ============================================================================
 void handle_root(const httplib::Request& /*req*/, httplib::Response& res) {
     json data;
     data["name"] = "Alfred";
-    data["version"] = "2.0.0";
+    data["version"] = ALFRED_VERSION;
     data["status"] = "running";
     data["engine"] = "llama.cpp + CUDA";
     json_ok(res, data);
@@ -169,8 +199,8 @@ void handle_create_conversation(const httplib::Request& req, httplib::Response& 
 
 void handle_list_conversations(const httplib::Request& req, httplib::Response& res) {
     int limit = 50, offset = 0;
-    if (req.has_param("limit")) limit = std::stoi(req.get_param_value("limit"));
-    if (req.has_param("offset")) offset = std::stoi(req.get_param_value("offset"));
+    if (!get_int_param(req, res, "limit",  limit,  1, 500)) return;
+    if (!get_int_param(req, res, "offset", offset, 0, INT_MAX)) return;
 
     auto conversations = ConversationManager::instance().list_conversations(limit, offset);
 
@@ -317,8 +347,8 @@ void handle_search_history(const httplib::Request& req, httplib::Response& res) 
 
     float threshold = 0.3f;
     int top_k = 10;
-    if (req.has_param("threshold")) threshold = std::stof(req.get_param_value("threshold"));
-    if (req.has_param("top_k")) top_k = std::stoi(req.get_param_value("top_k"));
+    if (!get_float_param(req, res, "threshold", threshold, 0.0f, 1.0f)) return;
+    if (!get_int_param(req,   res, "top_k",     top_k,    1,    100))   return;
 
     auto results = HistoryManager::instance().search(query_str, threshold, top_k);
 
@@ -340,8 +370,8 @@ void handle_search_history(const httplib::Request& req, httplib::Response& res) 
 
 void handle_list_history(const httplib::Request& req, httplib::Response& res) {
     int limit = 100, offset = 0;
-    if (req.has_param("limit")) limit = std::stoi(req.get_param_value("limit"));
-    if (req.has_param("offset")) offset = std::stoi(req.get_param_value("offset"));
+    if (!get_int_param(req, res, "limit",  limit,  1, 500)) return;
+    if (!get_int_param(req, res, "offset", offset, 0, INT_MAX)) return;
 
     auto entries = DBManager::instance().get_qa_history(limit, offset);
 
@@ -447,6 +477,14 @@ void handle_set_setting(const httplib::Request& req, httplib::Response& res) {
     if (key.empty()) { json_error(res, 400, "Campo 'key' requerido"); return; }
 
     DBManager::instance().set_app_setting(key, value);
+
+    auto& cfg = get_config();
+    if (key == "model_idle_timeout_sec") {
+        try { cfg.model_idle_timeout_sec = std::stoi(value); } catch (const std::exception&) {}
+    } else if (key == "model_lazy_load") {
+        cfg.model_lazy_load = (value == "true" || value == "1");
+    }
+
     json_ok(res, {{"status", "saved"}});
 }
 
@@ -508,8 +546,12 @@ void handle_delete_user_setting(const httplib::Request& req, httplib::Response& 
 // ============================================================================
 void handle_gpu_status(const httplib::Request& /*req*/, httplib::Response& res) {
     auto& gpu = GPUManager::instance();
-    json data = json::parse(gpu.status_json());
-    json_ok(res, data);
+    try {
+        json data = json::parse(gpu.status_json());
+        json_ok(res, data);
+    } catch (const json::parse_error&) {
+        json_error(res, 500, "Error obteniendo estado de GPU");
+    }
 }
 
 void handle_gpu_report(const httplib::Request& /*req*/, httplib::Response& res) {
