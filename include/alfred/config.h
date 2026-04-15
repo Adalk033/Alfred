@@ -42,6 +42,14 @@ struct AppConfig {
     int query_cache_max          = 50;
     int query_cache_ttl_seconds  = 300;
 
+    // --- Carga del modelo ---
+    // Si true, el modelo se carga al primer query (no al arrancar).
+    // Libera VRAM hasta que se necesite.
+    bool model_lazy_load        = true;
+    // Segundos de inactividad antes de descargar el modelo automaticamente.
+    // 0 = nunca descargar automaticamente.
+    int  model_idle_timeout_sec = 10;
+
     // --- Perfil de usuario (cargado de DB) ---
     std::string user_name;
     std::string user_age;

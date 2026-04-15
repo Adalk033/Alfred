@@ -99,7 +99,7 @@ static bool get_float_param(const httplib::Request& req, httplib::Response& res,
 void handle_root(const httplib::Request& /*req*/, httplib::Response& res) {
     json data;
     data["name"] = "Alfred";
-    data["version"] = "2.0.0";
+    data["version"] = ALFRED_VERSION;
     data["status"] = "running";
     data["engine"] = "llama.cpp + CUDA";
     json_ok(res, data);
