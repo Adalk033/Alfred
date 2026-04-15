@@ -58,6 +58,9 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Configurar MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       - name: Restaurar workloads necesarios
         run: dotnet workload restore --project ui/Alfred.UI/Alfred.UI.csproj
 
@@ -66,11 +69,14 @@ jobs:
 
       - name: Compilar UI
         run: |
-          dotnet build ui/Alfred.UI/Alfred.UI.csproj `
-            --configuration Release `
-            --runtime win-x64 `
+          msbuild ui/Alfred.UI/Alfred.UI.csproj `
+            /restore `
+            /m `
+            /verbosity:minimal `
+            /p:Configuration=Release `
             /p:Platform=x64 `
-            --no-restore
+            /p:RuntimeIdentifier=win-x64 `
+            /p:WindowsAppSDKSelfContained=true
 
       - name: Copiar ejecutable a output
         run: |

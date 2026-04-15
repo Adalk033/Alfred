@@ -186,7 +186,7 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        if (targetItem != null && NavView.SelectedItem != targetItem)
+        if (targetItem != null && !ReferenceEquals(NavView.SelectedItem, targetItem))
         {
             _suppressNavigation = true;
             NavView.SelectedItem = targetItem;
