@@ -77,13 +77,15 @@ jobs:
         run: |
           dotnet build ui/Alfred.UI/Alfred.UI.csproj `
             --configuration Release `
+            --runtime win-x64 `
+            /p:Platform=x64 `
             --no-restore
 
       - name: Copiar ejecutable a output
         run: |
           New-Item -ItemType Directory -Path publish/Alfred.UI -Force
-          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/Alfred.UI.exe -Destination publish/Alfred.UI/
-          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/*.dll -Destination publish/Alfred.UI/ -ErrorAction SilentlyContinue
+          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/win-x64/Alfred.UI.exe -Destination publish/Alfred.UI/
+          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/win-x64/*.dll -Destination publish/Alfred.UI/ -ErrorAction SilentlyContinue
 
       - name: Subir artifact del frontend
         uses: actions/upload-artifact@v4
