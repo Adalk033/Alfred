@@ -1,0 +1,138 @@
+name: Build and Release Alfred (CPU)
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (ej: 0.2.1)'
+        required: true
+
+env:
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+
+  # ============================================================
+  # Job 1: Compilar backend C++ sin CUDA (Windows)
+  # ============================================================
+  build-backend-cpu:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configurar CMake (Release, CPU-only)
+        run: |
+          cmake -S . -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DALFRED_CUDA=OFF
+
+      - name: Compilar
+        run: cmake --build build --config Release --parallel
+
+      - name: Subir artifact del backend
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-backend-cpu
+          path: |
+            build/Release/alfred.exe
+            build/Release/*.dll
+          if-no-files-found: error
+
+  # ============================================================
+  # Job 2: Compilar frontend WinUI 3 (Windows)
+  # ============================================================
+  build-frontend:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restaurar dependencias NuGet
+        run: dotnet restore ui/Alfred.UI/Alfred.UI.csproj
+
+      - name: Publicar UI
+        run: |
+          dotnet publish ui/Alfred.UI/Alfred.UI.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output publish/Alfred.UI `
+            /p:WindowsPackageType=None `
+            /p:PublishSingleFile=false
+
+      - name: Subir artifact del frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-frontend
+          path: publish/Alfred.UI/
+          if-no-files-found: error
+
+  # ============================================================
+  # Job 3: Empaquetar y adjuntar a la Release existente
+  # ============================================================
+  package-release:
+    runs-on: windows-latest
+    needs: [build-backend-cpu, build-frontend]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Obtener version
+        id: version
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            echo "VERSION=${{ github.event.inputs.version }}" >> $env:GITHUB_ENV
+          } else {
+            $tag = "${{ github.ref_name }}"
+            echo "VERSION=$($tag.TrimStart('v'))" >> $env:GITHUB_ENV
+          }
+
+      - name: Descargar artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Crear estructura de distribucion
+        run: |
+          $dist = "Alfred-v${{ env.VERSION }}-cpu"
+          New-Item -ItemType Directory -Path $dist
+          Copy-Item -Path "artifacts/alfred-backend-cpu/*" -Destination $dist -Recurse
+          Copy-Item -Path "artifacts/alfred-frontend/*"    -Destination $dist -Recurse
+          @"
+          Alfred v${{ env.VERSION }} (CPU)
+          ================================
+          Asistente de IA local para Windows — variante sin CUDA.
+
+          Requisitos:
+          - Windows 10 (19041) o superior
+          - No requiere GPU NVIDIA
+          - El rendimiento dependera de tu CPU (recomendado 8+ nucleos)
+
+          Uso:
+          1. Ejecutar Alfred.UI.exe
+          2. Ir a Modelos y descargar un modelo GGUF de HuggingFace
+          3. Seleccionar el modelo y empezar a chatear
+
+          Los datos se guardan en: %APPDATA%\Alfred\
+          "@ | Out-File "$dist\LEEME.txt" -Encoding UTF8
+
+      - name: Comprimir
+        run: Compress-Archive -Path "Alfred-v${{ env.VERSION }}-cpu" -DestinationPath "Alfred-v${{ env.VERSION }}-win-x64-cpu.zip"
+
+      - name: Subir ZIP a la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Alfred v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          files: Alfred-v${{ env.VERSION }}-win-x64-cpu.zip
