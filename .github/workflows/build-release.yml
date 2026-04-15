@@ -9,6 +9,9 @@ on:
         description: 'Version (ej: 0.2.1)'
         required: true
 
+permissions:
+  contents: write
+
 env:
   DOTNET_VERSION: '9.0.x'
   CUDA_VERSION: '12.4.0'
@@ -63,7 +66,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-          include-prerelease: false
 
       - name: Restaurar workloads necesarios
         run: dotnet workload restore --project ui/Alfred.UI/Alfred.UI.csproj
@@ -71,12 +73,11 @@ jobs:
       - name: Restaurar dependencias NuGet
         run: dotnet restore ui/Alfred.UI/Alfred.UI.csproj
 
-      - name: Compilar UI con MSBuild
+      - name: Compilar UI
         run: |
-          msbuild ui/Alfred.UI/Alfred.UI.csproj `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /p:RestorePackagesPath=.\packages
+          dotnet build ui/Alfred.UI/Alfred.UI.csproj `
+            --configuration Release `
+            --no-restore
 
       - name: Copiar ejecutable a output
         run: |
