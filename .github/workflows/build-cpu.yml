@@ -55,6 +55,9 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Restaurar workloads necesarios
+        run: dotnet workload restore --project ui/Alfred.UI/Alfred.UI.csproj
+
       - name: Restaurar dependencias NuGet
         run: dotnet restore ui/Alfred.UI/Alfred.UI.csproj
 
