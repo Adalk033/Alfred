@@ -71,18 +71,18 @@ jobs:
       - name: Restaurar dependencias NuGet
         run: dotnet restore ui/Alfred.UI/Alfred.UI.csproj
 
-      - name: Ver SDK usado
-        run: dotnet --info
-
-      - name: Publicar UI
+      - name: Compilar UI con MSBuild
         run: |
-          dotnet publish ui/Alfred.UI/Alfred.UI.csproj `
-            --configuration Release `
-            --runtime win-x64 `
-            --self-contained true `
-            --output publish/Alfred.UI `
-            /p:WindowsPackageType=None `
-            /p:PublishSingleFile=false
+          msbuild ui/Alfred.UI/Alfred.UI.csproj `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:RestorePackagesPath=.\packages
+
+      - name: Copiar ejecutable a output
+        run: |
+          New-Item -ItemType Directory -Path publish/Alfred.UI -Force
+          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/Alfred.UI.exe -Destination publish/Alfred.UI/
+          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/*.dll -Destination publish/Alfred.UI/ -ErrorAction SilentlyContinue
 
       - name: Subir artifact del frontend
         uses: actions/upload-artifact@v4
