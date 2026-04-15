@@ -77,7 +77,6 @@ public:
 
     // Obtener info del modelo cargado
     std::string model_name() const;
-    size_t model_size_mb() const;
     int context_length() const;
 
     // Cambiar parametros de sampling sin recargar modelo
