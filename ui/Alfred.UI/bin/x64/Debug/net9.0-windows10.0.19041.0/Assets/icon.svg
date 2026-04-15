@@ -1,0 +1,20 @@
+<!-- Placeholder para icono de la aplicación -->
+<!-- Este archivo puede ser reemplazado por un icono real PNG de 512x512 -->
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fondo circular con gradiente -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a9eff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6a5acd;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Círculo de fondo -->
+  <circle cx="256" cy="256" r="240" fill="url(#bgGradient)"/>
+  
+  <!-- Letra A estilizada -->
+  <path d="M 256 120 L 180 380 L 230 380 L 240 340 L 272 340 L 282 380 L 332 380 L 256 120 Z M 256 200 L 265 280 L 247 280 L 256 200 Z" fill="white"/>
+  
+  <!-- Punto debajo -->
+  <circle cx="256" cy="420" r="20" fill="white"/>
+</svg>

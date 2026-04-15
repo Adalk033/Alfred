@@ -36,8 +36,6 @@ F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\C
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ChatPage.g.cs
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ConversationsPage.g.i.cs
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ConversationsPage.g.cs
-F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\DocumentsPage.g.i.cs
-F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\DocumentsPage.g.cs
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\HistoryPage.g.i.cs
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\HistoryPage.g.cs
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ModelsPage.g.i.cs
@@ -49,7 +47,6 @@ F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\App.xam
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\MainWindow.xaml
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ChatPage.xaml
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ConversationsPage.xaml
-F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\DocumentsPage.xaml
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\HistoryPage.xaml
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ModelsPage.xaml
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\SettingsPage.xaml
@@ -57,7 +54,6 @@ F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\App.xbf
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\MainWindow.xbf
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ChatPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ConversationsPage.xbf
-F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\DocumentsPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\HistoryPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\ModelsPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\Pages\SettingsPage.xbf
@@ -75,7 +71,6 @@ F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\App.xbf
 F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\MainWindow.xbf
 F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Pages\ChatPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Pages\ConversationsPage.xbf
-F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Pages\DocumentsPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Pages\HistoryPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Pages\ModelsPage.xbf
 F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Pages\SettingsPage.xbf
@@ -331,3 +326,7 @@ F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\pri.res
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\qualifiers.txt
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\qualifiers.txt.intermediate
 F:\Projects\Alfred\ui\Alfred.UI\obj\x64\Debug\net9.0-windows10.0.19041.0\MultipleQualifiersPerDimensionFound.txt
+F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Assets\icon.icns
+F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Assets\icon.svg
+F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Assets\icon.ico
+F:\Projects\Alfred\ui\Alfred.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\Assets\icon.png
