@@ -71,7 +71,9 @@ public sealed partial class MainWindow : Window
             {
                 DispatcherQueue.TryEnqueue(() =>
                 {
-                    ModelName.Text = status.LlmModel ?? "Sin modelo";
+                    bool loaded = status.LlmLoaded;
+                    ModelName.Text = loaded ? (status.LlmModel ?? "Sin modelo") : "Sin modelo cargado";
+                    UnloadModelButton.Visibility = loaded ? Visibility.Visible : Visibility.Collapsed;
                 });
             }
         }
@@ -88,6 +90,9 @@ public sealed partial class MainWindow : Window
             else
                 UpdateStatus("Desconectado", Colors.Red);
         });
+
+        if (healthy)
+            await LoadModelInfo();
     }
 
     private void UpdateStatus(string text, Windows.UI.Color color)
@@ -195,6 +200,31 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void OnUnloadModel(object sender, RoutedEventArgs e)
+    {
+        UnloadModelButton.IsEnabled = false;
+        try
+        {
+            bool success = await _api.UnloadModelAsync();
+            if (success)
+            {
+                await LoadModelInfo();
+                NotificationService.Instance.ShowSuccess(
+                    "Modelo descargado. GPU/RAM liberados.",
+                    "Modelo detenido");
+            }
+            else
+            {
+                NotificationService.Instance.ShowError(
+                    "No se pudo detener el modelo.");
+            }
+        }
+        finally
+        {
+            UnloadModelButton.IsEnabled = true;
+        }
+    }
+
     private async void OnRestartBackend(object sender, RoutedEventArgs e)
     {
         UpdateStatus("Reiniciando...", Colors.Orange);
@@ -209,7 +239,6 @@ public sealed partial class MainWindow : Window
         _healthTimer.Stop();
         _backend.StatusChanged -= OnBackendStatusChanged;
         NotificationService.Instance.NotificationRequested -= OnNotificationRequested;
-        _backend.StopAsync().GetAwaiter().GetResult();
         _backend.Dispose();
         _api.Dispose();
     }

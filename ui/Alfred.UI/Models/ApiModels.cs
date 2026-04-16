@@ -222,6 +222,84 @@ public sealed class EncryptionStatus
     public bool HasKey { get; set; }
 }
 
+public sealed class ModelConfig
+{
+    [JsonPropertyName("n_ctx")]
+    public int NCtx { get; set; } = 4096;
+
+    [JsonPropertyName("n_gpu_layers")]
+    public int NGpuLayers { get; set; } = 99;
+
+    [JsonPropertyName("n_batch")]
+    public int NBatch { get; set; } = 512;
+
+    [JsonPropertyName("n_threads")]
+    public int NThreads { get; set; }
+
+    [JsonPropertyName("temperature")]
+    public float Temperature { get; set; } = 0.7f;
+
+    [JsonPropertyName("top_p")]
+    public float TopP { get; set; } = 0.9f;
+
+    [JsonPropertyName("max_tokens")]
+    public int MaxTokens { get; set; } = 2048;
+
+    [JsonPropertyName("seed")]
+    public int Seed { get; set; } = -1;
+}
+
+public sealed class ModelConfigSaveResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "";
+
+    [JsonPropertyName("needs_reload")]
+    public bool NeedsReload { get; set; }
+}
+
+public sealed class AutoTuneHardwareInfo
+{
+    [JsonPropertyName("gpu_available")]
+    public bool GpuAvailable { get; set; }
+
+    [JsonPropertyName("vram_total_mb")]
+    public long VramTotalMb { get; set; }
+
+    [JsonPropertyName("vram_free_mb")]
+    public long VramFreeMb { get; set; }
+
+    [JsonPropertyName("cpu_cores")]
+    public int CpuCores { get; set; }
+
+    [JsonPropertyName("device_name")]
+    public string DeviceName { get; set; } = "";
+
+    [JsonPropertyName("model_size_mb")]
+    public long ModelSizeMb { get; set; }
+}
+
+public sealed class AutoTuneResult
+{
+    [JsonPropertyName("n_ctx")]
+    public int NCtx { get; set; }
+
+    [JsonPropertyName("n_gpu_layers")]
+    public int NGpuLayers { get; set; }
+
+    [JsonPropertyName("n_batch")]
+    public int NBatch { get; set; }
+
+    [JsonPropertyName("n_threads")]
+    public int NThreads { get; set; }
+
+    [JsonPropertyName("max_tokens")]
+    public int MaxTokens { get; set; }
+
+    [JsonPropertyName("hardware")]
+    public AutoTuneHardwareInfo? Hardware { get; set; }
+}
+
 public sealed class ErrorResponse
 {
     [JsonPropertyName("error")]

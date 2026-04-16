@@ -29,6 +29,12 @@ struct QueryResult {
     double total_time_ms = 0.0;
 };
 
+struct ModelChangeResult {
+    bool success = false;
+    std::string error;              // vacio si exito
+    std::string warning;            // advertencia opcional (ej: fallback a CPU)
+};
+
 // Entrada de cache LRU
 struct CacheEntry {
     QueryResult result;
@@ -49,7 +55,10 @@ public:
                       const std::string& conversation_id = "");
 
     // Cambiar modelo LLM
-    bool change_model(const std::string& model_path);
+    ModelChangeResult change_model(const std::string& model_path);
+
+    // Descargar modelo actual (liberar GPU/RAM)
+    void unload_current_model();
 
     // Estadisticas generales
     json get_stats();
@@ -95,7 +104,7 @@ private:
     std::atomic<bool>       stop_monitor_{ false };     // senal de parada para el hilo monitor
     std::atomic<int64_t>    last_query_ns_{ 0 };        // timestamp (ns) del ultimo query exitoso
 
-    LLMConfig build_llm_config(const std::string& model_path);  // construye config del LLM
+    LLMConfig build_llm_config(const std::string& model_path, int gpu_layers_override = -1);
     void ensure_model_loaded();   // carga el modelo si no esta cargado
     void start_idle_monitor();    // arranca el hilo monitor
     void stop_idle_monitor();     // para y une el hilo monitor

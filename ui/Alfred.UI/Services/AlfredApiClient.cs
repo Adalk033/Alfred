@@ -196,10 +196,114 @@ public sealed class AlfredApiClient : IDisposable
         return await GetAsync<ModelStatus>("/models/status", 10);
     }
 
-    public async Task<bool> ChangeModelAsync(string modelPath)
+    public async Task<(bool Success, string Error)> DeleteModelAsync(string modelName)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            var response = await _http.DeleteAsync($"/models/{Uri.EscapeDataString(modelName)}", cts.Token);
+            if (response.IsSuccessStatusCode)
+                return (true, "");
+
+            var body = await response.Content.ReadAsStringAsync(cts.Token);
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("error", out var err))
+                    return (false, err.GetString() ?? "Error desconocido");
+            }
+            catch { }
+
+            return (false, $"Error del servidor (HTTP {(int)response.StatusCode})");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, string Error, string Warning)> ChangeModelAsync(string modelPath)
     {
         var response = await PostRawAsync("/models/change", new { model_path = modelPath }, 300);
+        if (response == null)
+            return (false, "No se pudo conectar con el backend", "");
+
+        var body = "";
+        try { body = await response.Content.ReadAsStringAsync(); } catch { }
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Extraer warning si existe
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("warning", out var warn))
+                    return (true, "", warn.GetString() ?? "");
+            }
+            catch { }
+            return (true, "", "");
+        }
+
+        // Leer detalle del error del backend
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var err))
+                return (false, err.GetString() ?? "Error desconocido", "");
+        }
+        catch { /* JSON invalido */ }
+
+        return (false, $"Error del servidor (HTTP {(int)response.StatusCode})", "");
+    }
+
+    /// <summary>
+    /// Descargar el modelo actual para liberar GPU/RAM.
+    /// </summary>
+    public async Task<bool> UnloadModelAsync()
+    {
+        var response = await PostRawAsync("/models/unload", new { }, 30);
         return response?.IsSuccessStatusCode ?? false;
+    }
+
+    /// <summary>
+    /// Obtener la configuracion actual del modelo LLM.
+    /// </summary>
+    public async Task<ModelConfig?> GetModelConfigAsync()
+    {
+        return await GetAsync<ModelConfig>("/models/config", 10);
+    }
+
+    /// <summary>
+    /// Guardar configuracion del modelo LLM. Retorna si requiere recargar el modelo.
+    /// </summary>
+    public async Task<(bool Success, bool NeedsReload)> SetModelConfigAsync(ModelConfig config)
+    {
+        var response = await PostRawAsync("/models/config", config, 15);
+        if (response == null || !response.IsSuccessStatusCode)
+            return (false, false);
+
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            var result = System.Text.Json.JsonSerializer.Deserialize<ModelConfigSaveResponse>(body, JsonOptions);
+            return (true, result?.NeedsReload ?? false);
+        }
+        catch
+        {
+            return (true, false);
+        }
+    }
+
+    /// <summary>
+    /// Obtener parametros de inferencia auto-tuneados segun hardware detectado.
+    /// Opcionalmente recibe model_path para ajustar al modelo especifico.
+    /// </summary>
+    public async Task<AutoTuneResult?> GetAutoTuneAsync(string? modelPath = null)
+    {
+        string endpoint = "/models/autotune";
+        if (!string.IsNullOrEmpty(modelPath))
+            endpoint += $"?model_path={Uri.EscapeDataString(modelPath)}";
+        return await GetAsync<AutoTuneResult>(endpoint, 15);
     }
 
     // ========================================================================

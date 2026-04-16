@@ -68,6 +68,15 @@ void handle_change_model(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
 void handle_model_status(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
+void handle_delete_model(const httplib::Request& req, httplib::Response& res,
+                          AlfredCore& core);
+void handle_unload_model(const httplib::Request& req, httplib::Response& res,
+                          AlfredCore& core);
+void handle_get_model_config(const httplib::Request& req, httplib::Response& res);
+void handle_set_model_config(const httplib::Request& req, httplib::Response& res,
+                              AlfredCore& core);
+void handle_autotune(const httplib::Request& req, httplib::Response& res,
+                      AlfredCore& core);
 
 // Optimizaciones
 void handle_optimization_stats(const httplib::Request& req, httplib::Response& res,

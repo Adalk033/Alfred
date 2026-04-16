@@ -58,10 +58,23 @@ void LLMEngine::cleanup() {
 bool LLMEngine::load_model(const LLMConfig& config) {
     cleanup();
     config_ = config;
+    last_error_.clear();
 
     log_info("Cargando modelo LLM: " + config.model_path);
     log_info("  GPU layers: " + std::to_string(config.n_gpu_layers));
     log_info("  Context: " + std::to_string(config.n_ctx));
+
+    // Verificar que el archivo existe y es accesible
+    {
+        std::error_code ec;
+        auto fsize = std::filesystem::file_size(config.model_path, ec);
+        if (ec) {
+            last_error_ = "No se pudo acceder al archivo: " + ec.message();
+            log_error(last_error_ + " (" + config.model_path + ")");
+            return false;
+        }
+        log_info("  Archivo: " + std::to_string(fsize / (1024*1024)) + " MB");
+    }
 
     // Parametros del modelo
     auto model_params = llama_model_default_params();
@@ -71,7 +84,10 @@ bool LLMEngine::load_model(const LLMConfig& config) {
 
     model_ = llama_model_load_from_file(config.model_path.c_str(), model_params);
     if (!model_) {
-        log_error("Error cargando modelo: " + config.model_path);
+        last_error_ = "llama.cpp no pudo cargar el modelo. Puede ser un archivo GGUF invalido, "
+                       "corrupto, o memoria insuficiente (GPU layers: " +
+                       std::to_string(config.n_gpu_layers) + ")";
+        log_error(last_error_ + " (" + config.model_path + ")");
         return false;
     }
 
@@ -91,7 +107,10 @@ bool LLMEngine::load_model(const LLMConfig& config) {
 
     ctx_ = llama_init_from_model(model_, ctx_params);
     if (!ctx_) {
-        log_error("Error creando contexto LLM");
+        last_error_ = "Error creando contexto LLM (n_ctx=" + std::to_string(config.n_ctx) +
+                       "). Puede que el modelo no soporte este tamano de contexto o no haya "
+                       "suficiente memoria";
+        log_error(last_error_);
         llama_model_free(model_);
         model_ = nullptr;
         return false;
@@ -105,6 +124,8 @@ bool LLMEngine::load_model(const LLMConfig& config) {
     log_info("Modelo LLM cargado en " + std::to_string(static_cast<int>(ms)) + "ms: " + model_name_);
     return true;
 }
+
+std::string LLMEngine::last_error() const { return last_error_; }
 
 void LLMEngine::unload_model() {
     cleanup();

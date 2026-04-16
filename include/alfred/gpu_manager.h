@@ -25,12 +25,28 @@ struct GPUInfo {
     int device_count = 0;
 };
 
+// Resultado del auto-tune de parametros de inferencia
+struct AutoTuneSettings {
+    int n_ctx        = 2048;
+    int n_gpu_layers = 0;
+    int n_batch      = 128;
+    int n_threads    = 0;
+    int max_tokens   = 1024;
+    size_t vram_total_mb = 0;
+    size_t vram_free_mb  = 0;
+    int cpu_cores        = 0;
+    bool gpu_available   = false;
+};
+
 class GPUManager {
 public:
     static GPUManager& instance();
 
     // Detectar GPUs disponibles
     void detect();
+
+    // Refrescar info de GPU (re-detectar VRAM actual)
+    void refresh();
 
     // Obtener informacion de GPU
     const GPUInfo& info() const;
@@ -49,6 +65,9 @@ public:
 
     // Reporte como JSON
     std::string status_json() const;
+
+    // Auto-tune: calcular parametros optimos segun hardware y modelo
+    AutoTuneSettings auto_tune(size_t model_size_mb = 0) const;
 
 private:
     GPUManager() = default;

@@ -10,6 +10,7 @@
 #include <sstream>
 #include <array>
 #include <cstdio>
+#include <thread>
 #include <nlohmann/json.hpp>
 
 namespace alfred {
@@ -35,6 +36,12 @@ static std::string exec_command(const std::string& cmd) {
 GPUManager& GPUManager::instance() {
     static GPUManager mgr;
     return mgr;
+}
+
+void GPUManager::refresh() {
+    detected_ = false;
+    gpu_info_ = GPUInfo{};
+    detect();
 }
 
 void GPUManager::detect() {
@@ -171,6 +178,96 @@ std::string GPUManager::status_json() const {
     j["used_vram_mb"] = gpu_info_.used_vram_mb;
     j["device_count"] = gpu_info_.device_count;
     return j.dump();
+}
+
+AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
+    AutoTuneSettings s;
+
+    // --- Detectar CPU ---
+    int hw_threads = static_cast<int>(std::thread::hardware_concurrency());
+    // Estimar cores fisicos (heuristica: threads / 2 en x86 con HT)
+    int physical_cores = std::max(1, hw_threads / 2);
+    s.cpu_cores    = physical_cores;
+    s.n_threads    = physical_cores;
+
+    // --- Detectar GPU ---
+    s.gpu_available  = gpu_info_.available;
+    s.vram_total_mb  = gpu_info_.total_vram_mb;
+    s.vram_free_mb   = gpu_info_.free_vram_mb;
+
+    if (!gpu_info_.available || gpu_info_.total_vram_mb == 0) {
+        // Sin GPU: configuracion conservadora CPU-only
+        s.n_gpu_layers = 0;
+        s.n_ctx        = 2048;
+        s.n_batch      = 64;
+        s.max_tokens   = 1024;
+        return s;
+    }
+
+    size_t vram_gb = gpu_info_.total_vram_mb / 1024;
+
+    // --- Configuracion base segun VRAM total ---
+    if (vram_gb <= 6) {
+        s.n_gpu_layers = 12;
+        s.n_ctx        = 2048;
+        s.n_batch      = 128;
+    } else if (vram_gb <= 8) {
+        s.n_gpu_layers = 24;
+        s.n_ctx        = 2048;
+        s.n_batch      = 128;
+    } else if (vram_gb <= 12) {
+        s.n_gpu_layers = 40;
+        s.n_ctx        = 4096;
+        s.n_batch      = 256;
+    } else {
+        s.n_gpu_layers = 99;
+        s.n_ctx        = 4096;
+        s.n_batch      = 512;
+    }
+
+    // --- Ajuste por modelo (si se conoce el tamano) ---
+    if (model_size_mb > 0) {
+        // Estimar VRAM necesaria para el modelo completo (1.2x overhead)
+        size_t vram_needed = static_cast<size_t>(model_size_mb * 1.2);
+
+        // Si el modelo no cabe completo en VRAM libre, reducir capas
+        if (vram_needed > gpu_info_.free_vram_mb) {
+            double ratio = static_cast<double>(gpu_info_.free_vram_mb) /
+                           static_cast<double>(vram_needed);
+            // Usar ~80% del ratio para dejar margen al contexto
+            int safe_layers = static_cast<int>(ratio * 40 * 0.8);
+            s.n_gpu_layers = std::max(0, safe_layers);
+        }
+
+        // Modelo muy grande (>10 GB) en GPU chica: reducir contexto
+        if (model_size_mb > 10000 && vram_gb <= 8) {
+            s.n_ctx   = 1024;
+            s.n_batch = 64;
+        }
+    }
+
+    // --- Validacion de seguridad: evitar combinaciones peligrosas ---
+    // Si n_ctx alto + n_gpu_layers alto + VRAM ajustada, reducir progresivamente
+    size_t ctx_vram_estimate = static_cast<size_t>(s.n_ctx) * s.n_gpu_layers / 10;
+    size_t total_estimate = (model_size_mb > 0 ? model_size_mb : 4000) + ctx_vram_estimate;
+
+    if (total_estimate > gpu_info_.free_vram_mb && s.n_gpu_layers > 0) {
+        // Primero reducir capas GPU
+        while (total_estimate > gpu_info_.free_vram_mb && s.n_gpu_layers > 0) {
+            s.n_gpu_layers = std::max(0, s.n_gpu_layers - 5);
+            ctx_vram_estimate = static_cast<size_t>(s.n_ctx) * s.n_gpu_layers / 10;
+            total_estimate = (model_size_mb > 0 ? model_size_mb : 4000) + ctx_vram_estimate;
+        }
+        // Luego reducir batch si aun no cabe
+        if (total_estimate > gpu_info_.free_vram_mb) {
+            s.n_batch = std::max(32, s.n_batch / 2);
+        }
+    }
+
+    // max_tokens = min(n_ctx / 2, 2048)
+    s.max_tokens = std::min(s.n_ctx / 2, 2048);
+
+    return s;
 }
 
 } // namespace alfred

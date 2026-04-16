@@ -27,13 +27,13 @@ namespace alfred {
 
 struct LLMConfig {
     std::string model_path;
-    int n_ctx         = 4096;
-    int n_gpu_layers  = 99;
-    int n_batch       = 512;
+    int n_ctx         = 2048;
+    int n_gpu_layers  = 20;
+    int n_batch       = 128;
     int n_threads     = 0;      // 0 = auto-detectar (usa cores fisicos)
     float temperature = 0.7f;
     float top_p       = 0.9f;
-    int max_tokens    = 2048;
+    int max_tokens    = 1024;
     int seed          = -1;
 };
 
@@ -79,6 +79,9 @@ public:
     std::string model_name() const;
     int context_length() const;
 
+    // Ultimo error de carga
+    std::string last_error() const;
+
     // Cambiar parametros de sampling sin recargar modelo
     void set_temperature(float temp);
     void set_top_p(float top_p);
@@ -89,6 +92,7 @@ private:
     llama_context* ctx_ = nullptr;
     LLMConfig config_;
     std::string model_name_;
+    std::string last_error_;
 
     // Tokenizar texto
     std::vector<int32_t> tokenize(const std::string& text, bool add_bos = true);

@@ -11,6 +11,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Text="Modelos GGUF" FontSize="24" FontWeight="Bold"
@@ -143,6 +144,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
@@ -161,6 +163,11 @@
                             <Button Grid.Column="2" Content="Usar como LLM"
                                     Click="OnChangeModel" Tag="{Binding Path}"
                                     Padding="12,4" VerticalAlignment="Center" />
+
+                            <Button Grid.Column="3" Content="Eliminar"
+                                    Click="OnDeleteModel" Tag="{Binding Name}"
+                                    Padding="12,4" VerticalAlignment="Center"
+                                    Foreground="#E74C3C" />
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
@@ -172,6 +179,153 @@
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        Margin="0,12,0,0"
                        Visibility="Collapsed" />
+
+            <!-- Configuracion del modelo LLM -->
+            <Border Grid.Row="5" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="8" Padding="16,12" Margin="0,24,0,0">
+                <StackPanel Spacing="12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE713;" FontSize="16" VerticalAlignment="Center" />
+                            <TextBlock Text="Configuracion del modelo" FontWeight="SemiBold" FontSize="16"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <!-- Config mode badge -->
+                        <Border x:Name="ConfigModeBadge" Grid.Column="2"
+                                CornerRadius="4" Padding="8,3"
+                                Background="{ThemeResource SystemFillColorNeutralBackgroundBrush}"
+                                VerticalAlignment="Center">
+                            <TextBlock x:Name="ConfigModeText" Text="Custom" FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Border>
+                    </Grid>
+
+                    <TextBlock Text="Los parametros de carga (contexto, GPU, batch, hilos) requieren detener y recargar el modelo. Los parametros de sampling (temperatura, top_p, max tokens) se aplican inmediatamente."
+                               FontSize="12" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                    <InfoBar x:Name="ConfigInfoBar" IsOpen="False" IsClosable="True"
+                             Severity="Informational" />
+
+                    <!-- Parametros de carga -->
+                    <TextBlock Text="Parametros de carga (requieren reinicio)" FontWeight="SemiBold"
+                               FontSize="13" Margin="0,4,0,0"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                    <Grid ColumnSpacing="24" RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <NumberBox x:Name="NCtxBox" Grid.Row="0" Grid.Column="0"
+                                   Header="Ventana de contexto (n_ctx)"
+                                   Minimum="512" Maximum="131072"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="512" LargeChange="2048" />
+
+                        <NumberBox x:Name="NGpuLayersBox" Grid.Row="0" Grid.Column="1"
+                                   Header="Capas GPU (n_gpu_layers)"
+                                   Minimum="0" Maximum="999"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="1" LargeChange="10" />
+
+                        <NumberBox x:Name="NBatchBox" Grid.Row="1" Grid.Column="0"
+                                   Header="Tamano de batch (n_batch)"
+                                   Minimum="1" Maximum="8192"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="64" LargeChange="256" />
+
+                        <NumberBox x:Name="NThreadsBox" Grid.Row="1" Grid.Column="1"
+                                   Header="Hilos CPU (0 = auto)"
+                                   Minimum="0" Maximum="256"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="1" LargeChange="4" />
+                    </Grid>
+
+                    <!-- Parametros de sampling -->
+                    <TextBlock Text="Parametros de sampling (se aplican en caliente)"
+                               FontWeight="SemiBold" FontSize="13" Margin="0,8,0,0"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                    <Grid ColumnSpacing="24" RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <NumberBox x:Name="TemperatureBox" Grid.Row="0" Grid.Column="0"
+                                   Header="Temperatura"
+                                   Minimum="0" Maximum="2"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="0.05" LargeChange="0.1" />
+
+                        <NumberBox x:Name="TopPBox" Grid.Row="0" Grid.Column="1"
+                                   Header="Top P"
+                                   Minimum="0" Maximum="1"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="0.05" LargeChange="0.1" />
+
+                        <NumberBox x:Name="MaxTokensBox" Grid.Row="1" Grid.Column="0"
+                                   Header="Max tokens"
+                                   Minimum="1" Maximum="131072"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="256" LargeChange="1024" />
+
+                        <NumberBox x:Name="SeedBox" Grid.Row="1" Grid.Column="1"
+                                   Header="Seed (-1 = aleatorio)"
+                                   Minimum="-1" Maximum="999999999"
+                                   SpinButtonPlacementMode="Inline"
+                                   SmallChange="1" LargeChange="100" />
+                    </Grid>
+
+                    <!-- Botones -->
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
+                        <Button x:Name="SaveConfigButton" Click="OnSaveConfig"
+                                Style="{StaticResource AccentButtonStyle}" Padding="16,8">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE74E;" FontSize="14" />
+                                <TextBlock Text="Guardar configuracion" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="AutoTuneButton" Click="OnAutoTune"
+                                Padding="16,8">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE945;" FontSize="14" />
+                                <TextBlock Text="Auto Tune (Recommended)" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="ResetConfigButton" Click="OnResetConfig"
+                                Padding="16,8">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE777;" FontSize="14" />
+                                <TextBlock Text="Restore Defaults" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Hardware info (visible tras auto-tune) -->
+                    <TextBlock x:Name="HardwareInfoText" FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
         </Grid>
     </ScrollViewer>
 </Page>

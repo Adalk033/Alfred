@@ -56,11 +56,27 @@ bool AlfredCore::initialize() {
         if (!cfg.llm_model_file.empty())
             llm_path = cfg.models_dir + "/" + cfg.llm_model_file;
 
-        // Cargar timeout desde DB si esta persistido
+        // Cargar configuracion LLM desde DB si esta persistida
         auto saved_timeout = db.get_app_setting("model_idle_timeout_sec");
         if (saved_timeout) {
             try { cfg.model_idle_timeout_sec = std::stoi(*saved_timeout); } catch (...) {}
         }
+        auto saved_nctx = db.get_app_setting("n_ctx");
+        if (saved_nctx) { try { cfg.n_ctx = std::stoi(*saved_nctx); } catch (...) {} }
+        auto saved_gpu = db.get_app_setting("n_gpu_layers");
+        if (saved_gpu) { try { cfg.n_gpu_layers = std::stoi(*saved_gpu); } catch (...) {} }
+        auto saved_batch = db.get_app_setting("n_batch");
+        if (saved_batch) { try { cfg.n_batch = std::stoi(*saved_batch); } catch (...) {} }
+        auto saved_threads = db.get_app_setting("n_threads");
+        if (saved_threads) { try { cfg.n_threads = std::stoi(*saved_threads); } catch (...) {} }
+        auto saved_temp = db.get_app_setting("temperature");
+        if (saved_temp) { try { cfg.temperature = std::stof(*saved_temp); } catch (...) {} }
+        auto saved_topp = db.get_app_setting("top_p");
+        if (saved_topp) { try { cfg.top_p = std::stof(*saved_topp); } catch (...) {} }
+        auto saved_maxtok = db.get_app_setting("max_tokens");
+        if (saved_maxtok) { try { cfg.max_tokens = std::stoi(*saved_maxtok); } catch (...) {} }
+        auto saved_seed = db.get_app_setting("seed");
+        if (saved_seed) { try { cfg.seed = std::stoi(*saved_seed); } catch (...) {} }
 
         if (llm_path.empty() || !std::filesystem::exists(llm_path)) {
             log_warn("Sin modelo LLM configurado. Usa la UI para descargar y seleccionar uno.");
@@ -96,13 +112,12 @@ bool AlfredCore::initialize() {
 // ============================================================================
 // Lazy loading del modelo
 // ============================================================================
-LLMConfig AlfredCore::build_llm_config(const std::string& model_path) {
+LLMConfig AlfredCore::build_llm_config(const std::string& model_path, int gpu_layers_override) {
     auto& cfg = get_config();
-    auto& gpu = GPUManager::instance();
     LLMConfig c;
     c.model_path   = model_path;
     c.n_ctx        = cfg.n_ctx;
-    c.n_gpu_layers = gpu.has_cuda() ? cfg.n_gpu_layers : 0;
+    c.n_gpu_layers = gpu_layers_override >= 0 ? gpu_layers_override : 0;
     c.n_batch      = cfg.n_batch;
     c.n_threads    = cfg.n_threads;
     c.temperature  = cfg.temperature;
@@ -117,8 +132,23 @@ void AlfredCore::ensure_model_loaded() {
     if (llm_->is_loaded() || pending_model_path_.empty()) return;
 
     log_info("Cargando modelo en demanda: " + pending_model_path_);
-    if (!llm_->load_model(build_llm_config(pending_model_path_)))
-        log_error("Error en carga lazy del modelo LLM");
+    auto& gpu = GPUManager::instance();
+    gpu.refresh();
+
+    std::error_code ec;
+    auto fsize = std::filesystem::file_size(pending_model_path_, ec);
+    size_t model_mb = ec ? 0 : static_cast<size_t>(fsize / (1024 * 1024));
+
+    int attempts[] = { 99, gpu.optimal_gpu_layers(model_mb), 0 };
+    int tried = -1;
+    for (int layers : attempts) {
+        if (layers > 0 && !gpu.has_cuda()) continue;
+        if (layers == tried) continue;
+        tried = layers;
+        if (llm_->load_model(build_llm_config(pending_model_path_, layers))) return;
+        llm_->unload_model();
+    }
+    log_error("Error en carga lazy del modelo LLM: " + llm_->last_error());
 }
 
 void AlfredCore::start_idle_monitor() {
@@ -351,28 +381,72 @@ QueryResult AlfredCore::query(const std::string& question,
     return result;
 }
 
-bool AlfredCore::change_model(const std::string& model_path) {
+void AlfredCore::unload_current_model() {
+    std::lock_guard<std::mutex> lock(model_load_mutex_);
+    if (llm_->is_loaded()) {
+        log_info("Descargando modelo manualmente para liberar recursos...");
+        llm_->unload_model();
+    }
+}
+
+ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
     log_info("Cambiando modelo LLM a: " + model_path);
-    auto& cfg = get_config();
+    ModelChangeResult result;
 
     std::lock_guard<std::mutex> lock(model_load_mutex_);
     llm_->unload_model();
 
-    if (cfg.model_lazy_load) {
-        pending_model_path_ = model_path;
-        DBManager::instance().set_model_setting("last_used_model", model_path);
-        clear_cache();
-        log_info("Modelo configurado para carga lazy: " + model_path);
-        return true;
+    auto& gpu = GPUManager::instance();
+    gpu.refresh();  // Refrescar VRAM actual antes de decidir
+
+    std::error_code ec;
+    auto fsize = std::filesystem::file_size(model_path, ec);
+    size_t model_mb = ec ? 0 : static_cast<size_t>(fsize / (1024 * 1024));
+
+    // Estrategia escalonada: full GPU -> parcial -> CPU
+    int attempts[] = { 99, gpu.optimal_gpu_layers(model_mb), 0 };
+    int used_layers = -1;
+
+    for (int layers : attempts) {
+        // Saltar si no hay CUDA y layers > 0
+        if (layers > 0 && !gpu.has_cuda()) continue;
+        // Saltar duplicados (ej: optimal ya era 99 o 0)
+        if (layers == used_layers) continue;
+
+        log_info("Intentando cargar modelo con gpu_layers=" + std::to_string(layers) + "...");
+        llm_->unload_model();
+        result.success = llm_->load_model(build_llm_config(model_path, layers));
+        used_layers = layers;
+
+        if (result.success) {
+            if (layers == 0 && gpu.has_cuda()) {
+                result.warning = "El modelo (" + std::to_string(model_mb) +
+                    " MB) necesita mas VRAM de la disponible (" +
+                    std::to_string(gpu.free_vram_mb()) +
+                    " MB libres en " + gpu.info().device_name +
+                    "). Se cargo en modo CPU, la inferencia sera mas lenta.";
+                log_warn(result.warning);
+            } else if (layers > 0 && layers < 99) {
+                result.warning = "No hay suficiente VRAM para cargar el modelo completo en GPU. "
+                    "Se cargaron " + std::to_string(layers) + " capas en " +
+                    gpu.info().device_name + " (" + std::to_string(gpu.free_vram_mb()) +
+                    " MB libres) y el resto en CPU.";
+                log_info(result.warning);
+            }
+            break;
+        }
     }
 
-    bool success = llm_->load_model(build_llm_config(model_path));
-    if (success) {
+    if (result.success) {
         pending_model_path_ = model_path;
         DBManager::instance().set_model_setting("last_used_model", model_path);
         clear_cache();
+        last_query_ns_ = std::chrono::steady_clock::now().time_since_epoch().count();
+    } else {
+        result.error = llm_->last_error();
     }
-    return success;
+
+    return result;
 }
 
 json AlfredCore::get_stats() {

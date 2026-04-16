@@ -32,8 +32,10 @@ bool HttpServer::setup(AlfredCore& core) {
     // Logging middleware
     setup_logging();
 
-    // Error handler global
+    // Error handler global (solo si el endpoint no puso body propio)
     server_->set_error_handler([](const httplib::Request& /*req*/, httplib::Response& res) {
+        if (!res.body.empty()) return;
+
         json err;
         if (res.status == 404) {
             err["error"] = "Ruta no encontrada";

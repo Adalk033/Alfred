@@ -615,12 +615,15 @@ void handle_change_model(const httplib::Request& req, httplib::Response& res,
     }
 
     log_info("Cambiando modelo a: " + model_path);
-    bool success = core.change_model(model_path);
+    auto result = core.change_model(model_path);
 
-    if (success) {
-        json_ok(res, {{"status", "changed"}, {"model", model_path}});
+    if (result.success) {
+        json data = {{"status", "changed"}, {"model", model_path}};
+        if (!result.warning.empty())
+            data["warning"] = result.warning;
+        json_ok(res, data);
     } else {
-        json_error(res, 500, "Error cambiando modelo");
+        json_error(res, 500, result.error.empty() ? "Error cambiando modelo" : result.error);
     }
 }
 
@@ -630,6 +633,194 @@ void handle_model_status(const httplib::Request& /*req*/, httplib::Response& res
     data["llm_loaded"] = core.llm().is_loaded();
     data["llm_model"] = core.llm().model_name();
     data["models_dir"] = get_config().models_dir;
+    json_ok(res, data);
+}
+
+void handle_delete_model(const httplib::Request& req, httplib::Response& res,
+                          AlfredCore& core) {
+    std::string name = path_param(req, "name");
+    if (name.empty()) {
+        json_error(res, 400, "Nombre del modelo requerido");
+        return;
+    }
+
+    // Construir ruta completa
+    std::string model_path = get_config().models_dir + "/" + name;
+
+    if (!std::filesystem::exists(model_path)) {
+        json_error(res, 404, "Modelo no encontrado: " + name);
+        return;
+    }
+
+    // No permitir eliminar el modelo actualmente cargado
+    if (core.llm().is_loaded() && core.llm().model_name() == name) {
+        json_error(res, 409, "No se puede eliminar el modelo que esta cargado actualmente. Cambia a otro modelo primero.");
+        return;
+    }
+
+    // Eliminar el archivo
+    std::error_code ec;
+    std::filesystem::remove(model_path, ec);
+    if (ec) {
+        json_error(res, 500, "Error eliminando modelo: " + ec.message());
+        return;
+    }
+
+    log_info("Modelo eliminado: " + name);
+    json_ok(res, {{"status", "deleted"}, {"model", name}});
+}
+
+// ============================================================================
+// Descargar modelo (liberar recursos)
+// ============================================================================
+void handle_unload_model(const httplib::Request& /*req*/, httplib::Response& res,
+                          AlfredCore& core) {
+    bool was_loaded = core.llm().is_loaded();
+    core.unload_current_model();
+
+    json data;
+    data["status"] = was_loaded ? "unloaded" : "already_unloaded";
+    json_ok(res, data);
+}
+
+// ============================================================================
+// Configuracion del modelo LLM
+// ============================================================================
+void handle_get_model_config(const httplib::Request& /*req*/, httplib::Response& res) {
+    auto& cfg = get_config();
+    json data;
+    data["n_ctx"]        = cfg.n_ctx;
+    data["n_gpu_layers"] = cfg.n_gpu_layers;
+    data["n_batch"]      = cfg.n_batch;
+    data["n_threads"]    = cfg.n_threads;
+    data["temperature"]  = cfg.temperature;
+    data["top_p"]        = cfg.top_p;
+    data["max_tokens"]   = cfg.max_tokens;
+    data["seed"]         = cfg.seed;
+    json_ok(res, data);
+}
+
+void handle_set_model_config(const httplib::Request& req, httplib::Response& res,
+                              AlfredCore& core) {
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    auto& cfg = get_config();
+    auto& db  = DBManager::instance();
+
+    // Parametros que requieren reinicio del modelo
+    bool needs_reload = false;
+
+    if (body.contains("n_ctx") && body["n_ctx"].is_number_integer()) {
+        int v = body["n_ctx"].get<int>();
+        v = std::max(512, std::min(131072, v));
+        if (v != cfg.n_ctx) { cfg.n_ctx = v; needs_reload = true; }
+        db.set_app_setting("n_ctx", std::to_string(v));
+    }
+    if (body.contains("n_gpu_layers") && body["n_gpu_layers"].is_number_integer()) {
+        int v = body["n_gpu_layers"].get<int>();
+        v = std::max(0, std::min(999, v));
+        if (v != cfg.n_gpu_layers) { cfg.n_gpu_layers = v; needs_reload = true; }
+        db.set_app_setting("n_gpu_layers", std::to_string(v));
+    }
+    if (body.contains("n_batch") && body["n_batch"].is_number_integer()) {
+        int v = body["n_batch"].get<int>();
+        v = std::max(1, std::min(8192, v));
+        if (v != cfg.n_batch) { cfg.n_batch = v; needs_reload = true; }
+        db.set_app_setting("n_batch", std::to_string(v));
+    }
+    if (body.contains("n_threads") && body["n_threads"].is_number_integer()) {
+        int v = body["n_threads"].get<int>();
+        v = std::max(0, std::min(256, v));
+        if (v != cfg.n_threads) { cfg.n_threads = v; needs_reload = true; }
+        db.set_app_setting("n_threads", std::to_string(v));
+    }
+
+    // Parametros de sampling (se aplican en caliente si el modelo esta cargado)
+    if (body.contains("temperature") && body["temperature"].is_number()) {
+        float v = body["temperature"].get<float>();
+        v = std::max(0.0f, std::min(2.0f, v));
+        cfg.temperature = v;
+        db.set_app_setting("temperature", std::to_string(v));
+        if (core.llm().is_loaded()) core.llm().set_temperature(v);
+    }
+    if (body.contains("top_p") && body["top_p"].is_number()) {
+        float v = body["top_p"].get<float>();
+        v = std::max(0.0f, std::min(1.0f, v));
+        cfg.top_p = v;
+        db.set_app_setting("top_p", std::to_string(v));
+        if (core.llm().is_loaded()) core.llm().set_top_p(v);
+    }
+    if (body.contains("max_tokens") && body["max_tokens"].is_number_integer()) {
+        int v = body["max_tokens"].get<int>();
+        v = std::max(1, std::min(131072, v));
+        cfg.max_tokens = v;
+        db.set_app_setting("max_tokens", std::to_string(v));
+        if (core.llm().is_loaded()) core.llm().set_max_tokens(v);
+    }
+    if (body.contains("seed") && body["seed"].is_number_integer()) {
+        int v = body["seed"].get<int>();
+        cfg.seed = v;
+        db.set_app_setting("seed", std::to_string(v));
+    }
+
+    json data;
+    data["status"] = "saved";
+    data["needs_reload"] = needs_reload;
+    json_ok(res, data);
+}
+
+// ============================================================================
+// Auto-tune de parametros de inferencia
+// ============================================================================
+void handle_autotune(const httplib::Request& req, httplib::Response& res,
+                      AlfredCore& core) {
+    auto& gpu = GPUManager::instance();
+    gpu.refresh();
+
+    // Calcular tamano del modelo activo (si hay uno cargado o pendiente)
+    size_t model_mb = 0;
+    // Verificar si hay modelo_path en query params (para calcular sobre un modelo especifico)
+    if (req.has_param("model_path")) {
+        std::string path = req.get_param_value("model_path");
+        std::error_code ec;
+        if (std::filesystem::exists(path)) {
+            model_mb = static_cast<size_t>(std::filesystem::file_size(path, ec) / (1024 * 1024));
+        }
+    }
+
+    // Si no se paso modelo, intentar usar el modelo activo
+    if (model_mb == 0 && core.llm().is_loaded()) {
+        // Buscar archivo del modelo activo en disco
+        std::string model_name = core.llm().model_name();
+        if (!model_name.empty()) {
+            std::string model_path = get_config().models_dir + "/" + model_name;
+            std::error_code ec;
+            if (std::filesystem::exists(model_path)) {
+                model_mb = static_cast<size_t>(std::filesystem::file_size(model_path, ec) / (1024 * 1024));
+            }
+        }
+    }
+
+    auto settings = gpu.auto_tune(model_mb);
+
+    json data;
+    data["n_ctx"]        = settings.n_ctx;
+    data["n_gpu_layers"] = settings.n_gpu_layers;
+    data["n_batch"]      = settings.n_batch;
+    data["n_threads"]    = settings.n_threads;
+    data["max_tokens"]   = settings.max_tokens;
+
+    // Info de hardware detectado
+    json hw;
+    hw["gpu_available"]  = settings.gpu_available;
+    hw["vram_total_mb"]  = settings.vram_total_mb;
+    hw["vram_free_mb"]   = settings.vram_free_mb;
+    hw["cpu_cores"]      = settings.cpu_cores;
+    hw["device_name"]    = gpu.info().device_name;
+    hw["model_size_mb"]  = model_mb;
+    data["hardware"]     = hw;
+
     json_ok(res, data);
 }
 
@@ -748,6 +939,21 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Get("/models/status", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_model_status(req, res, core);
+    });
+    server.Delete("/models/:name", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_delete_model(req, res, core);
+    });
+    server.Post("/models/unload", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_unload_model(req, res, core);
+    });
+    server.Get("/models/config", [](const httplib::Request& req, httplib::Response& res) {
+        handle_get_model_config(req, res);
+    });
+    server.Post("/models/config", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_set_model_config(req, res, core);
+    });
+    server.Get("/models/autotune", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_autotune(req, res, core);
     });
 
     // Optimizaciones

@@ -89,17 +89,14 @@ public sealed class BackendProcessManager : IDisposable
 
         try
         {
-            // Intentar terminacion limpia primero
-            _process.CloseMainWindow();
-            if (!_process.WaitForExit(3000))
-            {
-                _process.Kill(entireProcessTree: true);
-                await _process.WaitForExitAsync();
-            }
+            _process.Kill(entireProcessTree: true);
+            // Esperar maximo 3 segundos a que termine
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            try { await _process.WaitForExitAsync(cts.Token); } catch (OperationCanceledException) { }
         }
         catch
         {
-            try { _process.Kill(entireProcessTree: true); } catch { /* Proceso ya termino */ }
+            // Proceso ya termino o no se pudo matar
         }
         finally
         {
@@ -143,18 +140,27 @@ public sealed class BackendProcessManager : IDisposable
     {
         // Rutas relativas al directorio de la app
         string appDir = AppContext.BaseDirectory;
+        string cwd = Environment.CurrentDirectory;
         string[] searchPaths =
         [
             // Produccion: junto al ejecutable de la UI
             Path.Combine(appDir, "alfred.exe"),
             // Estructura de instalador: backend/ junto a la UI
             Path.Combine(appDir, "backend", "alfred.exe"),
+            // Desarrollo: cwd del proceso (tarea de VS Code)
+            Path.Combine(cwd, "build", "alfred.exe"),
+            Path.Combine(cwd, "build", "Debug", "alfred.exe"),
+            Path.Combine(cwd, "build", "Release", "alfred.exe"),
             // Desarrollo: build en raiz del repo (Ninja/Make)
             Path.Combine(appDir, "..", "..", "..", "..", "build", "alfred.exe"),
             // Desarrollo: build Visual Studio Debug
             Path.Combine(appDir, "..", "..", "..", "..", "build", "Debug", "alfred.exe"),
             // Desarrollo: build Visual Studio Release
             Path.Combine(appDir, "..", "..", "..", "..", "build", "Release", "alfred.exe"),
+            // Desarrollo: rutas cuando BaseDirectory agrega subcarpetas x64/Debug/net*
+            Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build", "alfred.exe"),
+            Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build", "Debug", "alfred.exe"),
+            Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build", "Release", "alfred.exe"),
         ];
 
         foreach (string path in searchPaths)

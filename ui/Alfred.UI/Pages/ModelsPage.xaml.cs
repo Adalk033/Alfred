@@ -1,3 +1,4 @@
+using Alfred.UI.Models;
 using Alfred.UI.Services;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
@@ -13,6 +14,8 @@ public sealed partial class ModelsPage : Page
     private AlfredApiClient? _api;
     private readonly ModelDownloadService _downloader = new();
     private readonly HuggingFaceService _hf = new();
+    private bool _isAutoTuned;          // true cuando los valores mostrados son del auto-tune
+    private bool _suppressConfigChange; // evita que ValueChanged dispare durante auto-tune/reset
 
     public ModelsPage()
     {
@@ -22,6 +25,23 @@ public sealed partial class ModelsPage : Page
             _downloader.Dispose();
             _hf.Dispose();
         };
+
+        // Marcar config como "Custom" cuando el usuario toca cualquier NumberBox
+        NCtxBox.ValueChanged += OnConfigValueChanged;
+        NGpuLayersBox.ValueChanged += OnConfigValueChanged;
+        NBatchBox.ValueChanged += OnConfigValueChanged;
+        NThreadsBox.ValueChanged += OnConfigValueChanged;
+        TemperatureBox.ValueChanged += OnConfigValueChanged;
+        TopPBox.ValueChanged += OnConfigValueChanged;
+        MaxTokensBox.ValueChanged += OnConfigValueChanged;
+        SeedBox.ValueChanged += OnConfigValueChanged;
+    }
+
+    private void OnConfigValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_suppressConfigChange) return;
+        if (_isAutoTuned)
+            SetConfigMode(isAutoTuned: false);
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -32,6 +52,7 @@ public sealed partial class ModelsPage : Page
 
         ModelsDirText.Text = $"Directorio de modelos: {_downloader.ModelsDirectory}";
         await LoadData();
+        await LoadConfig();
     }
 
     // ========================================================================
@@ -250,17 +271,241 @@ public sealed partial class ModelsPage : Page
 
         try
         {
-            bool success = await _api.ChangeModelAsync(modelPath);
+            var (success, error, warning) = await _api.ChangeModelAsync(modelPath);
             if (success)
+            {
                 await LoadData();
+                if (!string.IsNullOrEmpty(warning))
+                    await ShowWarning(warning);
+            }
             else
-                await ShowError("No se pudo cambiar el modelo LLM.");
+            {
+                await ShowError($"No se pudo cargar el modelo LLM.\n\n{error}");
+            }
         }
         finally
         {
             btn.IsEnabled = true;
             btn.Content = "Usar como LLM";
         }
+    }
+
+    // ========================================================================
+    // Eliminar modelo
+    // ========================================================================
+
+    private async void OnDeleteModel(object sender, RoutedEventArgs e)
+    {
+        if (_api == null) return;
+        if (sender is not Button btn || btn.Tag is not string modelName) return;
+
+        // Dialogo de confirmacion
+        var dialog = new ContentDialog
+        {
+            Title = "Eliminar modelo",
+            Content = $"¿Estas seguro de que deseas eliminar \"{modelName}\"?\n\nEsta accion no se puede deshacer.",
+            PrimaryButtonText = "Eliminar",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = this.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        btn.IsEnabled = false;
+        btn.Content = "Eliminando...";
+
+        try
+        {
+            var (success, error) = await _api.DeleteModelAsync(modelName);
+            if (success)
+            {
+                await LoadData();
+            }
+            else
+            {
+                await ShowError($"No se pudo eliminar el modelo.\n\n{error}");
+            }
+        }
+        finally
+        {
+            btn.IsEnabled = true;
+            btn.Content = "Eliminar";
+        }
+    }
+
+    // ========================================================================
+    // Configuracion del modelo LLM
+    // ========================================================================
+
+    private async Task LoadConfig()
+    {
+        if (_api == null) return;
+
+        var config = await _api.GetModelConfigAsync();
+        if (config == null) return;
+
+        _suppressConfigChange = true;
+        NCtxBox.Value = config.NCtx;
+        NGpuLayersBox.Value = config.NGpuLayers;
+        NBatchBox.Value = config.NBatch;
+        NThreadsBox.Value = config.NThreads;
+        TemperatureBox.Value = config.Temperature;
+        TopPBox.Value = config.TopP;
+        MaxTokensBox.Value = config.MaxTokens;
+        SeedBox.Value = config.Seed;
+        _suppressConfigChange = false;
+    }
+
+    private async void OnSaveConfig(object sender, RoutedEventArgs e)
+    {
+        if (_api == null) return;
+
+        SaveConfigButton.IsEnabled = false;
+
+        var config = new ModelConfig
+        {
+            NCtx = (int)NCtxBox.Value,
+            NGpuLayers = (int)NGpuLayersBox.Value,
+            NBatch = (int)NBatchBox.Value,
+            NThreads = (int)NThreadsBox.Value,
+            Temperature = (float)TemperatureBox.Value,
+            TopP = (float)TopPBox.Value,
+            MaxTokens = (int)MaxTokensBox.Value,
+            Seed = (int)SeedBox.Value
+        };
+
+        var (success, needsReload) = await _api.SetModelConfigAsync(config);
+
+        if (success)
+        {
+            if (needsReload)
+            {
+                ConfigInfoBar.Severity = Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning;
+                ConfigInfoBar.Message = "Configuracion guardada. Los cambios de carga se aplicaran la proxima vez que se cargue el modelo. Detene el modelo y vuelve a cargarlo para aplicar los cambios.";
+            }
+            else
+            {
+                ConfigInfoBar.Severity = Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success;
+                ConfigInfoBar.Message = "Configuracion guardada correctamente.";
+            }
+            ConfigInfoBar.IsOpen = true;
+        }
+        else
+        {
+            ConfigInfoBar.Severity = Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error;
+            ConfigInfoBar.Message = "Error al guardar la configuracion.";
+            ConfigInfoBar.IsOpen = true;
+        }
+
+        SaveConfigButton.IsEnabled = true;
+    }
+
+    private void OnResetConfig(object sender, RoutedEventArgs e)
+    {
+        _suppressConfigChange = true;
+        NCtxBox.Value = 4096;
+        NGpuLayersBox.Value = 99;
+        NBatchBox.Value = 512;
+        NThreadsBox.Value = 0;
+        TemperatureBox.Value = 0.7;
+        TopPBox.Value = 0.9;
+        MaxTokensBox.Value = 2048;
+        SeedBox.Value = -1;
+        _suppressConfigChange = false;
+
+        SetConfigMode(isAutoTuned: false);
+        HardwareInfoText.Visibility = Visibility.Collapsed;
+
+        ConfigInfoBar.Severity = Microsoft.UI.Xaml.Controls.InfoBarSeverity.Informational;
+        ConfigInfoBar.Message = "Valores restablecidos a los predeterminados. Presiona 'Guardar' para aplicar.";
+        ConfigInfoBar.IsOpen = true;
+    }
+
+    private async void OnAutoTune(object sender, RoutedEventArgs e)
+    {
+        if (_api == null) return;
+
+        AutoTuneButton.IsEnabled = false;
+
+        var result = await _api.GetAutoTuneAsync();
+        if (result == null)
+        {
+            ConfigInfoBar.Severity = InfoBarSeverity.Error;
+            ConfigInfoBar.Message = "No se pudo obtener la configuracion auto-tune del backend.";
+            ConfigInfoBar.IsOpen = true;
+            AutoTuneButton.IsEnabled = true;
+            return;
+        }
+
+        // Aplicar valores sin disparar OnConfigValueChanged
+        _suppressConfigChange = true;
+        NCtxBox.Value = result.NCtx;
+        NGpuLayersBox.Value = result.NGpuLayers;
+        NBatchBox.Value = result.NBatch;
+        NThreadsBox.Value = result.NThreads;
+        MaxTokensBox.Value = result.MaxTokens;
+        TemperatureBox.Value = 0.7;
+        TopPBox.Value = 0.9;
+        SeedBox.Value = -1;
+        _suppressConfigChange = false;
+
+        // Guardar automaticamente
+        var config = new ModelConfig
+        {
+            NCtx = result.NCtx,
+            NGpuLayers = result.NGpuLayers,
+            NBatch = result.NBatch,
+            NThreads = result.NThreads,
+            Temperature = 0.7f,
+            TopP = 0.9f,
+            MaxTokens = result.MaxTokens,
+            Seed = -1
+        };
+
+        var (success, needsReload) = await _api.SetModelConfigAsync(config);
+
+        // Mostrar info de hardware
+        if (result.Hardware != null)
+        {
+            var hw = result.Hardware;
+            string gpuInfo = hw.GpuAvailable
+                ? $"{hw.DeviceName} | VRAM: {hw.VramFreeMb:N0} MB libre de {hw.VramTotalMb:N0} MB"
+                : "Sin GPU - modo CPU";
+            string cpuInfo = $"CPU: {hw.CpuCores} cores fisicos";
+            string modelInfo = hw.ModelSizeMb > 0 ? $" | Modelo: {hw.ModelSizeMb:N0} MB" : "";
+            HardwareInfoText.Text = $"Hardware detectado: {gpuInfo} | {cpuInfo}{modelInfo}";
+            HardwareInfoText.Visibility = Visibility.Visible;
+        }
+
+        SetConfigMode(isAutoTuned: true);
+
+        if (success)
+        {
+            string reloadMsg = needsReload
+                ? " Recarga el modelo para aplicar los cambios de carga."
+                : "";
+            ConfigInfoBar.Severity = InfoBarSeverity.Success;
+            ConfigInfoBar.Message = $"Auto Tune aplicado y guardado.{reloadMsg}";
+        }
+        else
+        {
+            ConfigInfoBar.Severity = InfoBarSeverity.Warning;
+            ConfigInfoBar.Message = "Auto Tune aplicado en la UI pero no se pudo guardar en el backend.";
+        }
+        ConfigInfoBar.IsOpen = true;
+
+        AutoTuneButton.IsEnabled = true;
+    }
+
+    private void SetConfigMode(bool isAutoTuned)
+    {
+        _isAutoTuned = isAutoTuned;
+        ConfigModeText.Text = isAutoTuned ? "Recommended" : "Custom";
+        ConfigModeBadge.Background = isAutoTuned
+            ? new SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 180, 80))
+            : new SolidColorBrush(Windows.UI.Color.FromArgb(30, 128, 128, 128));
     }
 
     // ========================================================================
@@ -274,6 +519,18 @@ public sealed partial class ModelsPage : Page
             Title = "Error",
             Content = message,
             CloseButtonText = "Aceptar",
+            XamlRoot = this.XamlRoot
+        };
+        await dialog.ShowAsync();
+    }
+
+    private async Task ShowWarning(string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Advertencia",
+            Content = message,
+            CloseButtonText = "Entendido",
             XamlRoot = this.XamlRoot
         };
         await dialog.ShowAsync();
