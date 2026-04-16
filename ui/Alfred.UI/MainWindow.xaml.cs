@@ -20,6 +20,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "Alfred - Asistente IA Local";
         ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
 
         // Establecer icono de la ventana
         var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "icon.ico");

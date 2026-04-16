@@ -802,3 +802,214 @@ El archivo actual menciona "Electron" y "FastAPI" que ya no existen. Reemplazar 
 - [ ] Cambiar modelo desde Models → carga lazy aplicada
 - [ ] Arrancar UI sin `alfred.exe` en rutas absolutas de desarrollo → error claro "no encontrado"
 - [ ] GitHub Action: crear tag `v0.2.1` → workflow genera ZIP descargable en Releases
+
+---
+
+## Auditoria de implementacion (2026-04-14)
+
+> Revision linea por linea de cada item del plan contra el codigo fuente real del proyecto.
+> Resultado: **TODOS los 11 items del plan estan correctamente implementados.**
+
+---
+
+### Auditoria 1 — Backend C++: Lazy Loading del Modelo
+
+#### 1.1 `include/alfred/config.h` — ✅ CORRECTO
+| Campo | Linea | Valor | Estado |
+|-------|-------|-------|--------|
+| `model_lazy_load` | 48 | `true` | OK |
+| `model_idle_timeout_sec` | 51 | `10` | OK |
+| Comentarios explicativos | 45-51 | Presentes | OK |
+
+#### 1.2 `include/alfred/alfred_core.h` — ✅ CORRECTO
+| Elemento | Linea | Estado |
+|----------|-------|--------|
+| `#include <atomic>` | 11 | OK |
+| `#include <thread>` | 12 | OK |
+| `#include <chrono>` | 13 | OK |
+| `pending_model_path_` | 92 | OK |
+| `model_load_mutex_` | 93 | OK |
+| `idle_monitor_thread_` | 94 | OK |
+| `stop_monitor_{ false }` | 95 | OK |
+| `last_query_ns_{ 0 }` | 96 | OK |
+| `build_llm_config()` declarado | 98 | OK |
+| `ensure_model_loaded()` declarado | 99 | OK |
+| `start_idle_monitor()` declarado | 100 | OK |
+| `stop_idle_monitor()` declarado | 101 | OK |
+| Destructor explicito `~AlfredCore()` | 41 | OK |
+
+#### 1.3 `src/app/alfred_core.cpp` — ✅ CORRECTO
+| Metodo/Cambio | Lineas | Estado |
+|---------------|--------|--------|
+| Destructor llama `stop_idle_monitor()` | 28-29 | OK |
+| `initialize()` con carga condicional lazy | 46-78 | OK |
+| Lee `model_idle_timeout_sec` de DB | 60-63 | OK |
+| `build_llm_config()` como metodo auxiliar | 99-113 | OK |
+| `ensure_model_loaded()` con mutex | 115-122 | OK |
+| `start_idle_monitor()` con hilo monitor | 124-148 | OK |
+| `stop_idle_monitor()` con join | 150-154 | OK |
+| `query()` llama `ensure_model_loaded()` | 299 | OK |
+| `query()` actualiza `last_query_ns_` | 348 | OK |
+| `change_model()` con lazy loading y mutex | 354-376 | OK |
+| `get_stats()` expone `model_loaded`, `model_idle_timeout_sec`, `model_lazy_load` | 378-388 | OK |
+
+#### 1.4 `src/app/endpoints.cpp` — ✅ CORRECTO
+| Cambio | Lineas | Estado |
+|--------|--------|--------|
+| Helper `get_int_param()` | 69-79 | OK |
+| Helper `get_float_param()` | 83-94 | OK |
+| GPU JSON parse protegido con try/catch | 549-553 | OK |
+| Runtime update de `model_idle_timeout_sec` | 482-483 | OK |
+| Runtime update de `model_lazy_load` | 484-485 | OK |
+| `handle_root()` usa `ALFRED_VERSION` | 102 | OK |
+
+#### 1.5 `src/app/llm_engine.cpp` — ✅ CORRECTO
+| Cambio | Linea | Estado |
+|--------|-------|--------|
+| RAII para sampler (`unique_ptr` + deleter) | 248-249 | OK |
+| Path parsing con `std::filesystem` | 103 | OK |
+| `model_size_mb()` eliminada del engine | N/A | OK (no existe en llm_engine.h ni .cpp) |
+
+#### 1.6 `CMakeLists.txt` — ✅ CORRECTO
+| Cambio | Lineas | Estado |
+|--------|--------|--------|
+| `BUILD_TYPE=Release` por defecto | 13-16 | OK |
+| CUDA archs configurables `75;86;89` | 25 | OK |
+| Install target | 182-185 | OK |
+| `ALFRED_VERSION` define | 172 | OK |
+| `/GL` + `/LTCG` para MSVC Release | 177-178 | OK |
+
+---
+
+### Auditoria 2 — Frontend C#: Correcciones Criticas
+
+#### 2.1 `BackendProcessManager.cs` — ✅ CORRECTO
+| Cambio | Lineas | Estado |
+|--------|--------|--------|
+| Paths absolutos eliminados (solo relativos) | 146-158 | OK |
+| Ruta `backend/` agregada | 151 | OK |
+| Lambdas refactorizadas a metodos nombrados | 170-185 | OK (`OnOutputData`, `OnErrorData`, `OnExited`) |
+| `Dispose()` desuscribe los 3 eventos | 193-196 | OK |
+| Mensaje de error claro si no encontrado | 37 | OK |
+
+#### 2.2 `ChatPage.xaml.cs` — ✅ CORRECTO
+| Cambio | Lineas | Estado |
+|--------|--------|--------|
+| `UpdateAttachmentPanel()` desuscribe Click antes de reemplazar | 348-356 | OK |
+| Pattern matching `Border { Child: StackPanel sp }` | 352 | OK |
+| `AttachmentList.ItemsSource = null` antes de reconstruir | 356 | OK |
+
+#### 2.3 `MainWindow.xaml.cs` — ✅ CORRECTO
+| Cambio | Linea | Estado |
+|--------|-------|--------|
+| `_backend.StatusChanged -= OnBackendStatusChanged` | 209 | OK |
+| `NotificationService.Instance.NotificationRequested -= ...` | 210 | OK |
+| `_backend.Dispose()` | 212 | OK |
+| `_api.Dispose()` | 213 | OK |
+
+#### 2.4 `AlfredApiClient.cs` — ✅ CORRECTO
+| Cambio | Lineas | Estado |
+|--------|--------|--------|
+| `HttpClient.Timeout = InfiniteTimeSpan` | 26-27 | OK |
+| `GetAsync<T>` con timeout por CTS + logging | 280-305 | OK |
+| `PostAsync<T>` con timeout por CTS + logging | 307-332 | OK |
+| `PostRawAsync` con timeout | 334-350 | OK |
+| `PutAsync` con timeout | 352-364 | OK |
+| `DeleteAsync` con timeout | 366-378 | OK |
+| `IsHealthyAsync` con 5s dedicado | 34-50 | OK |
+
+**Timeouts por operacion verificados:**
+
+| Operacion | Timeout plan | Timeout real | Estado |
+|-----------|-------------|-------------|--------|
+| `IsHealthyAsync` | 5s | 5s | OK |
+| `GetHealthAsync` | 5s | 5s | OK |
+| `GetGpuStatusAsync` | 10s | 10s | OK |
+| `GetModelStatusAsync` | 10s | 10s | OK |
+| `ListConversationsAsync` | 15s | 15s (default) | OK |
+| `GetHistoryAsync` | 15s | 15s (default) | OK |
+| `SearchHistoryAsync` | 15s | 15s (default) | OK |
+| `SendQueryAsync` | 180s | 180s | OK |
+| `SendQueryWithAttachmentAsync` | 180s | 180s | OK |
+| `SendConversationQueryAsync` | 180s | 180s | OK |
+| `ChangeModelAsync` | 300s | 300s | OK |
+
+#### 2.5 `SettingsPage.xaml` + `.xaml.cs` — ✅ CORRECTO
+| Cambio | Archivo | Lineas | Estado |
+|--------|---------|--------|--------|
+| Seccion "Modelo LLM" en XAML | `.xaml` | 137-177 | OK |
+| `NumberBox` IdleTimeoutBox (min=0, max=3600) | `.xaml` | 160-169 | OK |
+| `IdleTimeoutHint` TextBlock | `.xaml` | 172-175 | OK |
+| `LoadAllSettings()` carga timeout de DB | `.xaml.cs` | 86-90 | OK |
+| Default a 10 si no hay valor guardado | `.xaml.cs` | 90 | OK |
+| `OnIdleTimeoutChanged` persiste y actualiza hint | `.xaml.cs` | 308-316 | OK |
+
+---
+
+### Auditoria 3 — GitHub Actions CI/CD
+
+#### 3.1 `build-release.yml` (CUDA) — ✅ CORRECTO
+| Elemento | Lineas | Estado |
+|----------|--------|--------|
+| Trigger: tags `v*.*.*` | 3-4 | OK |
+| Trigger: `workflow_dispatch` con input version | 5-9 | OK |
+| CUDA 12.4 toolkit install | 28-33 | OK |
+| CMake `-DALFRED_CUDA=ON -DALFRED_CUDA_ARCH="75;86;89"` | 37-40 | OK |
+| Backend artifact upload | 45-52 | OK |
+| Frontend .NET 9 build + publish | 56-85 | OK |
+| Package con LEEME.txt | 113-135 | OK |
+| GitHub Release con `softprops/action-gh-release@v2` | 141-161 | OK |
+| ZIP: `Alfred-v{VERSION}-win-x64.zip` | 138 | OK |
+
+#### 3.2 `build-cpu.yml` (CPU-only) — ✅ CORRECTO
+| Elemento | Lineas | Estado |
+|----------|--------|--------|
+| Mismo trigger que CUDA | 3-9 | OK |
+| CMake `-DALFRED_CUDA=OFF` | 30-31 | OK |
+| Artifact `alfred-backend-cpu` | 39 | OK |
+| ZIP: `Alfred-v{VERSION}-win-x64-cpu.zip` | 129 | OK |
+| Se sube a la misma Release | 132-139 | OK |
+
+---
+
+### Auditoria 4 — Documentacion
+
+#### 4.1 `.github/copilot-instructions.md` — ✅ CORRECTO
+| Elemento | Estado |
+|----------|--------|
+| Sin referencias a Electron/FastAPI | OK |
+| Stack actual: C++20, CMake, llama.cpp, WinUI 3, .NET 9 | OK |
+| Convenciones: espanol sin tildes | OK |
+| Arquitectura: REST localhost:8000 | OK |
+| Diagrama de componentes | OK |
+| Modelo de carga lazy documentado | OK |
+| Estructura de directorios | OK |
+
+---
+
+### Observaciones adicionales
+
+1. **`gpu_manager.h` tiene `optimal_gpu_layers(size_t model_size_mb)`** — Este es un metodo de `GPUManager`, no de `LLMEngine`. El plan solo pedia eliminar `model_size_mb()` de `LLMEngine`, lo cual se hizo correctamente. No confundir con el parametro `model_size_mb` de GPUManager que es un concepto diferente.
+
+2. **Coherencia de la version** — `CMakeLists.txt` define version `0.2.0`, `SettingsPage.xaml` muestra "Alfred 2.0.0" (linea 199). Hay una discrepancia menor en la UI que muestra `2.0.0` en vez de `0.2.0`. Esto no estaba en el plan original pero es un detalle a corregir en el futuro.
+
+3. **`copilot-instructions.md`** — El archivo actualizado va mas alla de lo especificado en el plan: incluye un diagrama de arquitectura ASCII, seccion de estructura de directorios, y seccion de lazy loading. Esto es una mejora positiva.
+
+4. **`build-cpu.yml`** — Comparte el job `build-frontend` con nombre identico al de `build-release.yml`. Si ambos workflows se ejecutan en paralelo por el mismo tag, podrian generar un conflicto de artifact names. Considerar renombrar a `alfred-frontend-cpu` en el workflow CPU para evitar colisiones.
+
+5. **Los tests de verificacion post-implementacion** (seccion final) son pruebas manuales que requieren una maquina con GPU NVIDIA y un modelo GGUF descargado. No se pueden automatizar completamente en CI.
+
+---
+
+### Resumen ejecutivo
+
+| Seccion | Items | Completados | Pendientes |
+|---------|-------|-------------|------------|
+| 1. Backend C++ Lazy Loading | 6 archivos | 6 | 0 |
+| 2. Frontend C# Correcciones | 5 archivos | 5 | 0 |
+| 3. GitHub Actions CI/CD | 2 workflows | 2 | 0 |
+| 4. Documentacion | 1 archivo | 1 | 0 |
+| **Total implementacion** | **14 archivos** | **14** | **0** |
+| Verificacion manual | 8 pruebas | 0 | 8 |
+
+**Estado final: Toda la implementacion de codigo esta completa. Quedan pendientes las 8 pruebas de verificacion manual post-implementacion.**

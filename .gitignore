@@ -2,6 +2,8 @@
 build/
 cmake-build-*/
 out/
+ui/Alfred.UI/bin/
+ui/Alfred.UI/obj/
 
 # Compilados
 *.exe

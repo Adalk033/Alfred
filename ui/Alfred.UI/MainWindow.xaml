@@ -11,12 +11,13 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Barra de estado del backend -->
-        <Grid Grid.Row="0" Padding="12,6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <!-- Barra de estado del backend (title bar personalizada) -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="12,6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="CaptionButtonsColumn" Width="188" />
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
