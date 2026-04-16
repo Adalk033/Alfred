@@ -70,7 +70,7 @@ endif()
 
 FetchContent_Declare(llama_cpp
     GIT_REPOSITORY https://github.com/ggml-org/llama.cpp
-    GIT_TAG        b8184
+    GIT_TAG        b8808
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(llama_cpp)

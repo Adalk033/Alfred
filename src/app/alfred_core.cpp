@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <regex>
+#include <vector>
 
 namespace alfred {
 
@@ -117,7 +118,7 @@ LLMConfig AlfredCore::build_llm_config(const std::string& model_path, int gpu_la
     LLMConfig c;
     c.model_path   = model_path;
     c.n_ctx        = cfg.n_ctx;
-    c.n_gpu_layers = gpu_layers_override >= 0 ? gpu_layers_override : 0;
+    c.n_gpu_layers = gpu_layers_override >= 0 ? gpu_layers_override : cfg.n_gpu_layers;
     c.n_batch      = cfg.n_batch;
     c.n_threads    = cfg.n_threads;
     c.temperature  = cfg.temperature;
@@ -139,13 +140,37 @@ void AlfredCore::ensure_model_loaded() {
     auto fsize = std::filesystem::file_size(pending_model_path_, ec);
     size_t model_mb = ec ? 0 : static_cast<size_t>(fsize / (1024 * 1024));
 
-    int attempts[] = { 99, gpu.optimal_gpu_layers(model_mb), 0 };
-    int tried = -1;
+    const int requested_layers = get_config().n_gpu_layers;
+    std::vector<int> attempts = {
+        requested_layers,
+        gpu.optimal_gpu_layers(model_mb),
+        0
+    };
+    int tried = -9999;
+    bool attempted_gpu = false;
+
+    log_info("Loading model: " + pending_model_path_);
+    log_info("Requested GPU layers (config): " + std::to_string(requested_layers));
+
     for (int layers : attempts) {
         if (layers > 0 && !gpu.has_cuda()) continue;
         if (layers == tried) continue;
         tried = layers;
-        if (llm_->load_model(build_llm_config(pending_model_path_, layers))) return;
+
+        if (layers > 0) {
+            attempted_gpu = true;
+        }
+
+        log_info("Intentando carga lazy con n_gpu_layers=" + std::to_string(layers));
+        if (llm_->load_model(build_llm_config(pending_model_path_, layers))) {
+            if (layers == 0 && attempted_gpu) {
+                log_warn("Falling back to CPU due to error en carga GPU previa");
+            }
+            return;
+        }
+
+        log_warn("Fallo carga lazy con n_gpu_layers=" + std::to_string(layers) +
+                 " | Motivo: " + llm_->last_error());
         llm_->unload_model();
     }
     log_error("Error en carga lazy del modelo LLM: " + llm_->last_error());
@@ -404,8 +429,13 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
     size_t model_mb = ec ? 0 : static_cast<size_t>(fsize / (1024 * 1024));
 
     // Estrategia escalonada: full GPU -> parcial -> CPU
-    int attempts[] = { 99, gpu.optimal_gpu_layers(model_mb), 0 };
+    const int requested_layers = get_config().n_gpu_layers;
+    std::vector<int> attempts = { requested_layers, gpu.optimal_gpu_layers(model_mb), 0 };
     int used_layers = -1;
+    bool attempted_gpu = false;
+
+    log_info("Loading model: " + model_path);
+    log_info("Requested GPU layers (config): " + std::to_string(requested_layers));
 
     for (int layers : attempts) {
         // Saltar si no hay CUDA y layers > 0
@@ -414,11 +444,17 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
         if (layers == used_layers) continue;
 
         log_info("Intentando cargar modelo con gpu_layers=" + std::to_string(layers) + "...");
+        if (layers > 0) {
+            attempted_gpu = true;
+        }
         llm_->unload_model();
         result.success = llm_->load_model(build_llm_config(model_path, layers));
         used_layers = layers;
 
         if (result.success) {
+            if (layers == 0 && attempted_gpu) {
+                log_warn("Falling back to CPU due to error en carga GPU previa");
+            }
             if (layers == 0 && gpu.has_cuda()) {
                 result.warning = "El modelo (" + std::to_string(model_mb) +
                     " MB) necesita mas VRAM de la disponible (" +
@@ -434,6 +470,9 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
                 log_info(result.warning);
             }
             break;
+        } else {
+            log_warn("Fallo carga de modelo con gpu_layers=" + std::to_string(layers) +
+                     " | Motivo: " + llm_->last_error());
         }
     }
 

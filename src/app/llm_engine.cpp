@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <thread>
 #include <filesystem>
+#include <mutex>
 
 namespace alfred {
 
@@ -60,9 +61,24 @@ bool LLMEngine::load_model(const LLMConfig& config) {
     config_ = config;
     last_error_.clear();
 
+    static std::once_flag llama_backend_once;
+    std::call_once(llama_backend_once, []() {
+        log_info("Inicializando backend llama.cpp/ggml...");
+        llama_backend_init();
+        log_info("Backend llama.cpp inicializado correctamente");
+    });
+
+    const bool gpu_offload_supported = llama_supports_gpu_offload();
+
     log_info("Cargando modelo LLM: " + config.model_path);
-    log_info("  GPU layers: " + std::to_string(config.n_gpu_layers));
+    log_info("  Requested GPU layers: " + std::to_string(config.n_gpu_layers));
+    log_info("  llama_supports_gpu_offload: " + std::string(gpu_offload_supported ? "YES" : "NO"));
     log_info("  Context: " + std::to_string(config.n_ctx));
+    log_info("  Batch: " + std::to_string(config.n_batch));
+
+    if (config.n_gpu_layers > 0 && !gpu_offload_supported) {
+        log_warn("GPU offload solicitado pero backend reporta soporte GPU OFF. Se puede usar CPU fallback.");
+    }
 
     // Verificar que el archivo existe y es accesible
     {
@@ -91,6 +107,18 @@ bool LLMEngine::load_model(const LLMConfig& config) {
         return false;
     }
 
+    const int model_layers = llama_model_n_layer(model_);
+    int effective_gpu_layers = 0;
+    if (gpu_offload_supported && config.n_gpu_layers != 0) {
+        if (config.n_gpu_layers < 0) {
+            effective_gpu_layers = model_layers;
+        } else {
+            effective_gpu_layers = std::min(config.n_gpu_layers, model_layers);
+        }
+    }
+    log_info("  Model layers total: " + std::to_string(model_layers));
+    log_info("  Effective GPU layers (estimado): " + std::to_string(effective_gpu_layers));
+
     // Parametros del contexto
     auto ctx_params = llama_context_default_params();
     ctx_params.n_ctx = static_cast<uint32_t>(config.n_ctx);
@@ -115,6 +143,9 @@ bool LLMEngine::load_model(const LLMConfig& config) {
         model_ = nullptr;
         return false;
     }
+
+    log_info("  Actual n_ctx usado: " + std::to_string(llama_n_ctx(ctx_)));
+    log_info("  Actual n_batch usado: " + std::to_string(llama_n_batch(ctx_)));
 
     auto end = std::chrono::steady_clock::now();
     double ms = std::chrono::duration<double, std::milli>(end - start).count();

@@ -11,11 +11,100 @@
 #include <array>
 #include <cstdio>
 #include <thread>
+#include <vector>
+#include <algorithm>
 #include <nlohmann/json.hpp>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace alfred {
 
 using json = nlohmann::json;
+
+#ifdef _WIN32
+struct CudaRuntimeProbeResult {
+    bool cudart_loaded = false;
+    bool cublas_loaded = false;
+    std::string cudart_dll;
+    std::string cublas_dll;
+    bool cuda_api_available = false;
+    int device_count = -1;
+    std::string status;
+};
+
+static CudaRuntimeProbeResult probe_cuda_runtime() {
+    CudaRuntimeProbeResult r;
+
+    const char* cudart_candidates[] = {
+        "cudart64_12.dll",
+        "cudart64_120.dll",
+        "cudart64_11.dll",
+        "cudart64_110.dll"
+    };
+
+    const char* cublas_candidates[] = {
+        "cublas64_12.dll",
+        "cublas64_11.dll"
+    };
+
+    HMODULE cudart = nullptr;
+    for (const char* dll : cudart_candidates) {
+        cudart = LoadLibraryA(dll);
+        if (cudart) {
+            r.cudart_loaded = true;
+            r.cudart_dll = dll;
+            break;
+        }
+    }
+
+    HMODULE cublas = nullptr;
+    for (const char* dll : cublas_candidates) {
+        cublas = LoadLibraryA(dll);
+        if (cublas) {
+            r.cublas_loaded = true;
+            r.cublas_dll = dll;
+            break;
+        }
+    }
+
+    if (!cudart) {
+        r.status = "CUDA runtime no disponible (cudart DLL no encontrada)";
+        if (cublas) FreeLibrary(cublas);
+        return r;
+    }
+
+    using cudaGetDeviceCountFn = int(*)(int*);
+    using cudaGetErrorStringFn = const char*(*)(int);
+
+    auto p_cudaGetDeviceCount = reinterpret_cast<cudaGetDeviceCountFn>(
+        GetProcAddress(cudart, "cudaGetDeviceCount"));
+    auto p_cudaGetErrorString = reinterpret_cast<cudaGetErrorStringFn>(
+        GetProcAddress(cudart, "cudaGetErrorString"));
+
+    if (!p_cudaGetDeviceCount || !p_cudaGetErrorString) {
+        r.status = "CUDA runtime cargado pero API incompleta (cudaGetDeviceCount/cudaGetErrorString)";
+        if (cublas) FreeLibrary(cublas);
+        FreeLibrary(cudart);
+        return r;
+    }
+
+    r.cuda_api_available = true;
+    int count = 0;
+    int err = p_cudaGetDeviceCount(&count);
+    r.device_count = count;
+    const char* err_str = p_cudaGetErrorString(err);
+    r.status = err_str ? err_str : "cudaGetErrorString devolvio nullptr";
+
+    if (cublas) FreeLibrary(cublas);
+    FreeLibrary(cudart);
+    return r;
+}
+#endif
 
 // Ejecutar comando y capturar salida
 static std::string exec_command(const std::string& cmd) {
@@ -49,6 +138,28 @@ void GPUManager::detect() {
     detected_ = true;
 
     log_info("Detectando GPU CUDA...");
+
+#ifdef _WIN32
+    auto cuda_probe = probe_cuda_runtime();
+    log_info("CUDA runtime cudart: " + std::string(cuda_probe.cudart_loaded ? "OK" : "NO") +
+             (cuda_probe.cudart_dll.empty() ? "" : " (" + cuda_probe.cudart_dll + ")"));
+    log_info("CUDA runtime cublas: " + std::string(cuda_probe.cublas_loaded ? "OK" : "NO") +
+             (cuda_probe.cublas_dll.empty() ? "" : " (" + cuda_probe.cublas_dll + ")"));
+
+    if (!cuda_probe.cudart_loaded) {
+        log_warn("CUDA runtime no disponible: faltan DLLs cudart64_*.dll");
+    }
+    if (!cuda_probe.cublas_loaded) {
+        log_warn("CUDA BLAS no disponible: falta cublas64_*.dll");
+    }
+
+    if (cuda_probe.cuda_api_available) {
+        log_info("CUDA status: " + cuda_probe.status);
+        log_info("CUDA device count: " + std::to_string(std::max(0, cuda_probe.device_count)));
+    } else {
+        log_warn("CUDA API no disponible en runtime: " + cuda_probe.status);
+    }
+#endif
 
     // Intentar nvidia-smi para detectar GPU NVIDIA
     std::string output = exec_command(
