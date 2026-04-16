@@ -76,7 +76,7 @@ jobs:
       - name: Restaurar dependencias NuGet
         run: dotnet restore ui/Alfred.UI/Alfred.UI.csproj
 
-      - name: Compilar UI
+      - name: Compilar UI (self-contained)
         run: |
           msbuild ui/Alfred.UI/Alfred.UI.csproj `
             /restore `
@@ -85,13 +85,14 @@ jobs:
             /p:Configuration=Release `
             /p:Platform=x64 `
             /p:RuntimeIdentifier=win-x64 `
+            /p:SelfContained=true `
             /p:WindowsAppSDKSelfContained=true
 
-      - name: Copiar ejecutable a output
+      - name: Copiar output completo
         run: |
+          $src = "ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/win-x64"
           New-Item -ItemType Directory -Path publish/Alfred.UI -Force
-          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/win-x64/Alfred.UI.exe -Destination publish/Alfred.UI/
-          Copy-Item -Path ui/Alfred.UI/bin/x64/Release/net9.0-windows10.0.19041.0/win-x64/*.dll -Destination publish/Alfred.UI/ -ErrorAction SilentlyContinue
+          Copy-Item -Path "$src/*" -Destination publish/Alfred.UI/ -Recurse -Force
 
       - name: Subir artifact del frontend
         uses: actions/upload-artifact@v4
@@ -150,8 +151,16 @@ jobs:
           Los datos se guardan en: %APPDATA%\Alfred\
           "@ | Out-File "$dist\LEEME.txt" -Encoding UTF8
 
-      - name: Comprimir
+      - name: Comprimir ZIP (portable)
         run: Compress-Archive -Path "Alfred-v${{ env.VERSION }}" -DestinationPath "Alfred-v${{ env.VERSION }}-win-x64.zip"
+
+      - name: Crear instalador con Inno Setup
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            /DMyAppVersion=${{ env.VERSION }} `
+            /DSourceDir="${{ github.workspace }}\Alfred-v${{ env.VERSION }}" `
+            installer\alfred.iss
+          Move-Item -Path "installer\Alfred-v${{ env.VERSION }}-win-x64-setup.exe" -Destination .
 
       - name: Crear GitHub Release
         uses: softprops/action-gh-release@v2
@@ -160,15 +169,25 @@ jobs:
           name: Alfred v${{ env.VERSION }}
           draft: false
           prerelease: false
-          files: Alfred-v${{ env.VERSION }}-win-x64.zip
+          files: |
+            Alfred-v${{ env.VERSION }}-win-x64-setup.exe
+            Alfred-v${{ env.VERSION }}-win-x64.zip
           body: |
             ## Alfred v${{ env.VERSION }}
 
-            ### Instalacion
+            ### Instalacion (recomendado)
+            1. Descargar `Alfred-v${{ env.VERSION }}-win-x64-setup.exe`
+            2. Ejecutar el instalador
+            3. Alfred se instalara en Archivos de programa y creara accesos directos
+
+            ### Instalacion portable
             1. Descargar `Alfred-v${{ env.VERSION }}-win-x64.zip`
             2. Extraer en cualquier carpeta
             3. Ejecutar `Alfred.UI.exe`
-            4. En la pantalla de Modelos, descargar un modelo GGUF
+
+            ### Primeros pasos
+            - En la pantalla de Modelos, descargar un modelo GGUF
+            - Seleccionar el modelo y empezar a chatear
 
             ### Requisitos
             - Windows 10 (19041+) o Windows 11
