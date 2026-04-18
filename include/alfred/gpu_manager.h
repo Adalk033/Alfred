@@ -27,11 +27,16 @@ struct GPUInfo {
 
 // Resultado del auto-tune de parametros de inferencia
 struct AutoTuneSettings {
-    int n_ctx        = 2048;
-    int n_gpu_layers = 0;
-    int n_batch      = 128;
-    int n_threads    = 0;
-    int max_tokens   = 1024;
+    int n_ctx         = 2048;
+    int n_gpu_layers  = 0;
+    int n_batch       = 128;
+    int n_ubatch      = 128;
+    int n_threads     = 0;
+    int max_tokens    = 1024;
+    int flash_attn    = -1;        // -1 auto, 0 off, 1 on
+    bool offload_kqv  = true;
+    std::string cache_type_k = "f16";
+    std::string cache_type_v = "f16";
     size_t vram_total_mb = 0;
     size_t vram_free_mb  = 0;
     int cpu_cores        = 0;

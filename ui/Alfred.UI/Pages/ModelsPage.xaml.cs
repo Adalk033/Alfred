@@ -35,6 +35,26 @@ public sealed partial class ModelsPage : Page
         TopPBox.ValueChanged += OnConfigValueChanged;
         MaxTokensBox.ValueChanged += OnConfigValueChanged;
         SeedBox.ValueChanged += OnConfigValueChanged;
+
+        // Tuning avanzado: NumberBoxes
+        NUbatchBox.ValueChanged += OnConfigValueChanged;
+        NThreadsBatchBox.ValueChanged += OnConfigValueChanged;
+        TopKBox.ValueChanged += OnConfigValueChanged;
+        MinPBox.ValueChanged += OnConfigValueChanged;
+        RepeatPenaltyBox.ValueChanged += OnConfigValueChanged;
+        RepeatLastNBox.ValueChanged += OnConfigValueChanged;
+    }
+
+    private void OnAdvancedSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressConfigChange) return;
+        if (_isAutoTuned) SetConfigMode(isAutoTuned: false);
+    }
+
+    private void OnAdvancedToggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressConfigChange) return;
+        if (_isAutoTuned) SetConfigMode(isAutoTuned: false);
     }
 
     private void OnConfigValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -344,18 +364,86 @@ public sealed partial class ModelsPage : Page
         if (_api == null) return;
 
         var config = await _api.GetModelConfigAsync();
-        if (config == null) return;
+        if (config != null)
+        {
+            _suppressConfigChange = true;
+            NCtxBox.Value = config.NCtx;
+            NGpuLayersBox.Value = config.NGpuLayers;
+            NBatchBox.Value = config.NBatch;
+            NThreadsBox.Value = config.NThreads;
+            TemperatureBox.Value = config.Temperature;
+            TopPBox.Value = config.TopP;
+            MaxTokensBox.Value = config.MaxTokens;
+            SeedBox.Value = config.Seed;
 
-        _suppressConfigChange = true;
-        NCtxBox.Value = config.NCtx;
-        NGpuLayersBox.Value = config.NGpuLayers;
-        NBatchBox.Value = config.NBatch;
-        NThreadsBox.Value = config.NThreads;
-        TemperatureBox.Value = config.Temperature;
-        TopPBox.Value = config.TopP;
-        MaxTokensBox.Value = config.MaxTokens;
-        SeedBox.Value = config.Seed;
-        _suppressConfigChange = false;
+            // Tuning avanzado
+            NUbatchBox.Value = config.NUbatch;
+            NThreadsBatchBox.Value = config.NThreadsBatch;
+            TopKBox.Value = config.TopK;
+            MinPBox.Value = config.MinP;
+            RepeatPenaltyBox.Value = config.RepeatPenalty;
+            RepeatLastNBox.Value = config.RepeatLastN;
+
+            OffloadKqvToggle.IsOn = config.OffloadKqv;
+            UseMmapToggle.IsOn = config.UseMmap;
+            UseMlockToggle.IsOn = config.UseMlock;
+
+            SelectComboByTag(FlashAttnCombo, config.FlashAttn.ToString());
+            SelectComboByTag(CacheKCombo, config.CacheTypeK);
+            SelectComboByTag(CacheVCombo, config.CacheTypeV);
+            _suppressConfigChange = false;
+        }
+
+        // Cargar timeout de descarga del modelo (movido desde SettingsPage)
+        var timeoutStr = await _api.GetAppSettingAsync("model_idle_timeout_sec");
+        if (int.TryParse(timeoutStr, out int idleTimeout))
+            IdleTimeoutBox.Value = idleTimeout;
+        else
+            IdleTimeoutBox.Value = 10;
+        UpdateIdleTimeoutHint((int)IdleTimeoutBox.Value);
+    }
+
+    private static void SelectComboByTag(ComboBox combo, string tag)
+    {
+        for (int i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is ComboBoxItem item && item.Tag?.ToString() == tag)
+            {
+                combo.SelectedIndex = i;
+                return;
+            }
+        }
+        combo.SelectedIndex = 0;
+    }
+
+    private static int GetIntTag(ComboBox combo, int fallback)
+    {
+        if (combo.SelectedItem is ComboBoxItem item &&
+            int.TryParse(item.Tag?.ToString(), out int v))
+            return v;
+        return fallback;
+    }
+
+    private static string GetStringTag(ComboBox combo, string fallback)
+    {
+        if (combo.SelectedItem is ComboBoxItem item)
+            return item.Tag?.ToString() ?? fallback;
+        return fallback;
+    }
+
+    private void UpdateIdleTimeoutHint(int secs)
+    {
+        IdleTimeoutHint.Text = secs == 0
+            ? "El modelo permanecera cargado hasta que cierres la app"
+            : $"El modelo se descargara tras {secs} segundos sin consultas";
+    }
+
+    private async void OnIdleTimeoutChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_api == null || double.IsNaN(args.NewValue)) return;
+        int secs = (int)args.NewValue;
+        await _api.SetAppSettingAsync("model_idle_timeout_sec", secs.ToString());
+        UpdateIdleTimeoutHint(secs);
     }
 
     private async void OnSaveConfig(object sender, RoutedEventArgs e)
@@ -373,7 +461,21 @@ public sealed partial class ModelsPage : Page
             Temperature = (float)TemperatureBox.Value,
             TopP = (float)TopPBox.Value,
             MaxTokens = (int)MaxTokensBox.Value,
-            Seed = (int)SeedBox.Value
+            Seed = (int)SeedBox.Value,
+
+            // Tuning avanzado
+            NUbatch = (int)NUbatchBox.Value,
+            NThreadsBatch = (int)NThreadsBatchBox.Value,
+            FlashAttn = GetIntTag(FlashAttnCombo, -1),
+            OffloadKqv = OffloadKqvToggle.IsOn,
+            UseMmap = UseMmapToggle.IsOn,
+            UseMlock = UseMlockToggle.IsOn,
+            CacheTypeK = GetStringTag(CacheKCombo, "f16"),
+            CacheTypeV = GetStringTag(CacheVCombo, "f16"),
+            TopK = (int)TopKBox.Value,
+            MinP = (float)MinPBox.Value,
+            RepeatPenalty = (float)RepeatPenaltyBox.Value,
+            RepeatLastN = (int)RepeatLastNBox.Value
         };
 
         var (success, needsReload) = await _api.SetModelConfigAsync(config);
@@ -413,6 +515,20 @@ public sealed partial class ModelsPage : Page
         TopPBox.Value = 0.9;
         MaxTokensBox.Value = 2048;
         SeedBox.Value = -1;
+
+        // Tuning avanzado: defaults
+        NUbatchBox.Value = 0;
+        NThreadsBatchBox.Value = 0;
+        TopKBox.Value = 40;
+        MinPBox.Value = 0.05;
+        RepeatPenaltyBox.Value = 1.10;
+        RepeatLastNBox.Value = 64;
+        OffloadKqvToggle.IsOn = true;
+        UseMmapToggle.IsOn = true;
+        UseMlockToggle.IsOn = false;
+        SelectComboByTag(FlashAttnCombo, "-1");
+        SelectComboByTag(CacheKCombo, "f16");
+        SelectComboByTag(CacheVCombo, "f16");
         _suppressConfigChange = false;
 
         SetConfigMode(isAutoTuned: false);
@@ -449,6 +565,13 @@ public sealed partial class ModelsPage : Page
         TemperatureBox.Value = 0.7;
         TopPBox.Value = 0.9;
         SeedBox.Value = -1;
+
+        // Tuning avanzado del auto-tune
+        NUbatchBox.Value = result.NUbatch;
+        OffloadKqvToggle.IsOn = result.OffloadKqv;
+        SelectComboByTag(FlashAttnCombo, result.FlashAttn.ToString());
+        SelectComboByTag(CacheKCombo, result.CacheTypeK);
+        SelectComboByTag(CacheVCombo, result.CacheTypeV);
         _suppressConfigChange = false;
 
         // Guardar automaticamente
@@ -461,7 +584,20 @@ public sealed partial class ModelsPage : Page
             Temperature = 0.7f,
             TopP = 0.9f,
             MaxTokens = result.MaxTokens,
-            Seed = -1
+            Seed = -1,
+
+            NUbatch = result.NUbatch,
+            NThreadsBatch = (int)NThreadsBatchBox.Value,
+            FlashAttn = result.FlashAttn,
+            OffloadKqv = result.OffloadKqv,
+            UseMmap = UseMmapToggle.IsOn,
+            UseMlock = UseMlockToggle.IsOn,
+            CacheTypeK = result.CacheTypeK,
+            CacheTypeV = result.CacheTypeV,
+            TopK = (int)TopKBox.Value,
+            MinP = (float)MinPBox.Value,
+            RepeatPenalty = (float)RepeatPenaltyBox.Value,
+            RepeatLastN = (int)RepeatLastNBox.Value
         };
 
         var (success, needsReload) = await _api.SetModelConfigAsync(config);
@@ -497,6 +633,88 @@ public sealed partial class ModelsPage : Page
         ConfigInfoBar.IsOpen = true;
 
         AutoTuneButton.IsEnabled = true;
+    }
+
+    // ========================================================================
+    // Presets rapidos (Velocidad / Balanceado / Calidad)
+    // ========================================================================
+
+    private void OnPresetSpeed(object sender, RoutedEventArgs e)
+    {
+        _suppressConfigChange = true;
+        // Velocidad: contexto reducido, sampling barato, KV quant agresivo
+        NCtxBox.Value = 2048;
+        NBatchBox.Value = 512;
+        NUbatchBox.Value = 512;
+        MaxTokensBox.Value = 512;
+        TopKBox.Value = 20;
+        MinPBox.Value = 0.1;
+        RepeatPenaltyBox.Value = 1.0;
+        RepeatLastNBox.Value = 0;
+        TemperatureBox.Value = 0.7;
+        TopPBox.Value = 0.9;
+        OffloadKqvToggle.IsOn = true;
+        SelectComboByTag(FlashAttnCombo, "1");
+        SelectComboByTag(CacheKCombo, "q4_0");
+        SelectComboByTag(CacheVCombo, "q4_0");
+        _suppressConfigChange = false;
+
+        SetConfigMode(isAutoTuned: false);
+        ConfigInfoBar.Severity = InfoBarSeverity.Informational;
+        ConfigInfoBar.Message = "Preset 'Velocidad' aplicado. Pulsa 'Guardar' para confirmar.";
+        ConfigInfoBar.IsOpen = true;
+    }
+
+    private void OnPresetBalanced(object sender, RoutedEventArgs e)
+    {
+        _suppressConfigChange = true;
+        // Balanceado: defaults razonables
+        NCtxBox.Value = 4096;
+        NBatchBox.Value = 512;
+        NUbatchBox.Value = 0;
+        MaxTokensBox.Value = 2048;
+        TopKBox.Value = 40;
+        MinPBox.Value = 0.05;
+        RepeatPenaltyBox.Value = 1.10;
+        RepeatLastNBox.Value = 64;
+        TemperatureBox.Value = 0.7;
+        TopPBox.Value = 0.9;
+        OffloadKqvToggle.IsOn = true;
+        SelectComboByTag(FlashAttnCombo, "-1");
+        SelectComboByTag(CacheKCombo, "f16");
+        SelectComboByTag(CacheVCombo, "f16");
+        _suppressConfigChange = false;
+
+        SetConfigMode(isAutoTuned: false);
+        ConfigInfoBar.Severity = InfoBarSeverity.Informational;
+        ConfigInfoBar.Message = "Preset 'Balanceado' aplicado. Pulsa 'Guardar' para confirmar.";
+        ConfigInfoBar.IsOpen = true;
+    }
+
+    private void OnPresetQuality(object sender, RoutedEventArgs e)
+    {
+        _suppressConfigChange = true;
+        // Calidad: contexto amplio, KV f16, sampling mas estricto
+        NCtxBox.Value = 8192;
+        NBatchBox.Value = 1024;
+        NUbatchBox.Value = 512;
+        MaxTokensBox.Value = 4096;
+        TopKBox.Value = 64;
+        MinPBox.Value = 0.02;
+        RepeatPenaltyBox.Value = 1.15;
+        RepeatLastNBox.Value = 128;
+        TemperatureBox.Value = 0.7;
+        TopPBox.Value = 0.9;
+        OffloadKqvToggle.IsOn = true;
+        SelectComboByTag(FlashAttnCombo, "1");
+        SelectComboByTag(CacheKCombo, "f16");
+        SelectComboByTag(CacheVCombo, "f16");
+        _suppressConfigChange = false;
+
+        SetConfigMode(isAutoTuned: false);
+        ConfigInfoBar.Severity = InfoBarSeverity.Informational;
+        ConfigInfoBar.Message = "Preset 'Calidad' aplicado. Pulsa 'Guardar' para confirmar.";
+        ConfigInfoBar.IsOpen = true;
     }
 
     private void SetConfigMode(bool isAutoTuned)

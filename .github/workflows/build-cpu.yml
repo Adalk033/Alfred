@@ -88,7 +88,7 @@ jobs:
       - name: Subir artifact del frontend
         uses: actions/upload-artifact@v4
         with:
-          name: alfred-frontend
+          name: alfred-frontend-cpu
           path: publish/Alfred.UI/
           if-no-files-found: error
 
@@ -123,7 +123,7 @@ jobs:
           $dist = "Alfred-v${{ env.VERSION }}-cpu"
           New-Item -ItemType Directory -Path $dist
           Copy-Item -Path "artifacts/alfred-backend-cpu/*" -Destination $dist -Recurse
-          Copy-Item -Path "artifacts/alfred-frontend/*"    -Destination $dist -Recurse
+          Copy-Item -Path "artifacts/alfred-frontend-cpu/*" -Destination $dist -Recurse
           @"
           Alfred v${{ env.VERSION }} (CPU)
           ================================

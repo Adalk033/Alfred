@@ -10,6 +10,7 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <shared_mutex>
 #include <atomic>
 #include <thread>
 #include <chrono>
@@ -78,7 +79,7 @@ private:
 
     // Cache LRU
     std::unordered_map<size_t, CacheEntry> query_cache_;
-    std::mutex cache_mutex_;
+    mutable std::shared_mutex cache_mutex_;
 
     // Generar respuesta (conocimiento general)
     QueryResult generate_response(const std::string& question,
@@ -106,6 +107,7 @@ private:
 
     LLMConfig build_llm_config(const std::string& model_path, int gpu_layers_override = -1);
     void ensure_model_loaded();   // carga el modelo si no esta cargado
+    void warmup_model();          // genera 1 token tras carga para compilar kernels CUDA
     void start_idle_monitor();    // arranca el hilo monitor
     void stop_idle_monitor();     // para y une el hilo monitor
 };

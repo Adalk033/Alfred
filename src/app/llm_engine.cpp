@@ -18,6 +18,21 @@
 
 namespace alfred {
 
+static ggml_type parse_cache_type(const std::string& s) {
+    if (s == "q8_0") return GGML_TYPE_Q8_0;
+    if (s == "q4_0") return GGML_TYPE_Q4_0;
+    if (s == "q5_0") return GGML_TYPE_Q5_0;
+    if (s == "q5_1") return GGML_TYPE_Q5_1;
+    if (s == "q4_1") return GGML_TYPE_Q4_1;
+    return GGML_TYPE_F16;
+}
+
+static llama_flash_attn_type to_flash_attn(int v) {
+    if (v == 0) return LLAMA_FLASH_ATTN_TYPE_DISABLED;
+    if (v == 1) return LLAMA_FLASH_ATTN_TYPE_ENABLED;
+    return LLAMA_FLASH_ATTN_TYPE_AUTO;
+}
+
 LLMEngine::LLMEngine() = default;
 
 LLMEngine::~LLMEngine() {
@@ -54,6 +69,7 @@ void LLMEngine::cleanup() {
         llama_model_free(model_);
         model_ = nullptr;
     }
+    last_tokens_.clear();
 }
 
 bool LLMEngine::load_model(const LLMConfig& config) {
@@ -95,6 +111,8 @@ bool LLMEngine::load_model(const LLMConfig& config) {
     // Parametros del modelo
     auto model_params = llama_model_default_params();
     model_params.n_gpu_layers = config.n_gpu_layers;
+    model_params.use_mmap     = config.use_mmap;
+    model_params.use_mlock    = config.use_mlock;
 
     auto start = std::chrono::steady_clock::now();
 
@@ -121,8 +139,15 @@ bool LLMEngine::load_model(const LLMConfig& config) {
 
     // Parametros del contexto
     auto ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = static_cast<uint32_t>(config.n_ctx);
-    ctx_params.n_batch = static_cast<uint32_t>(config.n_batch);
+    ctx_params.n_ctx           = static_cast<uint32_t>(config.n_ctx);
+    ctx_params.n_batch         = static_cast<uint32_t>(config.n_batch);
+    ctx_params.n_ubatch        = config.n_ubatch > 0
+        ? static_cast<uint32_t>(config.n_ubatch)
+        : static_cast<uint32_t>(config.n_batch);
+    ctx_params.flash_attn_type = to_flash_attn(config.flash_attn);
+    ctx_params.offload_kqv     = config.offload_kqv;
+    ctx_params.type_k          = parse_cache_type(config.cache_type_k);
+    ctx_params.type_v          = parse_cache_type(config.cache_type_v);
 
     // Threads: si es 0, usar cores fisicos (logicos / 2, minimo 4)
     int threads = config.n_threads;
@@ -130,8 +155,17 @@ bool LLMEngine::load_model(const LLMConfig& config) {
         int hw = static_cast<int>(std::thread::hardware_concurrency());
         threads = std::max(4, hw / 2);
     }
-    ctx_params.n_threads = static_cast<uint32_t>(threads);
+    int threads_batch = config.n_threads_batch > 0
+        ? config.n_threads_batch
+        : threads;
+    ctx_params.n_threads       = static_cast<int32_t>(threads);
+    ctx_params.n_threads_batch = static_cast<int32_t>(threads_batch);
     log_info("  Threads CPU: " + std::to_string(threads));
+    log_info("  flash_attn: " + std::string(llama_flash_attn_type_name(ctx_params.flash_attn_type)));
+    log_info("  offload_kqv: " + std::string(config.offload_kqv ? "true" : "false"));
+    log_info("  KV cache K/V: " + config.cache_type_k + "/" + config.cache_type_v);
+    log_info("  n_ubatch: " + std::to_string(ctx_params.n_ubatch));
+    log_info("  n_threads_batch: " + std::to_string(threads_batch));
 
     ctx_ = llama_init_from_model(model_, ctx_params);
     if (!ctx_) {
@@ -209,13 +243,31 @@ llama_sampler* LLMEngine::create_sampler() {
     auto sparams = llama_sampler_chain_default_params();
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
 
-    // Temperatura
+    // 1. Repeat penalty (si esta habilitado)
+    if (config_.repeat_penalty > 1.0f && config_.repeat_last_n != 0) {
+        llama_sampler_chain_add(smpl, llama_sampler_init_penalties(
+            config_.repeat_last_n,
+            config_.repeat_penalty,
+            0.0f,   // freq penalty
+            0.0f)); // presence penalty
+    }
+
+    // 2. Top-K (0 = desactivado)
+    if (config_.top_k > 0)
+        llama_sampler_chain_add(smpl, llama_sampler_init_top_k(config_.top_k));
+
+    // 3. Top-P
+    if (config_.top_p < 1.0f)
+        llama_sampler_chain_add(smpl, llama_sampler_init_top_p(config_.top_p, 1));
+
+    // 4. Min-P
+    if (config_.min_p > 0.0f)
+        llama_sampler_chain_add(smpl, llama_sampler_init_min_p(config_.min_p, 1));
+
+    // 5. Temperatura
     llama_sampler_chain_add(smpl, llama_sampler_init_temp(config_.temperature));
 
-    // Top-P
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(config_.top_p, 1));
-
-    // Distribucion final
+    // 6. Distribucion final con seed
     uint32_t seed = (config_.seed < 0)
         ? static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count())
         : static_cast<uint32_t>(config_.seed);
@@ -259,19 +311,35 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
         return result;
     }
 
-    // Limpiar estado previo del contexto
-    llama_memory_clear(llama_get_memory(ctx_), true);
+    // Prefix caching: detectar prefijo comun con la generacion anterior
+    size_t common_prefix = 0;
+    size_t cmp_len = std::min(tokens.size(), last_tokens_.size());
+    for (; common_prefix < cmp_len; ++common_prefix) {
+        if (tokens[common_prefix] != last_tokens_[common_prefix]) break;
+    }
+    // Heuristica: si el prefijo comun es todo el prompt nuevo, debemos reprocesar al menos
+    // el ultimo token (para producir logits). Lo recortamos a tokens.size()-1.
+    if (common_prefix > 0 && common_prefix == tokens.size())
+        common_prefix = tokens.size() - 1;
+    // Solo vale la pena si el ahorro es significativo
+    if (common_prefix == 0 || common_prefix < tokens.size() / 4) {
+        llama_memory_clear(llama_get_memory(ctx_), true);
+        common_prefix = 0;
+    } else {
+        llama_memory_seq_rm(llama_get_memory(ctx_), 0,
+                            static_cast<int32_t>(common_prefix), -1);
+    }
 
-    // Crear batch y procesar tokens del prompt
+    // Crear batch y procesar tokens del prompt (solo los nuevos tras el prefijo comun)
     llama_batch batch = llama_batch_init(config_.n_batch, 0, 1);
 
-    // Agregar tokens del prompt al batch
-    for (int i = 0; i < static_cast<int>(tokens.size()); ++i) {
+    int total_tokens = static_cast<int>(tokens.size());
+    for (int i = static_cast<int>(common_prefix); i < total_tokens; ++i) {
         batch.token[batch.n_tokens] = tokens[static_cast<size_t>(i)];
         batch.pos[batch.n_tokens] = i;
         batch.n_seq_id[batch.n_tokens] = 1;
         batch.seq_id[batch.n_tokens][0] = 0;
-        batch.logits[batch.n_tokens] = (i == static_cast<int>(tokens.size()) - 1) ? 1 : 0;
+        batch.logits[batch.n_tokens] = (i == total_tokens - 1) ? 1 : 0;
         batch.n_tokens++;
 
         // Si el batch esta lleno, decodificar
@@ -346,6 +414,15 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
 
     llama_batch_free(batch);
 
+    // Guardar el prompt actual para posible prefix caching en la siguiente llamada.
+    // Solo guardamos los tokens del prompt (no los generados) porque el siguiente prompt
+    // contendra todo el historial relevante y queremos detectar el prefijo del prompt.
+    if (result.success) {
+        last_tokens_ = std::move(tokens);
+    } else {
+        last_tokens_.clear();
+    }
+
     auto end = std::chrono::steady_clock::now();
     result.tokens_generated = n_generated;
     result.generation_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
@@ -370,5 +447,9 @@ int LLMEngine::context_length() const {
 void LLMEngine::set_temperature(float temp) { config_.temperature = temp; }
 void LLMEngine::set_top_p(float top_p) { config_.top_p = top_p; }
 void LLMEngine::set_max_tokens(int max_tokens) { config_.max_tokens = max_tokens; }
+void LLMEngine::set_top_k(int v) { config_.top_k = v; }
+void LLMEngine::set_min_p(float v) { config_.min_p = v; }
+void LLMEngine::set_repeat_penalty(float v) { config_.repeat_penalty = v; }
+void LLMEngine::set_repeat_last_n(int v) { config_.repeat_last_n = v; }
 
 } // namespace alfred

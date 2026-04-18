@@ -134,48 +134,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- Modelo LLM -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    CornerRadius="8" Padding="20">
-                <StackPanel Spacing="12">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Modelo LLM" FontWeight="SemiBold" FontSize="16" />
-                        <TextBlock Text="Configura el comportamiento de carga y descarga del modelo."
-                                   FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" Spacing="4">
-                            <TextBlock Text="Descargar modelo tras inactividad" FontSize="13" />
-                            <TextBlock Text="Libera VRAM cuando el modelo no se usa"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
-
-                        <NumberBox x:Name="IdleTimeoutBox"
-                                   Grid.Column="1"
-                                   Minimum="0"
-                                   Maximum="3600"
-                                   SmallChange="5"
-                                   LargeChange="30"
-                                   Width="120"
-                                   PlaceholderText="segundos"
-                                   SpinButtonPlacementMode="Inline"
-                                   ValueChanged="OnIdleTimeoutChanged" />
-                    </Grid>
-
-                    <TextBlock x:Name="IdleTimeoutHint"
-                               Text="0 = nunca descargar automaticamente"
-                               FontSize="11"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-            </Border>
-
             <!-- Informacion del sistema -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="8" Padding="20">
@@ -196,7 +154,7 @@
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Version"
                                    FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Alfred 2.0.0 (C++ nativo)"
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Alfred 0.3.0 (C++ nativo)"
                                    FontSize="13" />
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Motor LLM"

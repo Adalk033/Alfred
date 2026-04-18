@@ -16,6 +16,9 @@ namespace alfred {
 std::string trim(const std::string& s);
 std::string to_lower(const std::string& s);
 
+// Reemplazo in-place de todas las apariciones de `from` por `to` en `str`.
+void replace_all(std::string& str, const std::string& from, const std::string& to);
+
 // Split string por delimitador
 std::vector<std::string> split(const std::string& s, char delimiter);
 std::vector<std::string> split(const std::string& s, const std::string& delimiter);

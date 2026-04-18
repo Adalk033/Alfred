@@ -32,6 +32,15 @@ std::string to_lower(const std::string& s) {
     return result;
 }
 
+void replace_all(std::string& str, const std::string& from, const std::string& to) {
+    if (from.empty()) return;
+    size_t pos = 0;
+    while ((pos = str.find(from, pos)) != std::string::npos) {
+        str.replace(pos, from.length(), to);
+        pos += to.length();
+    }
+}
+
 std::vector<std::string> split(const std::string& s, char delimiter) {
     std::vector<std::string> parts;
     std::istringstream stream(s);

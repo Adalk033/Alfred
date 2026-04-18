@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(AlfredCpp
-    VERSION 0.2.0
+    VERSION 0.3.0
     LANGUAGES CXX
     DESCRIPTION "Alfred - Asistente IA local en C++ con HuggingFace + CUDA"
 )

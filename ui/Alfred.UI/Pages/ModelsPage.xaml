@@ -295,6 +295,199 @@
                                    SmallChange="1" LargeChange="100" />
                     </Grid>
 
+                    <!-- Tuning avanzado -->
+                    <Expander Header="Tuning avanzado"
+                              HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch">
+                        <StackPanel Spacing="12" Padding="0,8">
+
+                            <!-- Aceleracion GPU -->
+                            <TextBlock Text="Aceleracion GPU" FontWeight="SemiBold" FontSize="13"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <Grid ColumnSpacing="24" RowSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <ComboBox x:Name="FlashAttnCombo" Grid.Row="0" Grid.Column="0"
+                                          Header="Flash Attention" HorizontalAlignment="Stretch"
+                                          SelectionChanged="OnAdvancedSelectionChanged">
+                                    <ComboBoxItem Content="Auto" Tag="-1" />
+                                    <ComboBoxItem Content="Habilitado" Tag="1" />
+                                    <ComboBoxItem Content="Deshabilitado" Tag="0" />
+                                </ComboBox>
+
+                                <ToggleSwitch x:Name="OffloadKqvToggle" Grid.Row="0" Grid.Column="1"
+                                              Header="Offload KV cache a GPU"
+                                              OffContent="No" OnContent="Si"
+                                              Toggled="OnAdvancedToggled" />
+
+                                <ToggleSwitch x:Name="UseMmapToggle" Grid.Row="1" Grid.Column="0"
+                                              Header="Usar mmap"
+                                              OffContent="No" OnContent="Si"
+                                              Toggled="OnAdvancedToggled" />
+
+                                <ToggleSwitch x:Name="UseMlockToggle" Grid.Row="1" Grid.Column="1"
+                                              Header="Lockear modelo en RAM (use_mlock)"
+                                              OffContent="No" OnContent="Si"
+                                              Toggled="OnAdvancedToggled" />
+                            </Grid>
+
+                            <!-- KV cache quantization -->
+                            <TextBlock Text="Cuantizacion de KV cache (ahorro de VRAM)"
+                                       FontWeight="SemiBold" FontSize="13" Margin="0,8,0,0"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="F16 = mejor calidad. Q8_0 ahorra ~50% VRAM. Q4_0 ahorra ~75% con perdida minima."
+                                       FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <Grid ColumnSpacing="24">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <ComboBox x:Name="CacheKCombo" Grid.Column="0" Header="Cache K"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="OnAdvancedSelectionChanged">
+                                    <ComboBoxItem Content="F16" Tag="f16" />
+                                    <ComboBoxItem Content="Q8_0" Tag="q8_0" />
+                                    <ComboBoxItem Content="Q5_1" Tag="q5_1" />
+                                    <ComboBoxItem Content="Q5_0" Tag="q5_0" />
+                                    <ComboBoxItem Content="Q4_1" Tag="q4_1" />
+                                    <ComboBoxItem Content="Q4_0" Tag="q4_0" />
+                                </ComboBox>
+
+                                <ComboBox x:Name="CacheVCombo" Grid.Column="1" Header="Cache V"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="OnAdvancedSelectionChanged">
+                                    <ComboBoxItem Content="F16" Tag="f16" />
+                                    <ComboBoxItem Content="Q8_0" Tag="q8_0" />
+                                    <ComboBoxItem Content="Q5_1" Tag="q5_1" />
+                                    <ComboBoxItem Content="Q5_0" Tag="q5_0" />
+                                    <ComboBoxItem Content="Q4_1" Tag="q4_1" />
+                                    <ComboBoxItem Content="Q4_0" Tag="q4_0" />
+                                </ComboBox>
+                            </Grid>
+
+                            <!-- Batch avanzado -->
+                            <TextBlock Text="Procesamiento de batch" FontWeight="SemiBold" FontSize="13"
+                                       Margin="0,8,0,0"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <Grid ColumnSpacing="24">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <NumberBox x:Name="NUbatchBox" Grid.Column="0"
+                                           Header="Micro-batch (n_ubatch, 0 = igual a n_batch)"
+                                           Minimum="0" Maximum="8192"
+                                           SpinButtonPlacementMode="Inline"
+                                           SmallChange="32" LargeChange="128" />
+
+                                <NumberBox x:Name="NThreadsBatchBox" Grid.Column="1"
+                                           Header="Hilos para batch (0 = igual a n_threads)"
+                                           Minimum="0" Maximum="256"
+                                           SpinButtonPlacementMode="Inline"
+                                           SmallChange="1" LargeChange="4" />
+                            </Grid>
+
+                            <!-- Sampling avanzado -->
+                            <TextBlock Text="Sampling avanzado" FontWeight="SemiBold" FontSize="13"
+                                       Margin="0,8,0,0"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <Grid ColumnSpacing="24" RowSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <NumberBox x:Name="TopKBox" Grid.Row="0" Grid.Column="0"
+                                           Header="Top K (0 = off)"
+                                           Minimum="0" Maximum="1000"
+                                           SpinButtonPlacementMode="Inline"
+                                           SmallChange="1" LargeChange="10" />
+
+                                <NumberBox x:Name="MinPBox" Grid.Row="0" Grid.Column="1"
+                                           Header="Min P"
+                                           Minimum="0" Maximum="1"
+                                           SpinButtonPlacementMode="Inline"
+                                           SmallChange="0.01" LargeChange="0.05" />
+
+                                <NumberBox x:Name="RepeatPenaltyBox" Grid.Row="1" Grid.Column="0"
+                                           Header="Repeat penalty (1.0 = off)"
+                                           Minimum="0.5" Maximum="2"
+                                           SpinButtonPlacementMode="Inline"
+                                           SmallChange="0.05" LargeChange="0.1" />
+
+                                <NumberBox x:Name="RepeatLastNBox" Grid.Row="1" Grid.Column="1"
+                                           Header="Repeat last N (-1 = n_ctx, 0 = off)"
+                                           Minimum="-1" Maximum="4096"
+                                           SpinButtonPlacementMode="Inline"
+                                           SmallChange="8" LargeChange="64" />
+                            </Grid>
+
+                            <!-- Preset profiles -->
+                            <TextBlock Text="Presets rapidos" FontWeight="SemiBold" FontSize="13"
+                                       Margin="0,8,0,0"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Velocidad" Click="OnPresetSpeed" Padding="12,4" />
+                                <Button Content="Balanceado" Click="OnPresetBalanced" Padding="12,4" />
+                                <Button Content="Calidad" Click="OnPresetQuality" Padding="12,4" />
+                            </StackPanel>
+                            <TextBlock Text="Los presets cambian los valores en pantalla. Pulsa 'Guardar configuracion' para aplicarlos."
+                                       FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Expander>
+
+                    <!-- Gestion de memoria (movido desde SettingsPage) -->
+                    <TextBlock Text="Gestion de memoria" FontWeight="SemiBold" FontSize="13"
+                               Margin="0,8,0,0"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="Descargar modelo tras inactividad" FontSize="13" />
+                            <TextBlock Text="Libera VRAM cuando el modelo no se usa"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <NumberBox x:Name="IdleTimeoutBox"
+                                   Grid.Column="1"
+                                   Minimum="0" Maximum="3600"
+                                   SmallChange="5" LargeChange="30"
+                                   Width="120"
+                                   PlaceholderText="segundos"
+                                   SpinButtonPlacementMode="Inline"
+                                   ValueChanged="OnIdleTimeoutChanged" />
+                    </Grid>
+
+                    <TextBlock x:Name="IdleTimeoutHint"
+                               Text="0 = nunca descargar automaticamente"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
                     <!-- Botones -->
                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
                         <Button x:Name="SaveConfigButton" Click="OnSaveConfig"

@@ -697,6 +697,21 @@ void handle_get_model_config(const httplib::Request& /*req*/, httplib::Response&
     data["top_p"]        = cfg.top_p;
     data["max_tokens"]   = cfg.max_tokens;
     data["seed"]         = cfg.seed;
+
+    // Tuning avanzado
+    data["n_ubatch"]        = cfg.n_ubatch;
+    data["n_threads_batch"] = cfg.n_threads_batch;
+    data["flash_attn"]      = cfg.flash_attn;
+    data["offload_kqv"]     = cfg.offload_kqv;
+    data["use_mmap"]        = cfg.use_mmap;
+    data["use_mlock"]       = cfg.use_mlock;
+    data["cache_type_k"]    = cfg.cache_type_k;
+    data["cache_type_v"]    = cfg.cache_type_v;
+    data["top_k"]           = cfg.top_k;
+    data["min_p"]           = cfg.min_p;
+    data["repeat_penalty"]  = cfg.repeat_penalty;
+    data["repeat_last_n"]   = cfg.repeat_last_n;
+
     json_ok(res, data);
 }
 
@@ -764,6 +779,74 @@ void handle_set_model_config(const httplib::Request& req, httplib::Response& res
         db.set_app_setting("seed", std::to_string(v));
     }
 
+    // ---- Tuning avanzado: params de carga (requieren recarga) ----
+    if (body.contains("n_ubatch") && body["n_ubatch"].is_number_integer()) {
+        int v = std::max(0, std::min(8192, body["n_ubatch"].get<int>()));
+        if (v != cfg.n_ubatch) { cfg.n_ubatch = v; needs_reload = true; }
+        db.set_app_setting("n_ubatch", std::to_string(v));
+    }
+    if (body.contains("n_threads_batch") && body["n_threads_batch"].is_number_integer()) {
+        int v = std::max(0, std::min(256, body["n_threads_batch"].get<int>()));
+        if (v != cfg.n_threads_batch) { cfg.n_threads_batch = v; needs_reload = true; }
+        db.set_app_setting("n_threads_batch", std::to_string(v));
+    }
+    if (body.contains("flash_attn") && body["flash_attn"].is_number_integer()) {
+        int v = std::max(-1, std::min(1, body["flash_attn"].get<int>()));
+        if (v != cfg.flash_attn) { cfg.flash_attn = v; needs_reload = true; }
+        db.set_app_setting("flash_attn", std::to_string(v));
+    }
+    if (body.contains("offload_kqv") && body["offload_kqv"].is_boolean()) {
+        bool v = body["offload_kqv"].get<bool>();
+        if (v != cfg.offload_kqv) { cfg.offload_kqv = v; needs_reload = true; }
+        db.set_app_setting("offload_kqv", v ? "true" : "false");
+    }
+    if (body.contains("use_mmap") && body["use_mmap"].is_boolean()) {
+        bool v = body["use_mmap"].get<bool>();
+        if (v != cfg.use_mmap) { cfg.use_mmap = v; needs_reload = true; }
+        db.set_app_setting("use_mmap", v ? "true" : "false");
+    }
+    if (body.contains("use_mlock") && body["use_mlock"].is_boolean()) {
+        bool v = body["use_mlock"].get<bool>();
+        if (v != cfg.use_mlock) { cfg.use_mlock = v; needs_reload = true; }
+        db.set_app_setting("use_mlock", v ? "true" : "false");
+    }
+    if (body.contains("cache_type_k") && body["cache_type_k"].is_string()) {
+        std::string v = body["cache_type_k"].get<std::string>();
+        if (v != cfg.cache_type_k) { cfg.cache_type_k = v; needs_reload = true; }
+        db.set_app_setting("cache_type_k", v);
+    }
+    if (body.contains("cache_type_v") && body["cache_type_v"].is_string()) {
+        std::string v = body["cache_type_v"].get<std::string>();
+        if (v != cfg.cache_type_v) { cfg.cache_type_v = v; needs_reload = true; }
+        db.set_app_setting("cache_type_v", v);
+    }
+
+    // ---- Tuning avanzado: sampling (en caliente) ----
+    if (body.contains("top_k") && body["top_k"].is_number_integer()) {
+        int v = std::max(0, std::min(1000, body["top_k"].get<int>()));
+        cfg.top_k = v;
+        db.set_app_setting("top_k", std::to_string(v));
+        if (core.llm().is_loaded()) core.llm().set_top_k(v);
+    }
+    if (body.contains("min_p") && body["min_p"].is_number()) {
+        float v = std::max(0.0f, std::min(1.0f, body["min_p"].get<float>()));
+        cfg.min_p = v;
+        db.set_app_setting("min_p", std::to_string(v));
+        if (core.llm().is_loaded()) core.llm().set_min_p(v);
+    }
+    if (body.contains("repeat_penalty") && body["repeat_penalty"].is_number()) {
+        float v = std::max(0.5f, std::min(2.0f, body["repeat_penalty"].get<float>()));
+        cfg.repeat_penalty = v;
+        db.set_app_setting("repeat_penalty", std::to_string(v));
+        if (core.llm().is_loaded()) core.llm().set_repeat_penalty(v);
+    }
+    if (body.contains("repeat_last_n") && body["repeat_last_n"].is_number_integer()) {
+        int v = std::max(-1, std::min(4096, body["repeat_last_n"].get<int>()));
+        cfg.repeat_last_n = v;
+        db.set_app_setting("repeat_last_n", std::to_string(v));
+        if (core.llm().is_loaded()) core.llm().set_repeat_last_n(v);
+    }
+
     json data;
     data["status"] = "saved";
     data["needs_reload"] = needs_reload;
@@ -808,8 +891,13 @@ void handle_autotune(const httplib::Request& req, httplib::Response& res,
     data["n_ctx"]        = settings.n_ctx;
     data["n_gpu_layers"] = settings.n_gpu_layers;
     data["n_batch"]      = settings.n_batch;
+    data["n_ubatch"]     = settings.n_ubatch;
     data["n_threads"]    = settings.n_threads;
     data["max_tokens"]   = settings.max_tokens;
+    data["flash_attn"]   = settings.flash_attn;
+    data["offload_kqv"]  = settings.offload_kqv;
+    data["cache_type_k"] = settings.cache_type_k;
+    data["cache_type_v"] = settings.cache_type_v;
 
     // Info de hardware detectado
     json hw;

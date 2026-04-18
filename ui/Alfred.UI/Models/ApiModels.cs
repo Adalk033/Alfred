@@ -247,6 +247,43 @@ public sealed class ModelConfig
 
     [JsonPropertyName("seed")]
     public int Seed { get; set; } = -1;
+
+    // ---- Tuning avanzado ----
+    [JsonPropertyName("n_ubatch")]
+    public int NUbatch { get; set; }
+
+    [JsonPropertyName("n_threads_batch")]
+    public int NThreadsBatch { get; set; }
+
+    [JsonPropertyName("flash_attn")]
+    public int FlashAttn { get; set; } = -1;
+
+    [JsonPropertyName("offload_kqv")]
+    public bool OffloadKqv { get; set; } = true;
+
+    [JsonPropertyName("use_mmap")]
+    public bool UseMmap { get; set; } = true;
+
+    [JsonPropertyName("use_mlock")]
+    public bool UseMlock { get; set; } = false;
+
+    [JsonPropertyName("cache_type_k")]
+    public string CacheTypeK { get; set; } = "f16";
+
+    [JsonPropertyName("cache_type_v")]
+    public string CacheTypeV { get; set; } = "f16";
+
+    [JsonPropertyName("top_k")]
+    public int TopK { get; set; } = 40;
+
+    [JsonPropertyName("min_p")]
+    public float MinP { get; set; } = 0.05f;
+
+    [JsonPropertyName("repeat_penalty")]
+    public float RepeatPenalty { get; set; } = 1.10f;
+
+    [JsonPropertyName("repeat_last_n")]
+    public int RepeatLastN { get; set; } = 64;
 }
 
 public sealed class ModelConfigSaveResponse
@@ -295,6 +332,21 @@ public sealed class AutoTuneResult
 
     [JsonPropertyName("max_tokens")]
     public int MaxTokens { get; set; }
+
+    [JsonPropertyName("n_ubatch")]
+    public int NUbatch { get; set; }
+
+    [JsonPropertyName("flash_attn")]
+    public int FlashAttn { get; set; } = -1;
+
+    [JsonPropertyName("offload_kqv")]
+    public bool OffloadKqv { get; set; } = true;
+
+    [JsonPropertyName("cache_type_k")]
+    public string CacheTypeK { get; set; } = "f16";
+
+    [JsonPropertyName("cache_type_v")]
+    public string CacheTypeV { get; set; } = "f16";
 
     [JsonPropertyName("hardware")]
     public AutoTuneHardwareInfo? Hardware { get; set; }

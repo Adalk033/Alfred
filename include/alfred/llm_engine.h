@@ -27,14 +27,33 @@ namespace alfred {
 
 struct LLMConfig {
     std::string model_path;
-    int n_ctx         = 2048;
-    int n_gpu_layers  = 20;
-    int n_batch       = 128;
-    int n_threads     = 0;      // 0 = auto-detectar (usa cores fisicos)
-    float temperature = 0.7f;
-    float top_p       = 0.9f;
-    int max_tokens    = 1024;
-    int seed          = -1;
+    int n_ctx           = 2048;
+    int n_gpu_layers    = 20;
+    int n_batch         = 128;   // batch logico (tokens por llama_decode)
+    int n_ubatch        = 0;     // micro-batch (0 = usar n_batch)
+    int n_threads       = 0;     // 0 = auto (cores fisicos)
+    int n_threads_batch = 0;     // 0 = igual a n_threads
+
+    // --- Aceleracion GPU ---
+    int  flash_attn     = -1;    // -1 auto, 0 off, 1 on
+    bool offload_kqv    = true;  // KV cache en GPU
+    bool use_mmap       = true;
+    bool use_mlock      = false;
+
+    // --- KV cache quantization ---
+    // "f16" (default), "q8_0" (~50% VRAM), "q4_0" (~25% VRAM)
+    std::string cache_type_k = "f16";
+    std::string cache_type_v = "f16";
+
+    // --- Sampling ---
+    float temperature    = 0.7f;
+    float top_p          = 0.9f;
+    int   top_k          = 40;
+    float min_p          = 0.05f;
+    float repeat_penalty = 1.10f;
+    int   repeat_last_n  = 64;
+    int   max_tokens     = 1024;
+    int   seed           = -1;
 };
 
 struct LLMResult {
@@ -86,6 +105,10 @@ public:
     void set_temperature(float temp);
     void set_top_p(float top_p);
     void set_max_tokens(int max_tokens);
+    void set_top_k(int v);
+    void set_min_p(float v);
+    void set_repeat_penalty(float v);
+    void set_repeat_last_n(int v);
 
 private:
     llama_model* model_ = nullptr;
@@ -93,6 +116,9 @@ private:
     LLMConfig config_;
     std::string model_name_;
     std::string last_error_;
+
+    // Prefix caching: tokens de la ultima generacion para detectar prefijo comun
+    std::vector<int32_t> last_tokens_;
 
     // Tokenizar texto
     std::vector<int32_t> tokenize(const std::string& text, bool add_bos = true);

@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <regex>
 #include <vector>
+#include <future>
 
 namespace alfred {
 
@@ -34,15 +35,11 @@ bool AlfredCore::initialize() {
     log_info("=== Inicializando Alfred Core ===");
     auto& cfg = get_config();
 
-    // 1. Detectar GPU
-    log_info("Paso 1/2: Detectando GPU...");
-    auto& gpu = GPUManager::instance();
-    gpu.detect();
-    if (gpu.has_cuda()) {
-        log_info(gpu.status_report());
-    } else {
-        log_warn("Sin GPU CUDA - usando CPU para inferencia");
-    }
+    // 1. Detectar GPU en paralelo con la lectura de settings de DB
+    log_info("Paso 1/2: Detectando GPU (en paralelo con DB)...");
+    auto gpu_future = std::async(std::launch::async, []() {
+        GPUManager::instance().detect();
+    });
 
     // 2. Cargar modelo LLM
     log_info("Paso 2/2: Configurando modelo LLM...");
@@ -57,27 +54,58 @@ bool AlfredCore::initialize() {
         if (!cfg.llm_model_file.empty())
             llm_path = cfg.models_dir + "/" + cfg.llm_model_file;
 
-        // Cargar configuracion LLM desde DB si esta persistida
-        auto saved_timeout = db.get_app_setting("model_idle_timeout_sec");
-        if (saved_timeout) {
-            try { cfg.model_idle_timeout_sec = std::stoi(*saved_timeout); } catch (...) {}
+        // Helpers para leer settings tipados desde DB
+        auto get_int = [&](const std::string& k, int& dst) {
+            auto v = db.get_app_setting(k);
+            if (v) { try { dst = std::stoi(*v); } catch (...) {} }
+        };
+        auto get_float = [&](const std::string& k, float& dst) {
+            auto v = db.get_app_setting(k);
+            if (v) { try { dst = std::stof(*v); } catch (...) {} }
+        };
+        auto get_bool = [&](const std::string& k, bool& dst) {
+            auto v = db.get_app_setting(k);
+            if (v) { dst = (*v == "true" || *v == "1"); }
+        };
+        auto get_str = [&](const std::string& k, std::string& dst) {
+            auto v = db.get_app_setting(k);
+            if (v && !v->empty()) dst = *v;
+        };
+
+        // Settings basicos (existentes)
+        get_int  ("model_idle_timeout_sec", cfg.model_idle_timeout_sec);
+        get_int  ("n_ctx",                  cfg.n_ctx);
+        get_int  ("n_gpu_layers",           cfg.n_gpu_layers);
+        get_int  ("n_batch",                cfg.n_batch);
+        get_int  ("n_threads",              cfg.n_threads);
+        get_float("temperature",            cfg.temperature);
+        get_float("top_p",                  cfg.top_p);
+        get_int  ("max_tokens",             cfg.max_tokens);
+        get_int  ("seed",                   cfg.seed);
+
+        // Settings nuevos (tuning avanzado)
+        get_int  ("n_ubatch",         cfg.n_ubatch);
+        get_int  ("n_threads_batch",  cfg.n_threads_batch);
+        get_int  ("flash_attn",       cfg.flash_attn);
+        get_bool ("offload_kqv",      cfg.offload_kqv);
+        get_bool ("use_mmap",         cfg.use_mmap);
+        get_bool ("use_mlock",        cfg.use_mlock);
+        get_str  ("cache_type_k",     cfg.cache_type_k);
+        get_str  ("cache_type_v",     cfg.cache_type_v);
+        get_int  ("top_k",            cfg.top_k);
+        get_float("min_p",            cfg.min_p);
+        get_float("repeat_penalty",   cfg.repeat_penalty);
+        get_int  ("repeat_last_n",    cfg.repeat_last_n);
+        get_bool ("model_warmup",     cfg.model_warmup);
+
+        // Esperar deteccion de GPU antes de cargar modelo
+        gpu_future.wait();
+        auto& gpu = GPUManager::instance();
+        if (gpu.has_cuda()) {
+            log_info(gpu.status_report());
+        } else {
+            log_warn("Sin GPU CUDA - usando CPU para inferencia");
         }
-        auto saved_nctx = db.get_app_setting("n_ctx");
-        if (saved_nctx) { try { cfg.n_ctx = std::stoi(*saved_nctx); } catch (...) {} }
-        auto saved_gpu = db.get_app_setting("n_gpu_layers");
-        if (saved_gpu) { try { cfg.n_gpu_layers = std::stoi(*saved_gpu); } catch (...) {} }
-        auto saved_batch = db.get_app_setting("n_batch");
-        if (saved_batch) { try { cfg.n_batch = std::stoi(*saved_batch); } catch (...) {} }
-        auto saved_threads = db.get_app_setting("n_threads");
-        if (saved_threads) { try { cfg.n_threads = std::stoi(*saved_threads); } catch (...) {} }
-        auto saved_temp = db.get_app_setting("temperature");
-        if (saved_temp) { try { cfg.temperature = std::stof(*saved_temp); } catch (...) {} }
-        auto saved_topp = db.get_app_setting("top_p");
-        if (saved_topp) { try { cfg.top_p = std::stof(*saved_topp); } catch (...) {} }
-        auto saved_maxtok = db.get_app_setting("max_tokens");
-        if (saved_maxtok) { try { cfg.max_tokens = std::stoi(*saved_maxtok); } catch (...) {} }
-        auto saved_seed = db.get_app_setting("seed");
-        if (saved_seed) { try { cfg.seed = std::stoi(*saved_seed); } catch (...) {} }
 
         if (llm_path.empty() || !std::filesystem::exists(llm_path)) {
             log_warn("Sin modelo LLM configurado. Usa la UI para descargar y seleccionar uno.");
@@ -88,6 +116,8 @@ bool AlfredCore::initialize() {
             // Carga inmediata (comportamiento legacy)
             if (!llm_->load_model(build_llm_config(llm_path)))
                 log_error("Error cargando modelo LLM");
+            else
+                warmup_model();
         }
 
         // Arrancar monitor de inactividad en ambos modos
@@ -116,16 +146,49 @@ bool AlfredCore::initialize() {
 LLMConfig AlfredCore::build_llm_config(const std::string& model_path, int gpu_layers_override) {
     auto& cfg = get_config();
     LLMConfig c;
-    c.model_path   = model_path;
-    c.n_ctx        = cfg.n_ctx;
-    c.n_gpu_layers = gpu_layers_override >= 0 ? gpu_layers_override : cfg.n_gpu_layers;
-    c.n_batch      = cfg.n_batch;
-    c.n_threads    = cfg.n_threads;
-    c.temperature  = cfg.temperature;
-    c.top_p        = cfg.top_p;
-    c.max_tokens   = cfg.max_tokens;
-    c.seed         = cfg.seed;
+    c.model_path      = model_path;
+    c.n_ctx           = cfg.n_ctx;
+    c.n_gpu_layers    = gpu_layers_override >= 0 ? gpu_layers_override : cfg.n_gpu_layers;
+    c.n_batch         = cfg.n_batch;
+    c.n_ubatch        = cfg.n_ubatch;
+    c.n_threads       = cfg.n_threads;
+    c.n_threads_batch = cfg.n_threads_batch;
+    c.flash_attn      = cfg.flash_attn;
+    c.offload_kqv     = cfg.offload_kqv;
+    c.use_mmap        = cfg.use_mmap;
+    c.use_mlock       = cfg.use_mlock;
+    c.cache_type_k    = cfg.cache_type_k;
+    c.cache_type_v    = cfg.cache_type_v;
+    c.temperature     = cfg.temperature;
+    c.top_p           = cfg.top_p;
+    c.top_k           = cfg.top_k;
+    c.min_p           = cfg.min_p;
+    c.repeat_penalty  = cfg.repeat_penalty;
+    c.repeat_last_n   = cfg.repeat_last_n;
+    c.max_tokens      = cfg.max_tokens;
+    c.seed            = cfg.seed;
     return c;
+}
+
+void AlfredCore::warmup_model() {
+    if (!llm_->is_loaded()) return;
+    if (!get_config().model_warmup) return;
+
+    log_info("Ejecutando warm-up del modelo...");
+    auto start = std::chrono::steady_clock::now();
+
+    int saved_max = get_config().max_tokens;
+    llm_->set_max_tokens(1);
+    auto r = llm_->generate("Hola");
+    llm_->set_max_tokens(saved_max);
+
+    auto ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count();
+    if (r.success) {
+        log_info("Warm-up completado en " + std::to_string(static_cast<int>(ms)) + "ms");
+    } else {
+        log_warn("Warm-up fallo: " + r.error);
+    }
 }
 
 void AlfredCore::ensure_model_loaded() {
@@ -166,6 +229,7 @@ void AlfredCore::ensure_model_loaded() {
             if (layers == 0 && attempted_gpu) {
                 log_warn("Falling back to CPU due to error en carga GPU previa");
             }
+            warmup_model();
             return;
         }
 
@@ -212,32 +276,41 @@ void AlfredCore::stop_idle_monitor() {
 // Cache LRU
 // ============================================================================
 std::optional<QueryResult> AlfredCore::cache_lookup(const std::string& question) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
     auto& cfg = get_config();
 
     std::string normalized = trim(to_lower(question));
     size_t hash = std::hash<std::string>{}(normalized);
 
-    auto it = query_cache_.find(hash);
-    if (it == query_cache_.end()) return std::nullopt;
+    {
+        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+        auto it = query_cache_.find(hash);
+        if (it == query_cache_.end()) return std::nullopt;
 
-    // Verificar TTL
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-        now - it->second.timestamp).count();
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            now - it->second.timestamp).count();
 
-    if (elapsed > cfg.query_cache_ttl_seconds) {
-        query_cache_.erase(it);
-        return std::nullopt;
+        if (elapsed <= cfg.query_cache_ttl_seconds) {
+            auto result = it->second.result;
+            result.from_cache = true;
+            return result;
+        }
     }
-
-    auto result = it->second.result;
-    result.from_cache = true;
-    return result;
+    // Expirado: promover a unique_lock para borrar
+    std::unique_lock<std::shared_mutex> lock(cache_mutex_);
+    auto it = query_cache_.find(hash);
+    if (it != query_cache_.end()) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            now - it->second.timestamp).count();
+        if (elapsed > cfg.query_cache_ttl_seconds)
+            query_cache_.erase(it);
+    }
+    return std::nullopt;
 }
 
 void AlfredCore::cache_insert(const std::string& question, const QueryResult& result) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
+    std::unique_lock<std::shared_mutex> lock(cache_mutex_);
     auto& cfg = get_config();
 
     // Evictar si cache lleno
@@ -282,14 +355,6 @@ std::string AlfredCore::apply_user_profile(const std::string& prompt) {
     auto& cfg = get_config();
     std::string result = prompt;
 
-    auto replace_all = [](std::string& str, const std::string& from, const std::string& to) {
-        size_t pos = 0;
-        while ((pos = str.find(from, pos)) != std::string::npos) {
-            str.replace(pos, from.length(), to);
-            pos += to.length();
-        }
-    };
-
     replace_all(result, "{USER_NAME}", cfg.user_name.empty() ? "Usuario" : cfg.user_name);
     replace_all(result, "{USER_AGE}", cfg.user_age.empty() ? "No especificada" : cfg.user_age);
     replace_all(result, "{USER_OCCUPATION}", cfg.user_occupation.empty() ? "No especificada" : cfg.user_occupation);
@@ -303,18 +368,8 @@ std::string AlfredCore::build_prompt(const std::string& template_str,
                                       const std::string& context,
                                       const std::string& question) {
     std::string prompt = apply_user_profile(template_str);
-
-    auto replace_all = [](std::string& str, const std::string& from, const std::string& to) {
-        size_t pos = 0;
-        while ((pos = str.find(from, pos)) != std::string::npos) {
-            str.replace(pos, from.length(), to);
-            pos += to.length();
-        }
-    };
-
     replace_all(prompt, "{context}", context);
     replace_all(prompt, "{input}", question);
-
     return prompt;
 }
 
@@ -481,6 +536,7 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
         DBManager::instance().set_model_setting("last_used_model", model_path);
         clear_cache();
         last_query_ns_ = std::chrono::steady_clock::now().time_since_epoch().count();
+        warmup_model();
     } else {
         result.error = llm_->last_error();
     }
@@ -495,18 +551,21 @@ json AlfredCore::get_stats() {
     stats["model_idle_timeout_sec"] = get_config().model_idle_timeout_sec;
     stats["model_lazy_load"]        = get_config().model_lazy_load;
     stats["llm_model"]              = llm_->model_name();
-    stats["cache_size"]             = query_cache_.size();
+    {
+        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+        stats["cache_size"] = query_cache_.size();
+    }
     stats["gpu"]                    = json::parse(GPUManager::instance().status_json());
     return stats;
 }
 
 void AlfredCore::clear_cache() {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
+    std::unique_lock<std::shared_mutex> lock(cache_mutex_);
     query_cache_.clear();
 }
 
 json AlfredCore::get_cache_stats() {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
+    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
     json stats;
     stats["entries"] = query_cache_.size();
     stats["max_entries"] = get_config().query_cache_max;

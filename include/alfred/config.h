@@ -38,6 +38,25 @@ struct AppConfig {
     int max_tokens      = 2048;
     int seed            = -1;     // -1 = aleatorio
 
+    // --- LLM: tuning avanzado ---
+    int  n_ubatch         = 0;       // 0 = igual a n_batch
+    int  n_threads_batch  = 0;       // 0 = igual a n_threads
+    int  flash_attn       = -1;      // -1 auto, 0 off, 1 on
+    bool offload_kqv      = true;
+    bool use_mmap         = true;
+    bool use_mlock        = false;
+    std::string cache_type_k = "f16";
+    std::string cache_type_v = "f16";
+
+    // --- LLM: sampling avanzado ---
+    int   top_k          = 40;
+    float min_p          = 0.05f;
+    float repeat_penalty = 1.10f;
+    int   repeat_last_n  = 64;
+
+    // --- Warm-up tras carga del modelo ---
+    bool model_warmup    = true;
+
     // --- Cache de consultas ---
     int query_cache_max          = 50;
     int query_cache_ttl_seconds  = 300;

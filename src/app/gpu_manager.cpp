@@ -311,7 +311,10 @@ AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
         s.n_gpu_layers = 0;
         s.n_ctx        = 2048;
         s.n_batch      = 64;
+        s.n_ubatch     = 64;
         s.max_tokens   = 1024;
+        s.flash_attn   = 0;     // sin GPU, flash attention no aporta
+        s.offload_kqv  = false;
         return s;
     }
 
@@ -341,6 +344,18 @@ AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
         // Estimar VRAM necesaria para el modelo completo (1.2x overhead)
         size_t vram_needed = static_cast<size_t>(model_size_mb * 1.2);
 
+        // Antes de reducir capas, intentamos KV cache cuantizado (ahorra hasta ~75% de KV)
+        if (vram_needed > static_cast<size_t>(gpu_info_.free_vram_mb * 0.85)) {
+            // Q8_0 ahorra ~50% del KV cache: permite mantener mas capas en GPU
+            s.cache_type_k = "q8_0";
+            s.cache_type_v = "q8_0";
+        }
+        if (vram_needed > static_cast<size_t>(gpu_info_.free_vram_mb * 1.2)) {
+            // Muy ajustado: Q4_0 ahorra ~75%
+            s.cache_type_k = "q4_0";
+            s.cache_type_v = "q4_0";
+        }
+
         // Si el modelo no cabe completo en VRAM libre, reducir capas
         if (vram_needed > gpu_info_.free_vram_mb) {
             double ratio = static_cast<double>(gpu_info_.free_vram_mb) /
@@ -356,6 +371,11 @@ AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
             s.n_batch = 64;
         }
     }
+
+    // Flash Attention en AUTO: util en Ampere+ (compute >=8.0), neutral/peor en Turing
+    s.flash_attn = -1;
+    s.offload_kqv = true;
+    s.n_ubatch = s.n_batch;
 
     // --- Validacion de seguridad: evitar combinaciones peligrosas ---
     // Si n_ctx alto + n_gpu_layers alto + VRAM ajustada, reducir progresivamente
