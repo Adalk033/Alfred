@@ -1,0 +1,4 @@
+rm -r -fo build
+cmake -S . -B build -DALFRED_CUDA=ON -DALFRED_CUDA_ARCH=89// compila solo para Ada (RTX 40xx)
+// cmake -S . -B build -DALFRED_CUDA=ON -DALFRED_CUDA_ARCH=all// compila para todas las arquitecturas CUDA soportadas
+cmake --build build --config Release

@@ -41,6 +41,8 @@ static CudaRuntimeProbeResult probe_cuda_runtime() {
     CudaRuntimeProbeResult r;
 
     const char* cudart_candidates[] = {
+        "cudart64_13.dll",
+        "cudart64_130.dll",
         "cudart64_12.dll",
         "cudart64_120.dll",
         "cudart64_11.dll",
@@ -48,6 +50,7 @@ static CudaRuntimeProbeResult probe_cuda_runtime() {
     };
 
     const char* cublas_candidates[] = {
+        "cublas64_13.dll",
         "cublas64_12.dll",
         "cublas64_11.dll"
     };
