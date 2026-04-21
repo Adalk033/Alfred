@@ -35,11 +35,19 @@ jobs:
           method: 'network'
           sub-packages: '["nvcc", "cudart", "cublas", "cufft"]'
 
+      - name: Limpiar build previo
+        shell: pwsh
+        run: |
+          if (Test-Path build) {
+            Remove-Item -Recurse -Force build
+          }
+
       - name: Configurar CMake (Release + CUDA)
         run: |
           cmake -S . -B build `
             -DCMAKE_BUILD_TYPE=Release `
             -DALFRED_CUDA=ON `
+            -DGGML_CUDA=ON `
             -DALFRED_CUDA_ARCH="75;86;89"
 
       - name: Verificar que CUDA quedo activo en CMake
@@ -68,6 +76,9 @@ jobs:
 
           $alfredValue = (($alfredRaw.Line -split '=', 2)[1]).Trim().ToUpperInvariant()
           $ggmlValue = (($ggmlRaw.Line -split '=', 2)[1]).Trim().ToUpperInvariant()
+
+          Write-Host "ALFRED_CUDA line: $($alfredRaw.Line)"
+          Write-Host "GGML_CUDA line: $($ggmlRaw.Line)"
 
           if ($alfredValue -ne 'ON') {
             throw "ALFRED_CUDA quedo en '$alfredValue' (esperado: ON)"
