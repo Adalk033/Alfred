@@ -50,26 +50,24 @@ jobs:
             throw "No existe $cachePath despues de configurar CMake"
           }
 
-          $cache = Get-Content $cachePath -Raw
-
           # CMake puede guardar ON/OFF con tipos distintos (BOOL/STRING/UNINITIALIZED)
-          $alfredLine = [regex]::Match($cache, '(?mi)^ALFRED_CUDA:[^=]+=([^\r\n]+)$')
-          $ggmlLine = [regex]::Match($cache, '(?mi)^GGML_CUDA:[^=]+=([^\r\n]+)$')
+          $alfredRaw = Select-String -Path $cachePath -Pattern '^ALFRED_CUDA:[^=]+=.*$' | Select-Object -First 1
+          $ggmlRaw = Select-String -Path $cachePath -Pattern '^GGML_CUDA:[^=]+=.*$' | Select-Object -First 1
 
-          if (-not $alfredLine.Success) {
+          if (-not $alfredRaw) {
             Write-Host "No se encontro ALFRED_CUDA en CMakeCache.txt"
             Select-String -Path $cachePath -Pattern '^ALFRED_CUDA' | ForEach-Object { Write-Host $_.Line }
             throw "ALFRED_CUDA no aparece en CMakeCache.txt"
           }
 
-          if (-not $ggmlLine.Success) {
+          if (-not $ggmlRaw) {
             Write-Host "No se encontro GGML_CUDA en CMakeCache.txt"
             Select-String -Path $cachePath -Pattern '^GGML_CUDA' | ForEach-Object { Write-Host $_.Line }
             throw "GGML_CUDA no aparece en CMakeCache.txt"
           }
 
-          $alfredValue = $alfredLine.Groups[1].Value.Trim().ToUpperInvariant()
-          $ggmlValue = $ggmlLine.Groups[1].Value.Trim().ToUpperInvariant()
+          $alfredValue = (($alfredRaw.Line -split '=', 2)[1]).Trim().ToUpperInvariant()
+          $ggmlValue = (($ggmlRaw.Line -split '=', 2)[1]).Trim().ToUpperInvariant()
 
           if ($alfredValue -ne 'ON') {
             throw "ALFRED_CUDA quedo en '$alfredValue' (esperado: ON)"
@@ -78,6 +76,7 @@ jobs:
             throw "GGML_CUDA quedo en '$ggmlValue' (esperado: ON)"
           }
 
+          $cache = Get-Content $cachePath -Raw
           $cudaCompiler = [regex]::Match($cache, 'CMAKE_CUDA_COMPILER:FILEPATH=(.+)').Groups[1].Value.Trim()
           if ([string]::IsNullOrWhiteSpace($cudaCompiler)) {
             throw "CMAKE_CUDA_COMPILER no quedo definido en CMakeCache.txt"
@@ -92,7 +91,7 @@ jobs:
         run: cmake --build build --config Release --parallel
 
       - name: Subir artifact del backend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: alfred-backend
           path: |
