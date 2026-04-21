@@ -182,6 +182,7 @@ set(ALFRED_SOURCES
     src/app/model_lifecycle.cpp
     src/app/alfred_core.cpp
     src/app/token_accountant.cpp
+    src/app/tone.cpp
     src/app/pdf_extractor.cpp
     src/app/endpoints.cpp
     src/app/http_server.cpp

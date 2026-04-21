@@ -75,6 +75,11 @@ public:
     ModelLifecycle& lifecycle() { return lifecycle_; }
     ModelState model_state() const { return lifecycle_.state(); }
 
+    // Resuelve el template del system prompt sustituyendo perfil de usuario,
+    // tono y custom_instructions. Uso publico: token accounting coherente
+    // con lo que realmente se envia al modelo.
+    std::string resolve_system_prompt(const std::string& template_str);
+
 private:
     std::unique_ptr<LLMEngine> llm_;
 

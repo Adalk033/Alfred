@@ -32,7 +32,7 @@ std::string get_current_datetime() {
 // ============================================================================
 // Plantilla SIN documentos (conocimiento general)
 // ============================================================================
-const std::string PROMPT_TEMPLATE_NO_DOCUMENTS = R"(System: You are Alfred, a helpful personal AI assistant.
+const std::string PROMPT_TEMPLATE_NO_DOCUMENTS = R"(System: You are {ASSISTANT_NAME}, a helpful personal AI assistant.
 You must ALWAYS respond in Spanish.
 You are running 100% locally - no data is sent externally.
 
@@ -44,16 +44,22 @@ User Profile:
 
 Current date and time: {DATETIME}
 
+Tone and style:
+{TONE_DIRECTIVE}
+
+Additional instructions from the user:
+{CUSTOM_INSTRUCTIONS}
+
 Guidelines:
 - Rely on your general knowledge to answer.
 - Maintain conversation continuity using the context below.
-- Always respond in Spanish, be helpful and concise.
+- Always respond in Spanish and follow the tone and instructions above.
 
 Conversation context:
 {context}
 
 User question: {input}
 
-Alfred:)";
+{ASSISTANT_NAME}:)";
 
 } // namespace alfred

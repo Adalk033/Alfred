@@ -13,6 +13,7 @@
 #include "alfred/conversation_manager.h"
 #include "alfred/string_utils.h"
 #include "alfred/token_accountant.h"
+#include "alfred/tone.h"
 
 #include "llama.h"
 
@@ -138,6 +139,11 @@ bool AlfredCore::initialize() {
     if (occupation) cfg.user_occupation = *occupation;
     auto about = db.get_user_setting("about_user");
     if (about) cfg.about_user = *about;
+
+    // Cargar personalizacion del asistente desde DB
+    if (auto v = db.get_user_setting("assistant_name");      v && !v->empty()) cfg.assistant_name      = *v;
+    if (auto v = db.get_user_setting("response_tone");       v && !v->empty()) cfg.response_tone       = *v;
+    if (auto v = db.get_user_setting("custom_instructions"); v)                cfg.custom_instructions = *v;
 
     initialized_ = true;
     log_info("=== Alfred Core inicializado correctamente ===");
@@ -361,15 +367,26 @@ void AlfredCore::cache_evict_expired() {
 // ============================================================================
 // Prompt building
 // ============================================================================
+std::string AlfredCore::resolve_system_prompt(const std::string& template_str) {
+    return apply_user_profile(template_str);
+}
+
 std::string AlfredCore::apply_user_profile(const std::string& prompt) {
     auto& cfg = get_config();
     std::string result = prompt;
 
+    const std::string assistant = cfg.assistant_name.empty() ? "Alfred" : cfg.assistant_name;
+    const ToneSpec tone = resolve_tone(cfg.response_tone);
+
+    replace_all(result, "{ASSISTANT_NAME}", assistant);
     replace_all(result, "{USER_NAME}", cfg.user_name.empty() ? "Usuario" : cfg.user_name);
     replace_all(result, "{USER_AGE}", cfg.user_age.empty() ? "No especificada" : cfg.user_age);
     replace_all(result, "{USER_OCCUPATION}", cfg.user_occupation.empty() ? "No especificada" : cfg.user_occupation);
     replace_all(result, "{ABOUT_USER}", cfg.about_user.empty() ? "No especificado" : cfg.about_user);
     replace_all(result, "{DATETIME}", get_current_datetime());
+    replace_all(result, "{TONE_DIRECTIVE}", tone.directive);
+    replace_all(result, "{CUSTOM_INSTRUCTIONS}",
+                cfg.custom_instructions.empty() ? "(ninguna)" : cfg.custom_instructions);
 
     return result;
 }
@@ -451,11 +468,28 @@ QueryResult AlfredCore::query(const std::string& question,
         }
     }
 
-    // 3. Obtener contexto de conversacion
+    // 3. Obtener contexto de conversacion: truncado por tokens reales contra
+    //    el tokenizer del modelo cargado. El presupuesto se calcula como
+    //    n_ctx - (system + pregunta + tokens reservados para la respuesta
+    //    + margen de seguridad). Si por algun motivo da negativo, se omite
+    //    el historial para no desbordar el contexto.
     std::string conversation_context;
-    if (!conversation_id.empty()) {
-        conversation_context = ConversationManager::instance()
-            .format_history_as_context(conversation_id, 50);
+    if (!conversation_id.empty() && llm_->is_loaded()) {
+        const int context_max = llm_->context_length();
+        const int reserved    = get_config().max_tokens;
+        const int safety      = 128;
+
+        int system_toks   = llm_->count_tokens(resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS));
+        int question_toks = llm_->count_tokens(question);
+        if (system_toks   < 0) system_toks   = 512;   // estimado conservador
+        if (question_toks < 0) question_toks = static_cast<int>(question.size()) / 4;
+
+        const int history_budget = context_max - reserved - system_toks - question_toks - safety;
+        if (history_budget > 0) {
+            auto msgs = ConversationManager::instance()
+                .select_history_within_budget(conversation_id, *llm_, history_budget);
+            conversation_context = ConversationManager::format_messages_as_context(msgs);
+        }
     }
 
     // 4. Generar respuesta

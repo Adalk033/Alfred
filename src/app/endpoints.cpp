@@ -525,12 +525,18 @@ void handle_set_user_setting(const httplib::Request& req, httplib::Response& res
 
     DBManager::instance().set_user_setting(key, value);
 
-    // Actualizar config en runtime si es perfil de usuario
+    // Actualizar config en runtime si es perfil de usuario o personalizacion
     auto& cfg = get_config();
     if (key == "user_name") cfg.user_name = value;
     else if (key == "user_age") cfg.user_age = value;
     else if (key == "user_occupation") cfg.user_occupation = value;
     else if (key == "about_user") cfg.about_user = value;
+    else if (key == "assistant_name")
+        cfg.assistant_name = value.empty() ? std::string{"Alfred"} : value;
+    else if (key == "response_tone")
+        cfg.response_tone = value.empty() ? std::string{"professional"} : value;
+    else if (key == "custom_instructions")
+        cfg.custom_instructions = value;
 
     json_ok(res, {{"status", "saved"}});
 }
@@ -540,6 +546,13 @@ void handle_delete_user_setting(const httplib::Request& req, httplib::Response& 
     if (key.empty()) { json_error(res, 400, "Clave requerida"); return; }
 
     DBManager::instance().delete_user_setting(key);
+
+    // Reset en runtime a valores por defecto para personalizacion
+    auto& cfg = get_config();
+    if (key == "assistant_name")           cfg.assistant_name = "Alfred";
+    else if (key == "response_tone")       cfg.response_tone  = "professional";
+    else if (key == "custom_instructions") cfg.custom_instructions.clear();
+
     json_ok(res, {{"status", "deleted"}});
 }
 
@@ -959,7 +972,9 @@ void handle_token_budget(const httplib::Request& req, httplib::Response& res,
     int context_max         = core.llm().context_length();
     int reserved_for_reply  = get_config().max_tokens;
 
-    std::string system_prompt = PROMPT_TEMPLATE_NO_DOCUMENTS;
+    // Resolver el system prompt con perfil, tono y custom_instructions reales
+    // para que el conteo coincida con lo que realmente llega al modelo.
+    std::string system_prompt = core.resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS);
 
     std::vector<ConversationMessage> history;
     if (!conv_id.empty()) {

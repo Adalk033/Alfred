@@ -24,9 +24,27 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            VerticalAlignment="Center" />
             </StackPanel>
-            <Button Grid.Column="1" Content="Nueva conversacion"
-                    Style="{StaticResource AccentButtonStyle}"
-                    Click="OnNewConversation" />
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <ToggleButton x:Name="SelectModeToggle"
+                              Checked="OnEnterSelectMode" Unchecked="OnExitSelectMode"
+                              ToolTipService.ToolTip="Activar seleccion multiple">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE762;" FontSize="14" />
+                        <TextBlock Text="Seleccionar" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <Button x:Name="DeleteSelectedButton"
+                        Visibility="Collapsed" IsEnabled="False"
+                        Click="OnDeleteSelected"
+                        Style="{StaticResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                        <TextBlock x:Name="DeleteSelectedLabel" Text="Eliminar seleccionadas" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- Busqueda -->
@@ -47,7 +65,8 @@
 
         <!-- Lista de conversaciones -->
         <ListView x:Name="ConversationListView" Grid.Row="2"
-                  SelectionMode="None">
+                  SelectionMode="None"
+                  IsMultiSelectCheckBoxEnabled="True">
             <ListView.ItemTemplate>
                 <DataTemplate>
                     <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"

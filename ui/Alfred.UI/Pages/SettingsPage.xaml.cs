@@ -63,12 +63,6 @@ public sealed partial class SettingsPage : Page
             }
         }
 
-        // Limite de contexto
-        if (int.TryParse(settings.GetValueOrDefault("context_limit", "10"), out int contextLimit))
-        {
-            ContextLimitBox.Value = contextLimit;
-        }
-
         // Cargar info GPU
         var gpu = await _api.GetGpuReportAsync();
         if (gpu != null)
@@ -269,10 +263,6 @@ public sealed partial class SettingsPage : Page
                 string tone = toneItem.Tag?.ToString() ?? "professional";
                 await _api.SetUserSettingAsync("response_tone", tone);
             }
-
-            // Limite de contexto
-            int contextLimit = (int)ContextLimitBox.Value;
-            await _api.SetUserSettingAsync("context_limit", contextLimit.ToString());
 
             // Instrucciones personalizadas
             string instructions = CustomInstructionsBox.Text.Trim();

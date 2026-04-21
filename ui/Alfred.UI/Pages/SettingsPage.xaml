@@ -65,10 +65,15 @@
                         <ComboBoxItem Content="Creativo" Tag="creative" />
                     </ComboBox>
 
-                    <NumberBox x:Name="ContextLimitBox" Header="Limite de contexto (mensajes)"
-                               Minimum="2" Maximum="100" Value="10"
-                               SpinButtonPlacementMode="Inline"
-                               SmallChange="1" LargeChange="5" />
+                    <InfoBar IsOpen="True" IsClosable="False"
+                             Severity="Informational" Title="Contexto">
+                        <InfoBar.Message>
+                            El contexto se gestiona automaticamente por presupuesto de tokens
+                            del modelo (n_ctx) y se trunca de forma inteligente manteniendo los
+                            mensajes mas recientes. Puedes ver el uso en tiempo real en la barra
+                            superior y ajustar n_ctx desde la pagina de Modelos.
+                        </InfoBar.Message>
+                    </InfoBar>
 
                     <TextBox x:Name="CustomInstructionsBox" Header="Instrucciones personalizadas"
                              PlaceholderText="Instrucciones adicionales para Alfred..."

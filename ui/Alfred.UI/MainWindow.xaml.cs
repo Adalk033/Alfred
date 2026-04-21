@@ -418,6 +418,46 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // ========================================================================
+    // Nueva conversacion desde el sidebar (accesible desde cualquier pagina)
+    // ========================================================================
+    private async void OnNewConversationFromSidebar(object sender, RoutedEventArgs e)
+    {
+        NewConversationButton.IsEnabled = false;
+        try
+        {
+            var created = await _api.CreateConversationAsync("");
+            if (created == null)
+            {
+                NotificationService.Instance.ShowError(
+                    "No se pudo crear la conversacion. Verifica que el backend este activo.");
+                return;
+            }
+
+            // Seleccionar "Chat" en el NavView y navegar a la conversacion limpia
+            foreach (var item in NavView.MenuItems.OfType<NavigationViewItem>())
+            {
+                if ((item.Tag?.ToString() ?? "") == "chat")
+                {
+                    _suppressNavigation = true;
+                    NavView.SelectedItem = item;
+                    _suppressNavigation = false;
+                    break;
+                }
+            }
+
+            ContentFrame.Navigate(typeof(ChatPage), _api);
+            if (ContentFrame.Content is ChatPage chatPage)
+            {
+                await chatPage.LoadConversationAsync(created.Id);
+            }
+        }
+        finally
+        {
+            NewConversationButton.IsEnabled = true;
+        }
+    }
+
     private async void OnRestartBackend(object sender, RoutedEventArgs e)
     {
         UpdateStatus("Reiniciando...", Colors.Orange);

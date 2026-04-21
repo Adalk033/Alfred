@@ -14,6 +14,8 @@
 
 namespace alfred {
 
+class LLMEngine;
+
 class ConversationManager {
 public:
     static ConversationManager& instance();
@@ -56,6 +58,21 @@ public:
     // Formatear historial como contexto para el prompt
     std::string format_history_as_context(const std::string& conversation_id,
                                            int max_messages = 50);
+
+    // Selecciona los mensajes mas recientes que caben dentro de `token_budget`,
+    // usando el tokenizer real del modelo cargado. Si el modelo no esta cargado
+    // o count_tokens retorna -1, aplica fallback heuristico (1 token ~ 4 chars).
+    // Retorna los mensajes en orden cronologico.
+    std::vector<ConversationMessage> select_history_within_budget(
+        const std::string& conversation_id,
+        LLMEngine& llm,
+        int token_budget);
+
+    // Formatea un vector de mensajes ya seleccionado como bloque de contexto
+    // textual para inyectar en el prompt. Util cuando el filtrado (por tokens
+    // u otro criterio) ocurre fuera de esta clase.
+    static std::string format_messages_as_context(
+        const std::vector<ConversationMessage>& messages);
 
 private:
     ConversationManager() = default;

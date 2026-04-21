@@ -3,8 +3,10 @@
 // ============================================================================
 #include "alfred/conversation_manager.h"
 #include "alfred/string_utils.h"
+#include "alfred/llm_engine.h"
 
 #include <sstream>
+#include <algorithm>
 
 namespace alfred {
 
@@ -64,11 +66,15 @@ void ConversationManager::update_metadata(const std::string& id, const std::stri
 std::string ConversationManager::format_history_as_context(
     const std::string& conversation_id, int max_messages) {
     auto messages = get_history(conversation_id, max_messages);
+    return format_messages_as_context(messages);
+}
+
+std::string ConversationManager::format_messages_as_context(
+    const std::vector<ConversationMessage>& messages) {
     if (messages.empty()) return "";
 
     std::ostringstream oss;
     oss << "Historial de conversacion reciente:\n";
-
     for (const auto& msg : messages) {
         if (msg.role == "user") {
             oss << "Usuario: " << msg.content << "\n";
@@ -76,8 +82,37 @@ std::string ConversationManager::format_history_as_context(
             oss << "Alfred: " << truncate(msg.content, 500) << "\n";
         }
     }
-
     return oss.str();
+}
+
+std::vector<ConversationMessage> ConversationManager::select_history_within_budget(
+    const std::string& conversation_id, LLMEngine& llm, int token_budget) {
+    if (token_budget <= 0) return {};
+
+    // Leer un lote amplio y truncar por tokens desde el mas reciente hacia atras.
+    auto msgs = DBManager::instance().get_messages(conversation_id, 500);
+    if (msgs.empty()) return {};
+
+    std::vector<ConversationMessage> kept;
+    kept.reserve(msgs.size());
+
+    int used = 0;
+    for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
+        const auto& m = *it;
+        const std::string prefix = (m.role == "user") ? "Usuario: " : "Alfred: ";
+        const std::string& body  = (m.role == "user") ? m.content : truncate(m.content, 500);
+        std::string line = prefix + body + "\n";
+
+        int cost = llm.count_tokens(line);
+        if (cost < 0) cost = static_cast<int>(line.size()) / 4;   // fallback heuristico
+
+        if (used + cost > token_budget) break;
+        used += cost;
+        kept.push_back(m);
+    }
+
+    std::reverse(kept.begin(), kept.end());
+    return kept;
 }
 
 } // namespace alfred

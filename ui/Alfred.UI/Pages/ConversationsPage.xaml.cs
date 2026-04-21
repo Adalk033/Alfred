@@ -90,41 +90,6 @@ public sealed partial class ConversationsPage : Page
     // Acciones
     // ========================================================================
 
-    private async void OnNewConversation(object sender, RoutedEventArgs e)
-    {
-        if (_api == null) return;
-
-        var dialog = new ContentDialog
-        {
-            Title = "Nueva conversacion",
-            PrimaryButtonText = "Crear",
-            CloseButtonText = "Cancelar",
-            XamlRoot = this.XamlRoot
-        };
-
-        var input = new TextBox { PlaceholderText = "Titulo (opcional)" };
-        dialog.Content = input;
-
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
-        {
-            var created = await _api.CreateConversationAsync(input.Text.Trim());
-            if (created != null)
-            {
-                // Abrir la conversacion recien creada directamente en el chat
-                Frame.Navigate(typeof(ChatPage), _api);
-                if (Frame.Content is ChatPage chatPage)
-                {
-                    _ = chatPage.LoadConversationAsync(created.Id);
-                }
-            }
-            else
-            {
-                await LoadConversations();
-            }
-        }
-    }
-
     private void OnOpenConversation(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is string id)
@@ -192,5 +157,81 @@ public sealed partial class ConversationsPage : Page
             await _api.DeleteConversationAsync(id);
             await LoadConversations();
         }
+    }
+
+    // ========================================================================
+    // Seleccion multiple + eliminacion en lote
+    // ========================================================================
+
+    private void OnEnterSelectMode(object sender, RoutedEventArgs e)
+    {
+        ConversationListView.SelectionMode = ListViewSelectionMode.Multiple;
+        ConversationListView.SelectionChanged += OnSelectionCountChanged;
+        DeleteSelectedButton.Visibility = Visibility.Visible;
+        DeleteSelectedButton.IsEnabled  = false;
+        DeleteSelectedLabel.Text        = "Eliminar seleccionadas";
+    }
+
+    private void OnExitSelectMode(object sender, RoutedEventArgs e)
+    {
+        ConversationListView.SelectionChanged -= OnSelectionCountChanged;
+        ConversationListView.SelectedItems.Clear();
+        ConversationListView.SelectionMode = ListViewSelectionMode.None;
+        DeleteSelectedButton.Visibility = Visibility.Collapsed;
+        DeleteSelectedButton.IsEnabled  = false;
+    }
+
+    private void OnSelectionCountChanged(object sender, SelectionChangedEventArgs e)
+    {
+        int n = ConversationListView.SelectedItems.Count;
+        DeleteSelectedLabel.Text  = n > 0 ? $"Eliminar seleccionadas ({n})" : "Eliminar seleccionadas";
+        DeleteSelectedButton.IsEnabled = n > 0;
+    }
+
+    private async void OnDeleteSelected(object sender, RoutedEventArgs e)
+    {
+        if (_api == null) return;
+
+        var selected = ConversationListView.SelectedItems
+            .OfType<ConversationThread>()
+            .ToList();
+        if (selected.Count == 0) return;
+
+        string preview = selected.Count <= 3
+            ? string.Join("\n", selected.Select(c => $"• {c.Title}"))
+            : string.Join("\n", selected.Take(3).Select(c => $"• {c.Title}"))
+              + $"\n• ... y {selected.Count - 3} mas";
+
+        var dialog = new ContentDialog
+        {
+            Title             = $"Eliminar {selected.Count} conversaciones",
+            Content           = $"Se eliminaran las siguientes conversaciones y todos sus mensajes. "
+                              + "Esta accion no se puede deshacer.\n\n" + preview,
+            PrimaryButtonText = "Eliminar",
+            CloseButtonText   = "Cancelar",
+            DefaultButton     = ContentDialogButton.Close,
+            XamlRoot          = this.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        DeleteSelectedButton.IsEnabled = false;
+
+        // Borrado en paralelo; contamos exitos/fallos para reportar con precision.
+        var tasks   = selected.Select(c => _api.DeleteConversationAsync(c.Id)).ToArray();
+        var results = await Task.WhenAll(tasks);
+        int ok   = results.Count(r => r);
+        int fail = results.Length - ok;
+
+        SelectModeToggle.IsChecked = false;   // dispara OnExitSelectMode -> limpia estado
+        await LoadConversations();
+
+        if (fail == 0)
+            NotificationService.Instance.ShowSuccess(
+                $"{ok} conversaciones eliminadas correctamente.");
+        else
+            NotificationService.Instance.ShowWarning(
+                $"{ok} eliminadas, {fail} con error. Reintenta en unos segundos.");
     }
 }

@@ -74,6 +74,11 @@ struct AppConfig {
     std::string user_age;
     std::string user_occupation;
     std::string about_user;
+
+    // --- Personalizacion del asistente (cargado de DB) ---
+    std::string assistant_name     = "Alfred";
+    std::string response_tone      = "professional";
+    std::string custom_instructions;
 };
 
 // Plantilla de prompt (respuestas siempre en espanol)
