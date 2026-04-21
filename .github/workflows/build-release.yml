@@ -208,7 +208,7 @@ jobs:
           Move-Item -Path "installer\Alfred-v${{ env.VERSION }}-win-x64-setup.exe" -Destination .
 
       - name: Crear GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
         with:
           tag_name: v${{ env.VERSION }}
           name: Alfred v${{ env.VERSION }}
