@@ -42,6 +42,30 @@ jobs:
             -DALFRED_CUDA=ON `
             -DALFRED_CUDA_ARCH="75;86;89"
 
+      - name: Verificar que CUDA quedo activo en CMake
+        shell: pwsh
+        run: |
+          $cachePath = "build/CMakeCache.txt"
+          if (-not (Test-Path $cachePath)) {
+            throw "No existe $cachePath despues de configurar CMake"
+          }
+
+          $cache = Get-Content $cachePath -Raw
+          if ($cache -notmatch 'ALFRED_CUDA:BOOL=ON') {
+            throw "ALFRED_CUDA no quedo activo en CMakeCache.txt"
+          }
+          if ($cache -notmatch 'GGML_CUDA:BOOL=ON') {
+            throw "GGML_CUDA no quedo activo en CMakeCache.txt"
+          }
+
+          $cudaCompiler = [regex]::Match($cache, 'CMAKE_CUDA_COMPILER:FILEPATH=(.+)').Groups[1].Value.Trim()
+          if ([string]::IsNullOrWhiteSpace($cudaCompiler)) {
+            throw "CMAKE_CUDA_COMPILER no quedo definido en CMakeCache.txt"
+          }
+
+          Write-Host "CUDA activo en CMakeCache.txt"
+          Write-Host "CMAKE_CUDA_COMPILER=$cudaCompiler"
+
       - name: Compilar
         run: cmake --build build --config Release --parallel
 
