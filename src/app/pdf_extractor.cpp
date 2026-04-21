@@ -125,7 +125,7 @@ void chunk_by_tokens(std::vector<PdfChunk>& chunks_out,
         c.page_end   = end;
         c.text       = clean_text(buf);
         c.tokens     = (llm && llm->is_loaded())
-                       ? std::max(0, llm->count_tokens(c.text))
+                       ? (std::max)(0, llm->count_tokens(c.text))
                        : 0;
         chunks_out.push_back(std::move(c));
         buf.clear();

@@ -1006,8 +1006,9 @@ void handle_extract_pdf(const httplib::Request& req, httplib::Response& res,
     std::string filename;
     std::vector<uint8_t> bytes;
 
-    if (req.has_file("file")) {
-        const auto& f = req.get_file_value("file");
+    auto file_it = req.files.find("file");
+    if (file_it != req.files.end()) {
+        const auto& f = file_it->second;
         filename = f.filename;
         bytes.assign(f.content.begin(), f.content.end());
     } else {
