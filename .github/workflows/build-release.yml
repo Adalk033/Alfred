@@ -24,12 +24,12 @@ jobs:
   build-backend:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
         with:
           submodules: recursive
 
       - name: Instalar CUDA Toolkit ${{ env.CUDA_VERSION }}
-        uses: Jimver/cuda-toolkit@v0.2.15
+        uses: Jimver/cuda-toolkit@3d45d157f327c09c04b50ee6ccdea2d9d017ec76
         with:
           cuda: ${{ env.CUDA_VERSION }}
           method: 'network'
@@ -84,15 +84,15 @@ jobs:
   build-frontend:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
 
       - name: Instalar .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Configurar MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57
 
       - name: Restaurar workloads necesarios
         run: dotnet workload restore --project ui/Alfred.UI/Alfred.UI.csproj
@@ -119,7 +119,7 @@ jobs:
           Copy-Item -Path "$src/*" -Destination publish/Alfred.UI/ -Recurse -Force
 
       - name: Subir artifact del frontend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: alfred-frontend
           path: publish/Alfred.UI/
@@ -134,7 +134,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
 
       - name: Obtener version
         id: version
@@ -147,7 +147,7 @@ jobs:
           }
 
       - name: Descargar artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           path: artifacts/
 
