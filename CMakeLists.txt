@@ -70,7 +70,7 @@ endif()
 
 FetchContent_Declare(llama_cpp
     GIT_REPOSITORY https://github.com/ggml-org/llama.cpp
-    GIT_TAG        b8808
+    GIT_TAG        b8860
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(llama_cpp)
@@ -88,7 +88,7 @@ endif()
 set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(httplib
     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
-    GIT_TAG        v0.18.3
+    GIT_TAG        v0.43.1
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(httplib)
@@ -97,7 +97,7 @@ FetchContent_MakeAvailable(httplib)
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(json
     GIT_REPOSITORY https://github.com/nlohmann/json
-    GIT_TAG        v3.11.3
+    GIT_TAG        v3.12.0
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(json)
@@ -105,7 +105,7 @@ FetchContent_MakeAvailable(json)
 # --- spdlog (logging estructurado) ---
 FetchContent_Declare(spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog
-    GIT_TAG        v1.15.0
+    GIT_TAG        v1.17.0
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(spdlog)
@@ -115,10 +115,48 @@ set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "" FORCE)
 set(SQLITECPP_RUN_CPPCHECK OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(SQLiteCpp
     GIT_REPOSITORY https://github.com/SRombauts/SQLiteCpp
-    GIT_TAG        3.3.2
+    GIT_TAG        3.3.3
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(SQLiteCpp)
+
+# --- PDFium (extraccion de texto desde PDFs) ---
+# Usamos los binarios prebuilt de bblanchon/pdfium-binaries. Son libres
+# (Apache 2.0 / BSD-3) e incluyen cabeceras listas para usar. Descarga
+# automatica por FetchContent: no requiere vcpkg.
+if(WIN32)
+    set(PDFIUM_URL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7802/pdfium-win-x64.tgz")
+elseif(APPLE)
+    set(PDFIUM_URL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7802/pdfium-mac-x64.tgz")
+else()
+    set(PDFIUM_URL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7802/pdfium-linux-x64.tgz")
+endif()
+
+FetchContent_Declare(pdfium
+    URL            ${PDFIUM_URL}
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(pdfium)
+
+# El paquete descomprime en <pdfium_SOURCE_DIR>/{include,lib,bin}
+set(PDFIUM_INCLUDE_DIR "${pdfium_SOURCE_DIR}/include")
+if(WIN32)
+    set(PDFIUM_LIBRARY "${pdfium_SOURCE_DIR}/lib/pdfium.dll.lib")
+    set(PDFIUM_RUNTIME "${pdfium_SOURCE_DIR}/bin/pdfium.dll")
+elseif(APPLE)
+    set(PDFIUM_LIBRARY "${pdfium_SOURCE_DIR}/lib/libpdfium.dylib")
+    set(PDFIUM_RUNTIME "${PDFIUM_LIBRARY}")
+else()
+    set(PDFIUM_LIBRARY "${pdfium_SOURCE_DIR}/lib/libpdfium.so")
+    set(PDFIUM_RUNTIME "${PDFIUM_LIBRARY}")
+endif()
+
+add_library(pdfium SHARED IMPORTED)
+set_target_properties(pdfium PROPERTIES
+    IMPORTED_LOCATION "${PDFIUM_RUNTIME}"
+    IMPORTED_IMPLIB   "${PDFIUM_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${PDFIUM_INCLUDE_DIR}"
+)
 
 # --- OpenSSL (encriptacion AES-256-GCM, opcional) ---
 find_package(OpenSSL QUIET)
@@ -141,7 +179,10 @@ set(ALFRED_SOURCES
     src/app/conversation_manager.cpp
     src/app/history_manager.cpp
     src/app/llm_engine.cpp
+    src/app/model_lifecycle.cpp
     src/app/alfred_core.cpp
+    src/app/token_accountant.cpp
+    src/app/pdf_extractor.cpp
     src/app/endpoints.cpp
     src/app/http_server.cpp
 )
@@ -158,6 +199,14 @@ target_link_libraries(alfred PRIVATE
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     SQLiteCpp
+    pdfium
+)
+
+# Copiar runtime de PDFium junto al ejecutable (Windows requiere el DLL al lado).
+add_custom_command(TARGET alfred POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PDFIUM_RUNTIME}"
+            "$<TARGET_FILE_DIR:alfred>"
 )
 
 if(OpenSSL_FOUND)
@@ -181,6 +230,12 @@ endif()
 # Install target para distribucion y CI/CD
 install(TARGETS alfred
     RUNTIME DESTINATION bin
+    COMPONENT Runtime
+)
+
+# El runtime de PDFium (DLL en Windows, .so/.dylib en otros) debe acompanar al binario.
+install(FILES "${PDFIUM_RUNTIME}"
+    DESTINATION bin
     COMPONENT Runtime
 )
 
