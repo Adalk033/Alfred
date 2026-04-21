@@ -33,7 +33,6 @@ jobs:
         with:
           cuda: ${{ env.CUDA_VERSION }}
           method: 'network'
-          sub-packages: '["nvcc", "cudart", "cublas", "cufft"]'
 
       - name: Limpiar build previo
         shell: pwsh
@@ -43,12 +42,37 @@ jobs:
           }
 
       - name: Configurar CMake (Release + CUDA)
+        shell: pwsh
         run: |
-          cmake -S . -B build `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DALFRED_CUDA=ON `
-            -DGGML_CUDA=ON `
-            -DALFRED_CUDA_ARCH="75;86;89"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DALFRED_CUDA=ON -DGGML_CUDA=ON -DLLAMA_CUDA=ON -DALFRED_CUDA_ARCH="75;86;89"
+
+      - name: Dump diagnostico CUDA de CMake
+        shell: pwsh
+        run: |
+          Write-Host "=== Toolchain CUDA ==="
+          cmake --version
+          $nvccCmd = Get-Command nvcc -ErrorAction SilentlyContinue
+          if ($nvccCmd) {
+            Write-Host "nvcc path: $($nvccCmd.Source)"
+            nvcc --version
+          } else {
+            Write-Host "nvcc no encontrado en PATH"
+          }
+
+          $cachePath = "build/CMakeCache.txt"
+          if (Test-Path $cachePath) {
+            Write-Host "=== Extracto CMakeCache (CUDA/GGML) ==="
+            Select-String -Path $cachePath -Pattern '^(ALFRED_CUDA|ALFRED_CUDA_ARCH|GGML_CUDA|LLAMA_CUDA|CMAKE_CUDA_COMPILER|CMAKE_CUDA_COMPILER_VERSION|CUDAToolkit_)' |
+              ForEach-Object { Write-Host $_.Line }
+          }
+
+          $cfgLog = "build/CMakeFiles/CMakeConfigureLog.yaml"
+          if (Test-Path $cfgLog) {
+            Write-Host "=== Extracto CMakeConfigureLog (CUDA/CUDAToolkit/GGML) ==="
+            Select-String -Path $cfgLog -Pattern 'CUDA|CUDAToolkit|GGML_CUDA|LLAMA_CUDA|nvcc|cublas|cudart' |
+              Select-Object -First 200 |
+              ForEach-Object { Write-Host $_.Line }
+          }
 
       - name: Verificar que CUDA quedo activo en CMake
         shell: pwsh
