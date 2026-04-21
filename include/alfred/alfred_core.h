@@ -17,6 +17,7 @@
 #include <nlohmann/json.hpp>
 
 #include "alfred/llm_engine.h"
+#include "alfred/model_lifecycle.h"
 
 namespace alfred {
 
@@ -71,6 +72,8 @@ public:
     // Acceso a componentes
     LLMEngine& llm();
     bool is_initialized() const;
+    ModelLifecycle& lifecycle() { return lifecycle_; }
+    ModelState model_state() const { return lifecycle_.state(); }
 
 private:
     std::unique_ptr<LLMEngine> llm_;
@@ -103,7 +106,7 @@ private:
     std::mutex              model_load_mutex_;          // protege carga/descarga concurrente del modelo
     std::thread             idle_monitor_thread_;       // hilo que vigila inactividad
     std::atomic<bool>       stop_monitor_{ false };     // senal de parada para el hilo monitor
-    std::atomic<int64_t>    last_query_ns_{ 0 };        // timestamp (ns) del ultimo query exitoso
+    ModelLifecycle          lifecycle_;                 // maquina de estados IDLE/LOADING/PROCESSING
 
     LLMConfig build_llm_config(const std::string& model_path, int gpu_layers_override = -1);
     void ensure_model_loaded();   // carga el modelo si no esta cargado

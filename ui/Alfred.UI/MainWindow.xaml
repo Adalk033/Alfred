@@ -28,10 +28,39 @@
             </StackPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" Margin="12,0,0,0">
-                <TextBlock x:Name="ModelName" Text="" FontSize="12"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"
-                           MaxWidth="250" TextTrimming="CharacterEllipsis"
-                           ToolTipService.ToolTip="{x:Bind ModelName.Text, Mode=OneWay}" />
+                <!-- Indicador de tokens del contexto -->
+                <StackPanel x:Name="TokenMeterPanel" Orientation="Horizontal" Spacing="6"
+                            VerticalAlignment="Center" Visibility="Collapsed"
+                            ToolTipService.ToolTip="Uso del contexto del modelo">
+                    <FontIcon Glyph="&#xE9D9;" FontSize="11"
+                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ProgressBar x:Name="TokenMeterBar" Width="80" Height="6"
+                                 Minimum="0" Maximum="100" Value="0"
+                                 VerticalAlignment="Center" />
+                    <TextBlock x:Name="TokenMeterText" Text="0 / 0" FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center" MinWidth="80" />
+                </StackPanel>
+
+                <!-- Selector de modelo -->
+                <DropDownButton x:Name="ModelPickerButton" VerticalAlignment="Center"
+                                Padding="8,4" FontSize="11"
+                                ToolTipService.ToolTip="Cambiar o cargar modelo"
+                                Click="OnModelPickerOpening">
+                    <DropDownButton.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border x:Name="ModelStateDot" Width="8" Height="8" CornerRadius="4"
+                                    VerticalAlignment="Center" />
+                            <TextBlock x:Name="ModelName" Text="Cargar modelo" FontSize="11"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DropDownButton.Content>
+                    <DropDownButton.Flyout>
+                        <MenuFlyout x:Name="ModelFlyout" Placement="Bottom" />
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+
                 <Button x:Name="UnloadModelButton" Click="OnUnloadModel"
                         Padding="8,4" FontSize="11" VerticalAlignment="Center"
                         ToolTipService.ToolTip="Detener modelo y liberar GPU/RAM"

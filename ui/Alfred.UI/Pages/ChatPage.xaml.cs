@@ -65,6 +65,7 @@ public sealed partial class ChatPage : Page
     private void OnInputTextChanged(object sender, TextChangedEventArgs e)
     {
         SendButton.IsEnabled = !string.IsNullOrWhiteSpace(InputBox.Text) || _attachedFiles.Count > 0;
+        ChatContext.Draft = InputBox.Text ?? "";
     }
 
     private async Task SendMessage()
@@ -76,6 +77,7 @@ public sealed partial class ChatPage : Page
 
         _isSending = true;
         InputBox.Text = "";
+        ChatContext.Draft = "";
         SendButton.IsEnabled = false;
         WelcomePanel.Visibility = Visibility.Collapsed;
 
@@ -130,7 +132,10 @@ public sealed partial class ChatPage : Page
                 }
 
                 if (response?.ConversationId != null)
+                {
                     _conversationId = response.ConversationId;
+                    ChatContext.ConversationId = _conversationId;
+                }
             }
 
             if (response != null)
@@ -307,10 +312,29 @@ public sealed partial class ChatPage : Page
         try
         {
             string content;
+            bool isPdf = file.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
             bool isBinary = BinaryExtensions.Any(ext =>
                 file.Name.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
 
-            if (isBinary)
+            if (isPdf && _api != null)
+            {
+                // Los PDFs se extraen en el backend (PDFium) y viajan al modelo
+                // como texto plano. Nunca los enviamos como base64 crudo al LLM.
+                var buffer = await FileIO.ReadBufferAsync(file);
+                byte[] bytes = new byte[buffer.Length];
+                using var reader = Windows.Storage.Streams.DataReader.FromBuffer(buffer);
+                reader.ReadBytes(bytes);
+
+                var extracted = await _api.ExtractPdfAsync(file.Name, bytes);
+                if (extracted == null || string.IsNullOrWhiteSpace(extracted.Text))
+                {
+                    ShowNotification(InfoBarSeverity.Error,
+                        $"No se pudo extraer texto de \"{file.Name}\". El PDF podria estar protegido o contener solo imagenes.");
+                    return;
+                }
+                content = extracted.Text;
+            }
+            else if (isBinary)
             {
                 var buffer = await FileIO.ReadBufferAsync(file);
                 byte[] bytes = new byte[buffer.Length];
@@ -477,6 +501,7 @@ public sealed partial class ChatPage : Page
         if (_api == null) return;
 
         _conversationId = conversationId;
+        ChatContext.ConversationId = conversationId;
         _bubbles.Clear();
         MessagesPanel.Children.Clear();
         WelcomePanel.Visibility = Visibility.Collapsed;
@@ -500,6 +525,7 @@ public sealed partial class ChatPage : Page
     public void LoadHistoryEntry(string question, string answer)
     {
         _conversationId = null;
+        ChatContext.ConversationId = null;
         _bubbles.Clear();
         MessagesPanel.Children.Clear();
         WelcomePanel.Visibility = Visibility.Collapsed;

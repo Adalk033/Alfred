@@ -82,4 +82,14 @@ void handle_autotune(const httplib::Request& req, httplib::Response& res,
 void handle_optimization_stats(const httplib::Request& req, httplib::Response& res,
                                 AlfredCore& core);
 
+// Tokens
+void handle_token_count(const httplib::Request& req, httplib::Response& res,
+                        AlfredCore& core);
+void handle_token_budget(const httplib::Request& req, httplib::Response& res,
+                         AlfredCore& core);
+
+// Archivos (PDFs, etc.)
+void handle_extract_pdf(const httplib::Request& req, httplib::Response& res,
+                         AlfredCore& core);
+
 } // namespace alfred

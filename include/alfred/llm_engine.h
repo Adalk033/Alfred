@@ -98,6 +98,11 @@ public:
     std::string model_name() const;
     int context_length() const;
 
+    // Cuenta tokens reales usando el tokenizer del modelo cargado.
+    // Devuelve -1 si no hay modelo. No agrega BOS ni tokens especiales salvo
+    // que el texto los contenga literalmente.
+    int count_tokens(const std::string& text) const;
+
     // Ultimo error de carga
     std::string last_error() const;
 

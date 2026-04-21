@@ -357,3 +357,60 @@ public sealed class ErrorResponse
     [JsonPropertyName("error")]
     public string Error { get; set; } = "";
 }
+
+// ============================================================================
+// Tokens
+// ============================================================================
+public sealed class TokenBreakdown
+{
+    [JsonPropertyName("system")]
+    public int System { get; set; }
+
+    [JsonPropertyName("user_messages")]
+    public int UserMessages { get; set; }
+
+    [JsonPropertyName("assistant_messages")]
+    public int AssistantMessages { get; set; }
+
+    [JsonPropertyName("tools")]
+    public int Tools { get; set; }
+
+    [JsonPropertyName("files")]
+    public int Files { get; set; }
+}
+
+public sealed class TokenBudget
+{
+    [JsonPropertyName("total_tokens_usados")]
+    public int TotalTokensUsados { get; set; }
+
+    [JsonPropertyName("max_tokens_contexto")]
+    public int MaxTokensContexto { get; set; }
+
+    [JsonPropertyName("tokens_reservados_para_respuesta")]
+    public int TokensReservadosParaRespuesta { get; set; }
+
+    [JsonPropertyName("porcentaje_usado")]
+    public double PorcentajeUsado { get; set; }
+
+    [JsonPropertyName("breakdown")]
+    public TokenBreakdown Breakdown { get; set; } = new();
+}
+
+// ============================================================================
+// PDF extraction
+// ============================================================================
+public sealed class PdfExtractResponse
+{
+    [JsonPropertyName("filename")]
+    public string Filename { get; set; } = "";
+
+    [JsonPropertyName("pages")]
+    public int Pages { get; set; }
+
+    [JsonPropertyName("total_tokens")]
+    public int TotalTokens { get; set; }
+
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = "";
+}

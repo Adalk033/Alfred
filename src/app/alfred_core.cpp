@@ -12,6 +12,7 @@
 #include "alfred/history_manager.h"
 #include "alfred/conversation_manager.h"
 #include "alfred/string_utils.h"
+#include "alfred/token_accountant.h"
 
 #include "llama.h"
 
@@ -114,10 +115,13 @@ bool AlfredCore::initialize() {
             log_info("Modelo configurado para carga lazy: " + pending_model_path_);
         } else {
             // Carga inmediata (comportamiento legacy)
-            if (!llm_->load_model(build_llm_config(llm_path)))
+            lifecycle_.set_loading();
+            if (!llm_->load_model(build_llm_config(llm_path))) {
                 log_error("Error cargando modelo LLM");
-            else
+            } else {
                 warmup_model();
+            }
+            lifecycle_.set_idle_now();
         }
 
         // Arrancar monitor de inactividad en ambos modos
@@ -195,6 +199,7 @@ void AlfredCore::ensure_model_loaded() {
     std::lock_guard<std::mutex> lock(model_load_mutex_);
     if (llm_->is_loaded() || pending_model_path_.empty()) return;
 
+    lifecycle_.set_loading();
     log_info("Cargando modelo en demanda: " + pending_model_path_);
     auto& gpu = GPUManager::instance();
     gpu.refresh();
@@ -230,6 +235,7 @@ void AlfredCore::ensure_model_loaded() {
                 log_warn("Falling back to CPU due to error en carga GPU previa");
             }
             warmup_model();
+            lifecycle_.set_idle_now();
             return;
         }
 
@@ -237,37 +243,41 @@ void AlfredCore::ensure_model_loaded() {
                  " | Motivo: " + llm_->last_error());
         llm_->unload_model();
     }
+    lifecycle_.set_idle_now();
     log_error("Error en carga lazy del modelo LLM: " + llm_->last_error());
 }
 
 void AlfredCore::start_idle_monitor() {
-    last_query_ns_ = std::chrono::steady_clock::now().time_since_epoch().count();
-    stop_monitor_  = false;
+    stop_monitor_ = false;
     idle_monitor_thread_ = std::thread([this]() {
-        while (!stop_monitor_) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            if (stop_monitor_) break;
+        while (!stop_monitor_.load()) {
+            // Despertamos por (a) transicion del lifecycle o (b) timeout de 5s.
+            // Esto evita spin loops de 1s cuando el modelo esta idle muchas horas.
+            lifecycle_.wait_for(std::chrono::seconds(5),
+                [this]{ return stop_monitor_.load(); });
+            if (stop_monitor_.load()) break;
 
-            auto& cfg = get_config();
-            if (cfg.model_idle_timeout_sec <= 0) continue;
+            const int timeout = get_config().model_idle_timeout_sec;
+            if (timeout <= 0) continue;
 
             std::lock_guard<std::mutex> lock(model_load_mutex_);
             if (!llm_->is_loaded()) continue;
 
-            auto now_ns  = std::chrono::steady_clock::now().time_since_epoch().count();
-            auto idle_sec = (now_ns - last_query_ns_.load()) / 1'000'000'000LL;
+            // Solo descarga si estado == IDLE, in_flight == 0 y se cumplio el
+            // timeout de inactividad. Durante PROCESSING esto devuelve false
+            // y nunca se interrumpe una inferencia en curso.
+            if (!lifecycle_.can_unload(timeout)) continue;
 
-            if (idle_sec >= cfg.model_idle_timeout_sec) {
-                log_info("Modelo inactivo " + std::to_string(idle_sec) +
-                         "s, descargando recursos...");
-                llm_->unload_model();
-            }
+            log_info("Modelo IDLE >= " + std::to_string(timeout) +
+                     "s, descargando recursos...");
+            llm_->unload_model();
         }
     });
 }
 
 void AlfredCore::stop_idle_monitor() {
     stop_monitor_ = true;
+    lifecycle_.notify();   // despertar monitor para que vea stop_monitor_
     if (idle_monitor_thread_.joinable())
         idle_monitor_thread_.join();
 }
@@ -408,6 +418,10 @@ QueryResult AlfredCore::query(const std::string& question,
                                const std::string& conversation_id) {
     ensure_model_loaded();
 
+    // Marca PROCESSING mientras viva este scope. El monitor de inactividad
+    // no podra descargar el modelo aunque la generacion dure horas.
+    ModelLifecycle::Scope scope(lifecycle_);
+
     auto start = std::chrono::steady_clock::now();
     QueryResult result;
 
@@ -455,7 +469,6 @@ QueryResult AlfredCore::query(const std::string& question,
         HistoryManager::instance().save(question, result.answer,
                                          result.personal_data, "");
         cache_insert(question, result);
-        last_query_ns_ = std::chrono::steady_clock::now().time_since_epoch().count();
     }
 
     return result;
@@ -464,8 +477,15 @@ QueryResult AlfredCore::query(const std::string& question,
 void AlfredCore::unload_current_model() {
     std::lock_guard<std::mutex> lock(model_load_mutex_);
     if (llm_->is_loaded()) {
+        // Rechaza descarga manual mientras se esta generando: evita cortar
+        // una respuesta del usuario. El cliente puede reintentar al terminar.
+        if (lifecycle_.state() == ModelState::PROCESSING) {
+            log_warn("unload_current_model() ignorado: modelo en PROCESSING");
+            return;
+        }
         log_info("Descargando modelo manualmente para liberar recursos...");
         llm_->unload_model();
+        lifecycle_.set_idle_now();
     }
 }
 
@@ -474,6 +494,17 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
     ModelChangeResult result;
 
     std::lock_guard<std::mutex> lock(model_load_mutex_);
+
+    // No permitir cambio de modelo mientras hay inferencia en curso.
+    if (lifecycle_.state() == ModelState::PROCESSING) {
+        result.success = false;
+        result.error   = "No se puede cambiar el modelo mientras se genera una respuesta. "
+                         "Espera a que termine o cancela la peticion actual.";
+        log_warn(result.error);
+        return result;
+    }
+
+    lifecycle_.set_loading();
     llm_->unload_model();
 
     auto& gpu = GPUManager::instance();
@@ -535,10 +566,12 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
         pending_model_path_ = model_path;
         DBManager::instance().set_model_setting("last_used_model", model_path);
         clear_cache();
-        last_query_ns_ = std::chrono::steady_clock::now().time_since_epoch().count();
+        TokenAccountant::instance().clear();   // distinto tokenizer
         warmup_model();
+        lifecycle_.set_idle_now();
     } else {
         result.error = llm_->last_error();
+        lifecycle_.set_idle_now();
     }
 
     return result;
@@ -551,6 +584,12 @@ json AlfredCore::get_stats() {
     stats["model_idle_timeout_sec"] = get_config().model_idle_timeout_sec;
     stats["model_lazy_load"]        = get_config().model_lazy_load;
     stats["llm_model"]              = llm_->model_name();
+    switch (lifecycle_.state()) {
+        case ModelState::IDLE:       stats["model_state"] = "idle"; break;
+        case ModelState::LOADING:    stats["model_state"] = "loading"; break;
+        case ModelState::PROCESSING: stats["model_state"] = "processing"; break;
+    }
+    stats["in_flight_requests"]     = lifecycle_.in_flight();
     {
         std::shared_lock<std::shared_mutex> lock(cache_mutex_);
         stats["cache_size"] = query_cache_.size();

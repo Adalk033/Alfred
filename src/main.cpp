@@ -21,6 +21,7 @@
 #include "alfred/encryption.h"
 #include "alfred/alfred_core.h"
 #include "alfred/http_server.h"
+#include "alfred/pdf_extractor.h"
 
 #include <iostream>
 #include <string>
@@ -103,6 +104,9 @@ int main(int argc, char* argv[]) {
     } else {
         alfred::log_info("Encriptacion: sin clave configurada");
     }
+
+    // 5.5 Inicializar PDFium (extraccion de PDFs)
+    alfred::PdfExtractor::initialize();
 
     // 6. Inicializar Alfred Core (carga modelos)
     std::cout << "[5/5] Inicializando Alfred Core (cargando modelos)...\n";

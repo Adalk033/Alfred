@@ -444,6 +444,16 @@ int LLMEngine::context_length() const {
     return config_.n_ctx;
 }
 
+int LLMEngine::count_tokens(const std::string& text) const {
+    if (!model_) return -1;
+    if (text.empty()) return 0;
+    const llama_vocab* vocab = llama_model_get_vocab(model_);
+    // llama_tokenize con buffer nulo devuelve -n_tokens_reales.
+    int n = llama_tokenize(vocab, text.c_str(), static_cast<int32_t>(text.size()),
+                           nullptr, 0, /*add_bos=*/false, /*parse_special=*/true);
+    return n < 0 ? -n : n;
+}
+
 void LLMEngine::set_temperature(float temp) { config_.temperature = temp; }
 void LLMEngine::set_top_p(float top_p) { config_.top_p = top_p; }
 void LLMEngine::set_max_tokens(int max_tokens) { config_.max_tokens = max_tokens; }

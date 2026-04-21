@@ -307,6 +307,31 @@ public sealed class AlfredApiClient : IDisposable
     }
 
     // ========================================================================
+    // Tokens
+    // ========================================================================
+
+    public async Task<PdfExtractResponse?> ExtractPdfAsync(string filename, byte[] bytes)
+    {
+        var payload = new
+        {
+            filename,
+            data_base64 = Convert.ToBase64String(bytes),
+        };
+        return await PostAsync<PdfExtractResponse>("/files/extract-pdf", payload, 60);
+    }
+
+    public async Task<TokenBudget?> GetTokenBudgetAsync(string? conversationId = null, string? draft = null)
+    {
+        var qs = new List<string>();
+        if (!string.IsNullOrEmpty(conversationId))
+            qs.Add($"conversation_id={Uri.EscapeDataString(conversationId)}");
+        if (!string.IsNullOrEmpty(draft))
+            qs.Add($"draft={Uri.EscapeDataString(draft)}");
+        var endpoint = "/tokens/budget" + (qs.Count > 0 ? "?" + string.Join("&", qs) : "");
+        return await GetAsync<TokenBudget>(endpoint, 10);
+    }
+
+    // ========================================================================
     // GPU
     // ========================================================================
 

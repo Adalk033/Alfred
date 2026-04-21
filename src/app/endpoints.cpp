@@ -14,6 +14,8 @@
 #include "alfred/paths.h"
 #include "alfred/logger.h"
 #include "alfred/string_utils.h"
+#include "alfred/token_accountant.h"
+#include "alfred/pdf_extractor.h"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -924,6 +926,140 @@ void handle_optimization_stats(const httplib::Request& /*req*/, httplib::Respons
 }
 
 // ============================================================================
+// Tokens
+// ============================================================================
+void handle_token_count(const httplib::Request& req, httplib::Response& res,
+                        AlfredCore& core) {
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    std::string text = body.value("text", std::string{});
+    int n = core.llm().count_tokens(text);
+    if (n < 0) {
+        // Sin modelo cargado: fallback heuristico 1 token ~ 4 chars.
+        n = static_cast<int>(text.size()) / 4;
+        json data;
+        data["tokens"]   = n;
+        data["estimate"] = true;
+        data["warning"]  = "Modelo no cargado, usando estimacion aproximada.";
+        json_ok(res, data);
+        return;
+    }
+    json data;
+    data["tokens"]   = n;
+    data["estimate"] = false;
+    json_ok(res, data);
+}
+
+void handle_token_budget(const httplib::Request& req, httplib::Response& res,
+                         AlfredCore& core) {
+    const std::string conv_id   = req.get_param_value("conversation_id");
+    const std::string draft     = req.has_param("draft") ? req.get_param_value("draft") : "";
+
+    int context_max         = core.llm().context_length();
+    int reserved_for_reply  = get_config().max_tokens;
+
+    std::string system_prompt = PROMPT_TEMPLATE_NO_DOCUMENTS;
+
+    std::vector<ConversationMessage> history;
+    if (!conv_id.empty()) {
+        history = ConversationManager::instance().get_history(conv_id, 200);
+    }
+
+    // Archivos adjuntos (cuando este listo el upload de PDFs esto se
+    // rellena con los tokens ya contados durante la extraccion).
+    std::vector<FileTokenInfo> files;
+
+    // Tools aun no implementado en este backend; queda en 0.
+    std::string tools_text;
+
+    auto budget = TokenAccountant::instance().compute(
+        core.llm(), context_max, reserved_for_reply,
+        system_prompt, history, tools_text, files, draft);
+
+    json_ok(res, budget.to_json());
+}
+
+// ============================================================================
+// Archivos (extraccion de texto desde PDFs)
+// ============================================================================
+void handle_extract_pdf(const httplib::Request& req, httplib::Response& res,
+                        AlfredCore& core) {
+    // Dos modos:
+    //  1) multipart/form-data con campo "file"
+    //  2) JSON body { "filename": "...", "data_base64": "..." }
+    std::string filename;
+    std::vector<uint8_t> bytes;
+
+    if (req.has_file("file")) {
+        const auto& f = req.get_file_value("file");
+        filename = f.filename;
+        bytes.assign(f.content.begin(), f.content.end());
+    } else {
+        json body;
+        if (!parse_body(req, res, body)) return;
+        filename = body.value("filename", std::string{"documento.pdf"});
+        std::string b64 = body.value("data_base64", std::string{});
+        if (b64.empty()) {
+            json_error(res, 400, "Falta 'file' (multipart) o 'data_base64' (JSON)");
+            return;
+        }
+        // Decodificar base64
+        auto b64_value = [](char c) -> int {
+            if (c >= 'A' && c <= 'Z') return c - 'A';
+            if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+            if (c >= '0' && c <= '9') return c - '0' + 52;
+            if (c == '+') return 62;
+            if (c == '/') return 63;
+            return -1;
+        };
+        bytes.reserve(b64.size() * 3 / 4);
+        int bits = 0, acc = 0;
+        for (char c : b64) {
+            if (c == '=' || c == '\n' || c == '\r' || c == ' ' || c == '\t') continue;
+            int v = b64_value(c);
+            if (v < 0) { json_error(res, 400, "base64 invalido"); return; }
+            acc = (acc << 6) | v;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                bytes.push_back(static_cast<uint8_t>((acc >> bits) & 0xFF));
+            }
+        }
+    }
+
+    if (bytes.size() < 4 ||
+        !(bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46)) {
+        json_error(res, 400, "El archivo no parece ser un PDF (cabecera %PDF ausente)");
+        return;
+    }
+
+    auto pdf = PdfExtractor::extract_from_bytes(bytes.data(), bytes.size(),
+                                                &core.llm(), 800, 80);
+    if (!pdf.ok) {
+        json_error(res, 422, "Error extrayendo PDF: " + pdf.error);
+        return;
+    }
+
+    json data;
+    data["filename"]         = filename;
+    data["pages"]            = pdf.pages;
+    data["total_tokens"]     = pdf.total_tokens;
+    data["text"]             = pdf.full_text();
+    json chunks = json::array();
+    for (const auto& c : pdf.chunks) {
+        chunks.push_back({
+            {"page_start", c.page_start},
+            {"page_end",   c.page_end},
+            {"tokens",     c.tokens},
+            {"text",       c.text},
+        });
+    }
+    data["chunks"] = chunks;
+    json_ok(res, data);
+}
+
+// ============================================================================
 // Registro de todos los endpoints
 // ============================================================================
 void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
@@ -1047,6 +1183,19 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     // Optimizaciones
     server.Get("/optimization/stats", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_optimization_stats(req, res, core);
+    });
+
+    // Tokens
+    server.Post("/tokens/count", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_token_count(req, res, core);
+    });
+    server.Get("/tokens/budget", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_token_budget(req, res, core);
+    });
+
+    // Archivos
+    server.Post("/files/extract-pdf", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_extract_pdf(req, res, core);
     });
 
     log_info("Endpoints registrados");
