@@ -5,7 +5,7 @@
             "label": "CMake: Configure",
             "type": "shell",
             "command": "cmake",
-            "args": ["-S", ".", "-B", "build"],
+            "args": ["-S", ".", "-B", "build_mingw", "-G", "MinGW Makefiles", "-DALFRED_CUDA=OFF"],
             "group": "build",
             "problemMatcher": []
         },
@@ -13,7 +13,7 @@
             "label": "CMake: Build All",
             "type": "shell",
             "command": "cmake",
-            "args": ["--build", "build", "--config", "Debug"],
+            "args": ["--build", "build_mingw", "--config", "Debug"],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -25,7 +25,7 @@
             "label": "CMake: Build Release",
             "type": "shell",
             "command": "cmake",
-            "args": ["--build", "build", "--config", "Release"],
+            "args": ["--build", "build_mingw", "--config", "Release"],
             "group": "build",
             "dependsOn": "CMake: Configure",
             "problemMatcher": ["$msCompile", "$gcc"]
@@ -34,7 +34,7 @@
             "label": "CMake: Clean",
             "type": "shell",
             "command": "cmake",
-            "args": ["--build", "build", "--target", "clean"],
+            "args": ["--build", "build_mingw", "--target", "clean"],
             "group": "build",
             "problemMatcher": []
         },

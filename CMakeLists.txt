@@ -30,6 +30,16 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Forzar API minima de Windows 10 para dependencias (ej. cpp-httplib)
+# y evitar defaults antiguos en MinGW.
+if(WIN32)
+    add_compile_definitions(
+        WINVER=0x0A00
+        _WIN32_WINNT=0x0A00
+        NTDDI_VERSION=0x0A000000
+    )
+endif()
+
 # Build type por defecto: Release (aplica a generadores de config unica como Ninja/Make)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Tipo de build (Debug, Release, RelWithDebInfo, MinSizeRel)" FORCE)
@@ -107,6 +117,7 @@ if(MSVC)
     endif()
 endif()
 set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_NON_BLOCKING_GETADDRINFO OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(httplib
     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
     GIT_TAG        v0.43.1
