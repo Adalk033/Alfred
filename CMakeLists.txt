@@ -1,4 +1,25 @@
 cmake_minimum_required(VERSION 3.20)
+
+# Evitar que find_package recoja bibliotecas de MSYS2/MinGW cuando el build
+# se corre desde MSYS2 bash con MSVC. Paquetes como zstd (dependencia transitiva
+# de llama.cpp) exportan C:/msys64/ucrt64/include como include dir, y MSVC no
+# puede parsear esas cabeceras GCC-style (__asm__, __builtin_va_list, uintptr_t
+# redefinido). Solo aplica en Windows con toolchain no-MinGW.
+if(CMAKE_HOST_WIN32 AND NOT MINGW AND NOT CMAKE_CXX_COMPILER MATCHES "mingw|msys")
+    list(APPEND CMAKE_IGNORE_PREFIX_PATH
+        "C:/msys64"
+        "C:/msys32"
+        "C:/mingw64"
+        "C:/mingw32")
+    list(APPEND CMAKE_IGNORE_PATH
+        "C:/msys64/ucrt64"
+        "C:/msys64/mingw64"
+        "C:/msys64/mingw32"
+        "C:/msys64/clang64"
+        "C:/msys64/ucrt64/lib/cmake"
+        "C:/msys64/mingw64/lib/cmake")
+endif()
+
 project(AlfredCpp
     VERSION 0.3.0
     LANGUAGES CXX
