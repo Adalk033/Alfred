@@ -1,5 +1,7 @@
 # Build
 build/
+build_mingw/
+build_probe/
 cmake-build-*/
 out/
 ui/Alfred.UI/bin/
