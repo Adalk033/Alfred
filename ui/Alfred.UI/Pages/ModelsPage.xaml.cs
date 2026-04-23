@@ -276,7 +276,7 @@ public sealed partial class ModelsPage : Page
                 ModelsDirText.Text = $"Directorio de modelos: {status.ModelsDir}";
         }
 
-        var models = await _api.ListModelsAsync();
+        var models = ModelListHelpers.Deduplicate(await _api.ListModelsAsync());
         ModelListView.ItemsSource = models;
         EmptyText.Visibility = models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }

@@ -187,9 +187,20 @@ public sealed partial class ChatPage : Page
         bool isUser = role == "user";
         bool isError = role == "error";
 
+        // Solo limpiamos respuestas del asistente: mensajes del usuario y errores
+        // se muestran tal cual para no alterar lo que el usuario escribio.
+        string mainText = text;
+        string? reasoningText = null;
+        if (!isUser && !isError)
+        {
+            var cleaned = ChatMessageCleaner.Clean(text);
+            mainText = cleaned.Text;
+            reasoningText = cleaned.Reasoning;
+        }
+
         var contentBlock = new TextBlock
         {
-            Text = text,
+            Text = mainText,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
             Foreground = new SolidColorBrush(Colors.White),
@@ -198,6 +209,32 @@ public sealed partial class ChatPage : Page
 
         var stack = new StackPanel { Spacing = 4 };
         stack.Children.Add(contentBlock);
+
+        if (reasoningText != null)
+        {
+            var reasoningExpander = new Expander
+            {
+                Header = new TextBlock
+                {
+                    Text = "Análisis interno",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Colors.LightGray)
+                },
+                Content = new TextBlock
+                {
+                    Text = reasoningText,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Colors.LightGray),
+                    IsTextSelectionEnabled = true
+                },
+                Margin = new Thickness(0, 6, 0, 0),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 255, 255))
+            };
+            stack.Children.Add(reasoningExpander);
+        }
 
         // Indicador de archivos adjuntos en el mensaje
         if (attachmentNames != null && attachmentNames.Count > 0)

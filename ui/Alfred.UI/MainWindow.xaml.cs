@@ -126,9 +126,18 @@ public sealed partial class MainWindow : Window
     {
         ModelFlyout.Items.Clear();
 
+        // Paths ya renderizados (normalizados) para evitar duplicados entre
+        // "Recientes" y "Locales" o dentro de una misma seccion.
+        var seenPaths = new HashSet<string>(StringComparer.Ordinal);
+
         // Recientes (persistidos en user_settings)
-        var recents = await LoadRecentModelsAsync();
-        if (recents.Count > 0)
+        var recents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync());
+        var recentsToShow = recents
+            .Where(r => seenPaths.Add(ModelListHelpers.NormalizePath(r.Path, r.Name)))
+            .Take(RECENT_MODELS_MAX)
+            .ToList();
+
+        if (recentsToShow.Count > 0)
         {
             var recentHeader = new MenuFlyoutItem
             {
@@ -137,16 +146,19 @@ public sealed partial class MainWindow : Window
                 FontSize = 10,
             };
             ModelFlyout.Items.Add(recentHeader);
-            foreach (var r in recents.Take(RECENT_MODELS_MAX))
+            foreach (var r in recentsToShow)
             {
                 ModelFlyout.Items.Add(CreateModelMenuItem(r.Name, r.Path));
             }
             ModelFlyout.Items.Add(new MenuFlyoutSeparator());
         }
 
-        // Modelos locales
-        var models = await _api.ListModelsAsync();
-        if (models.Count == 0)
+        // Modelos locales (dedup por path y excluyendo los ya mostrados en recientes)
+        var models = ModelListHelpers.Deduplicate(await _api.ListModelsAsync())
+            .Where(m => seenPaths.Add(ModelListHelpers.NormalizePath(m.Path, m.Name)))
+            .ToList();
+
+        if (models.Count == 0 && recentsToShow.Count == 0)
         {
             var empty = new MenuFlyoutItem { Text = "Sin modelos locales", IsEnabled = false };
             ModelFlyout.Items.Add(empty);
@@ -222,7 +234,7 @@ public sealed partial class MainWindow : Window
             var raw = await _api.GetUserSettingAsync(RECENT_MODELS_KEY);
             if (string.IsNullOrEmpty(raw)) return new();
             var list = JsonSerializer.Deserialize<List<ModelInfo>>(raw);
-            return list ?? new();
+            return ModelListHelpers.Deduplicate(list);
         }
         catch { return new(); }
     }
@@ -230,7 +242,8 @@ public sealed partial class MainWindow : Window
     private async Task SaveRecentModelAsync(string name, string path)
     {
         var list = await LoadRecentModelsAsync();
-        list.RemoveAll(m => m.Path == path);
+        string key = ModelListHelpers.NormalizePath(path, name);
+        list.RemoveAll(m => ModelListHelpers.NormalizePath(m.Path, m.Name) == key);
         list.Insert(0, new ModelInfo { Name = name, Path = path });
         if (list.Count > RECENT_MODELS_MAX) list = list.Take(RECENT_MODELS_MAX).ToList();
         try
