@@ -23,7 +23,7 @@ jobs:
   build-backend-cpu:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
         with:
           submodules: recursive
 
@@ -37,7 +37,7 @@ jobs:
         run: cmake --build build --config Release --parallel
 
       - name: Subir artifact del backend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: alfred-backend-cpu
           path: |
@@ -51,15 +51,15 @@ jobs:
   build-frontend:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
 
       - name: Instalar .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Configurar MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57
 
       - name: Restaurar workloads necesarios
         run: dotnet workload restore --project ui/Alfred.UI/Alfred.UI.csproj
@@ -86,7 +86,7 @@ jobs:
           Copy-Item -Path "$src/*" -Destination publish/Alfred.UI/ -Recurse -Force
 
       - name: Subir artifact del frontend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: alfred-frontend-cpu
           path: publish/Alfred.UI/
@@ -101,7 +101,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
 
       - name: Obtener version
         id: version
@@ -114,7 +114,7 @@ jobs:
           }
 
       - name: Descargar artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
           path: artifacts/
 
@@ -154,7 +154,7 @@ jobs:
           Move-Item -Path "installer\Alfred-v${{ env.VERSION }}-cpu-win-x64-setup.exe" -Destination .
 
       - name: Subir archivos a la Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
         with:
           tag_name: v${{ env.VERSION }}
           name: Alfred v${{ env.VERSION }}
