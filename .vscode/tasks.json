@@ -41,13 +41,13 @@
         {
             "label": "UI: Build Debug",
             "type": "shell",
-            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "command": "dotnet",
             "args": [
+                "build",
                 "ui/Alfred.UI/Alfred.UI.csproj",
-                "-restore",
-                "-p:Configuration=Debug",
-                "-p:Platform=x64",
-                "-verbosity:minimal"
+                "-c",
+                "Debug",
+                "-p:Platform=x64"
             ],
             "group": "build",
             "problemMatcher": "$msCompile"
@@ -55,13 +55,13 @@
         {
             "label": "UI: Build Release",
             "type": "shell",
-            "command": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+            "command": "dotnet",
             "args": [
+                "build",
                 "ui/Alfred.UI/Alfred.UI.csproj",
-                "-restore",
-                "-p:Configuration=Release",
-                "-p:Platform=x64",
-                "-verbosity:minimal"
+                "-c",
+                "Release",
+                "-p:Platform=x64"
             ],
             "group": "build",
             "problemMatcher": "$msCompile"

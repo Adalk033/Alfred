@@ -1,0 +1,7 @@
+{
+    "cmake.generator": "MinGW Makefiles",
+    "cmake.buildDirectory": "${workspaceFolder}/build_mingw",
+    "cmake.configureSettings": {
+        "ALFRED_CUDA": "OFF"
+    }
+}
