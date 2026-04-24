@@ -16,6 +16,18 @@
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(AppxMSBuildToolsPath)' == ''">
+    <_Vs18CommunityAppxPath>C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VisualStudio\v18.0\AppxPackage\</_Vs18CommunityAppxPath>
+    <_Vs18ProfessionalAppxPath>C:\Program Files\Microsoft Visual Studio\18\Professional\MSBuild\Microsoft\VisualStudio\v18.0\AppxPackage\</_Vs18ProfessionalAppxPath>
+    <_Vs18EnterpriseAppxPath>C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VisualStudio\v18.0\AppxPackage\</_Vs18EnterpriseAppxPath>
+    <_Vs18BuildToolsAppxPath>C:\Program Files\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VisualStudio\v18.0\AppxPackage\</_Vs18BuildToolsAppxPath>
+
+    <AppxMSBuildToolsPath Condition="Exists('$(_Vs18CommunityAppxPath)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_Vs18CommunityAppxPath)</AppxMSBuildToolsPath>
+    <AppxMSBuildToolsPath Condition="'$(AppxMSBuildToolsPath)' == '' and Exists('$(_Vs18ProfessionalAppxPath)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_Vs18ProfessionalAppxPath)</AppxMSBuildToolsPath>
+    <AppxMSBuildToolsPath Condition="'$(AppxMSBuildToolsPath)' == '' and Exists('$(_Vs18EnterpriseAppxPath)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_Vs18EnterpriseAppxPath)</AppxMSBuildToolsPath>
+    <AppxMSBuildToolsPath Condition="'$(AppxMSBuildToolsPath)' == '' and Exists('$(_Vs18BuildToolsAppxPath)Microsoft.Build.Packaging.Pri.Tasks.dll')">$(_Vs18BuildToolsAppxPath)</AppxMSBuildToolsPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
