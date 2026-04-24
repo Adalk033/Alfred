@@ -148,9 +148,16 @@ public sealed class BackendProcessManager : IDisposable
             // Estructura de instalador: backend/ junto a la UI
             Path.Combine(appDir, "backend", "alfred.exe"),
             // Desarrollo: cwd del proceso (tarea de VS Code)
+            Path.Combine(cwd, "build_mingw", "alfred.exe"),
+            Path.Combine(cwd, "build_mingw", "Debug", "alfred.exe"),
+            Path.Combine(cwd, "build_mingw", "Release", "alfred.exe"),
             Path.Combine(cwd, "build", "alfred.exe"),
             Path.Combine(cwd, "build", "Debug", "alfred.exe"),
             Path.Combine(cwd, "build", "Release", "alfred.exe"),
+            // Desarrollo: build_mingw en raiz del repo
+            Path.Combine(appDir, "..", "..", "..", "..", "build_mingw", "alfred.exe"),
+            Path.Combine(appDir, "..", "..", "..", "..", "build_mingw", "Debug", "alfred.exe"),
+            Path.Combine(appDir, "..", "..", "..", "..", "build_mingw", "Release", "alfred.exe"),
             // Desarrollo: build en raiz del repo (Ninja/Make)
             Path.Combine(appDir, "..", "..", "..", "..", "build", "alfred.exe"),
             // Desarrollo: build Visual Studio Debug
@@ -158,6 +165,9 @@ public sealed class BackendProcessManager : IDisposable
             // Desarrollo: build Visual Studio Release
             Path.Combine(appDir, "..", "..", "..", "..", "build", "Release", "alfred.exe"),
             // Desarrollo: rutas cuando BaseDirectory agrega subcarpetas x64/Debug/net*
+            Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build_mingw", "alfred.exe"),
+            Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build_mingw", "Debug", "alfred.exe"),
+            Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build_mingw", "Release", "alfred.exe"),
             Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build", "alfred.exe"),
             Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build", "Debug", "alfred.exe"),
             Path.Combine(appDir, "..", "..", "..", "..", "..", "..", "build", "Release", "alfred.exe"),
