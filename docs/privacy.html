@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es-Mx">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Política de Privacidad de Alfred - Tu privacidad es nuestra prioridad">
+    <title>Política de Privacidad - Alfred</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="privacy.css">
+</head>
+
+<body>
+    <!-- Header/Navigation -->
+    <header class="header">
+        <nav class="nav container">
+            <a href="index.html" class="logo">
+                <span class="logo-text">Alfred</span>
+            </a>
+            <ul class="nav-menu">
+                <li><a href="index.html#features">Características</a></li>
+                <li><a href="index.html#privacy">Privacidad</a></li>
+                <li><a href="index.html#requirements">Requisitos</a></li>
+                <li>
+                    <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
+                        <svg class="theme-icon sun-icon" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2" />
+                            <path
+                                d="M12 1V3M12 21V23M4.22 4.22L5.64 5.64M18.36 18.36L19.78 19.78M1 12H3M21 12H23M4.22 19.78L5.64 18.36M18.36 5.64L19.78 4.22"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                        <svg class="theme-icon moon-icon" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </button>
+                </li>
+                <li><a href="index.html#download" class="nav-cta">Descargar</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Beta Banner -->
+    <div class="beta-banner">
+        <div class="beta-banner-content">
+            <span class="beta-badge">
+                <svg class="beta-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                BETA
+            </span>
+            <span class="beta-text">
+                <strong>Versión en desarrollo:</strong> Alfred está en fase BETA. Algunas funciones pueden cambiar.
+            </span>
+        </div>
+    </div>
+
+    <!-- Legal Content -->
+    <section class="legal-page">
+        <div class="container">
+            <div class="legal-header">
+                <h1 class="legal-title">Política de Privacidad</h1>
+                <p class="legal-updated">Última actualización: 4 de noviembre de 2025</p>
+            </div>
+
+            <div class="legal-content">
+                <div class="highlight-box">
+                    <p>Alfred es 100% privado. No recopilamos, almacenamos ni compartimos ningún
+                        dato personal. Todo se procesa localmente en tu dispositivo. No hay servidores externos, no hay
+                        telemetría, no hay seguimiento.</p>
+                </div>
+
+                <div class="legal-section">
+                    <h2>1. Introducción</h2>
+                    <p>
+                        En Alfred, tu privacidad no es solo una prioridad, es el núcleo de nuestro diseño. Esta Política
+                        de Privacidad explica cómo Alfred maneja tus datos y por qué puedes confiar en que nunca dejamos
+                        tu dispositivo.
+                    </p>
+                    <p>
+                        Alfred es un asistente de escritorio con inteligencia artificial completamente local. A
+                        diferencia de otros asistentes, no requiere conexión a internet para funcionar y nunca envía tus
+                        datos a servidores externos.
+                    </p>
+                </div>
+
+                <div class="legal-section">
+                    <h2>2. Información que NO Recopilamos</h2>
+                    <p>Alfred NO recopila, transmite ni comparte:</p>
+                    <ul>
+                        <li>Información personal identificable (nombre, email, dirección, etc.)</li>
+                        <li>Documentos que procesas con la aplicación</li>
+                        <li>Conversaciones con el asistente IA</li>
+                        <li>Historial de consultas o búsquedas</li>
+                        <li>Datos de uso o telemetría</li>
+                        <li>Información del dispositivo o sistema operativo</li>
+                        <li>Dirección IP o ubicación geográfica</li>
+                        <li>Cookies o identificadores de seguimiento</li>
+                        <li>Cualquier otro tipo de dato personal o de uso</li>
+                    </ul>
+                </div>
+
+                <div class="legal-section">
+                    <h2>3. Cómo Funciona Alfred</h2>
+
+                    <h3>Procesamiento 100% Local</h3>
+                    <p>
+                        Todo el procesamiento de Alfred ocurre exclusivamente en tu dispositivo:
+                    </p>
+                    <ul>
+                        <li><strong>IA Local:</strong> Utiliza Ollama para ejecutar modelos de lenguaje directamente en
+                            tu computadora</li>
+                        <li><strong>Base de Datos Local:</strong> ChromaDB se ejecuta localmente para búsqueda vectorial
+                        </li>
+                        <li><strong>Almacenamiento Local:</strong> Todos los datos se guardan en tu dispositivo
+                            (Windows: AppData, Linux: ~/.alfred, macOS: Application Support)</li>
+                        <li><strong>Sin Conexiones Externas:</strong> No hay comunicación con servidores externos
+                            durante el uso normal</li>
+                    </ul>
+
+                    <h3>Encriptación de Datos</h3>
+                    <p>
+                        Tus datos sensibles están protegidos con encriptación AES-256-GCM:
+                    </p>
+                    <ul>
+                        <li>Datos personales como RFC, CURP, NSS están encriptados en la base de datos</li>
+                        <li>Las claves de encriptación se generan y almacenan únicamente en tu dispositivo</li>
+                        <li>Ni siquiera nosotros podemos acceder a tus datos encriptados</li>
+                    </ul>
+                </div>
+
+                <div class="legal-section">
+                    <h2>4. Almacenamiento de Datos</h2>
+                    <p>
+                        Alfred almacena datos exclusivamente en tu dispositivo local:
+                    </p>
+                    <ul>
+                        <li><strong>Documentos indexados:</strong> Fragmentos de texto procesados para búsqueda
+                            (embeddings vectoriales)</li>
+                        <li><strong>Historial de conversaciones:</strong> Tus conversaciones con el asistente, guardadas
+                            localmente</li>
+                        <li><strong>Caché de respuestas:</strong> Respuestas previas para acelerar consultas repetidas
+                        </li>
+                        <li><strong>Configuración de usuario:</strong> Preferencias y ajustes de la aplicación</li>
+                        <li><strong>Logs locales:</strong> Registros de funcionamiento para diagnóstico (nunca contienen
+                            datos personales)</li>
+                    </ul>
+                    <p>
+                        Ubicaciones de almacenamiento:
+                    </p>
+                    <ul>
+                        <li><strong>Windows:</strong> C:\Users\&lt;Usuario&gt;\AppData\Roaming\Alfred\</li>
+                        <li><strong>Linux:</strong> ~/.alfred/</li>
+                        <li><strong>macOS:</strong> ~/Library/Application Support/Alfred/</li>
+                    </ul>
+                </div>
+
+                <div class="legal-section">
+                    <h2>5. Conexiones a Internet</h2>
+                    <p>
+                        Alfred requiere conexión a internet ÚNICAMENTE para:
+                    </p>
+                    <ul>
+                        <li><strong>Descarga inicial:</strong> Descargar modelos de IA desde Ollama (primera vez)</li>
+                        <li><strong>Actualizaciones de software:</strong> Verificar nuevas versiones (opcional, puedes
+                            desactivarlo)</li>
+                    </ul>
+                    <p>
+                        Una vez instalado y con los modelos descargados, Alfred funciona completamente offline. No hay
+                        comunicación con servidores durante el uso normal de la aplicación.
+                    </p>
+                </div>
+
+                <div class="legal-section">
+                    <h2>6. Código Abierto y Auditable</h2>
+                    <p>
+                        Alfred es software de código abierto bajo Apache License 2.0:
+                    </p>
+                    <ul>
+                        <li>El código fuente está disponible públicamente en <a
+                                href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener">GitHub</a></li>
+                        <li>Cualquiera puede auditar el código para verificar nuestras afirmaciones de privacidad</li>
+                        <li>La comunidad puede contribuir y mejorar la aplicación</li>
+                        <li>No hay código oculto ni funcionalidades no documentadas</li>
+                    </ul>
+                </div>
+
+                <div class="legal-section">
+                    <h2>7. Terceros y Servicios Externos</h2>
+                    <p>
+                        Alfred NO utiliza:
+                    </p>
+                    <ul>
+                        <li>Servicios de análisis (Google Analytics, etc.)</li>
+                        <li>Servicios de publicidad</li>
+                        <li>Servicios de seguimiento o rastreo</li>
+                        <li>CDNs para contenido dinámico</li>
+                        <li>APIs de terceros para funcionalidad principal</li>
+                    </ul>
+                    <p>
+                        <strong>Nota sobre Ollama:</strong> Ollama es un servidor de modelos de IA que también se
+                        ejecuta localmente en tu dispositivo. No envía datos a servidores externos durante el uso
+                        normal.
+                    </p>
+                </div>
+
+                <div class="legal-section">
+                    <h2>8. Control de tus Datos</h2>
+                    <p>
+                        Tienes control total sobre tus datos:
+                    </p>
+                    <ul>
+                        <li><strong>Eliminar datos:</strong> Puedes eliminar conversaciones, documentos indexados o toda
+                            la base de datos desde la aplicación</li>
+                        <li><strong>Exportar datos:</strong> Tus datos están en formatos estándar (SQLite, ChromaDB) que
+                            puedes acceder directamente</li>
+                        <li><strong>Desinstalar:</strong> Al desinstalar Alfred, puedes elegir mantener o eliminar todos
+                            los datos locales</li>
+                    </ul>
+                </div>
+
+                <div class="legal-section">
+                    <h2>9. Seguridad</h2>
+                    <p>
+                        Medidas de seguridad implementadas:
+                    </p>
+                    <ul>
+                        <li><strong>Encriptación AES-256-GCM:</strong> Para datos sensibles en la base de datos</li>
+                        <li><strong>Context Isolation:</strong> Electron ejecuta con aislamiento de contexto activado
+                        </li>
+                        <li><strong>Sandboxing:</strong> Procesos renderer ejecutan en sandbox</li>
+                        <li><strong>Sin Node Integration:</strong> El renderer no tiene acceso directo al sistema</li>
+                        <li><strong>Host fijo:</strong> El backend solo escucha en 127.0.0.1 (localhost)</li>
+                    </ul>
+                </div>
+
+                <div class="legal-section">
+                    <h2>10. Actualizaciones de la Aplicación</h2>
+                    <p>
+                        Las actualizaciones de Alfred:
+                    </p>
+                    <ul>
+                        <li>Se notifican al usuario pero no se instalan automáticamente</li>
+                        <li>La verificación de actualizaciones es opcional y puede desactivarse</li>
+                        <li>No se recopila información del dispositivo durante la verificación</li>
+                        <li>Las actualizaciones se descargan desde repositorios públicos (GitHub Releases)</li>
+                    </ul>
+                </div>
+
+                <div class="legal-section">
+                    <h2>11. Menores de Edad</h2>
+                    <p>
+                        Alfred no recopila datos de usuarios de ninguna edad. La aplicación puede ser utilizada por
+                        personas de cualquier edad bajo la supervisión de un adulto responsable cuando sea apropiado.
+                    </p>
+                </div>
+
+                <div class="legal-section">
+                    <h2>12. Cambios a esta Política</h2>
+                    <p>
+                        Cualquier cambio a esta Política de Privacidad será:
+                    </p>
+                    <ul>
+                        <li>Publicado en esta página con fecha de actualización</li>
+                        <li>Notificado a través de la aplicación (para cambios importantes)</li>
+                        <li>Disponible en el repositorio de GitHub con historial de cambios</li>
+                    </ul>
+                    <p>
+                        El uso continuado de Alfred después de cambios en la política constituye aceptación de los
+                        mismos.
+                    </p>
+                </div>
+
+                <div class="legal-section">
+                    <h2>13. Contacto</h2>
+                    <p>
+                        Si tienes preguntas sobre esta Política de Privacidad:
+                    </p>
+                    <ul>
+                        <li><strong>GitHub:</strong> <a href="https://github.com/Adalk033/Alfred/issues" target="_blank"
+                                rel="noopener">Abrir un issue</a></li>
+                        <li><strong>Email:</strong> (Disponible en el perfil de GitHub)</li>
+                    </ul>
+                </div>
+
+                <div class="highlight-box">
+                    <p><strong>Resumen:</strong> Alfred está diseñado desde cero para proteger tu privacidad. No
+                        recopilamos datos. No compartimos datos. No hay servidores externos. Todo es local. Tu
+                        privacidad es absoluta.</p>
+                </div>
+
+                <a href="index.html" class="back-link">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    Volver al inicio
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <span class="logo-text">Alfred</span>
+                    </div>
+                    <p class="footer-description">
+                        Tu asistente personal con IA local.<br>
+                        100% privado. 100% tuyo.
+                    </p>
+                </div>
+
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Producto</h4>
+                        <ul>
+                            <li><a href="index.html#features">Características</a></li>
+                            <li><a href="index.html#privacy">Privacidad</a></li>
+                            <li><a href="index.html#download">Descargar</a></li>
+                            <li><a href="index.html#requirements">Requisitos</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Recursos</h4>
+                        <ul>
+                            <li><a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener">GitHub</a>
+                            </li>
+                            <li><a href="https://ollama.ai" target="_blank" rel="noopener">Ollama</a></li>
+                            <li><a href="index.html#faq">FAQ</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <ul>
+                            <li><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank"
+                                    rel="noopener">Apache License 2.0</a></li>
+                            <li><a href="terms.html">Términos de Uso</a></li>
+                            <li><a href="privacy.html">Política de Privacidad</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2025 Alfred. Código abierto bajo Apache License 2.0.</p>
+                <div class="footer-social">
+                    <a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener" aria-label="GitHub">
+                        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

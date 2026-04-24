@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="es-Mx">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Alfred - Tu asistente personal con IA local. 100% privado, sin envío de datos. Disponible para Windows.">
+    <meta name="keywords" content="IA local, asistente personal, privacidad, RAG, Windows">
+    <title>Alfred - Asistente Personal con IA Local</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Header/Navigation -->
+    <header class="header">
+        <nav class="nav container">
+            <div class="logo">
+                <span class="logo-text">Alfred</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#features">Características</a></li>
+                <li><a href="#privacy">Privacidad</a></li>
+                <li><a href="#requirements">Requisitos</a></li>
+                <li>
+                    <button id="themeToggle" class="theme-toggle" aria-label="Cambiar tema">
+                        <svg class="theme-icon sun-icon" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2" />
+                            <path
+                                d="M12 1V3M12 21V23M4.22 4.22L5.64 5.64M18.36 18.36L19.78 19.78M1 12H3M21 12H23M4.22 19.78L5.64 18.36M18.36 5.64L19.78 4.22"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                        <svg class="theme-icon moon-icon" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </button>
+                </li>
+                <li><a href="#download" class="nav-cta">Descargar</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Beta Banner -->
+    <div class="beta-banner">
+        <div class="beta-banner-content">
+            <span class="beta-badge">
+                <svg class="beta-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                </svg>
+                BETA
+            </span>
+            <span class="beta-text">
+                <strong>Versión en desarrollo:</strong> Alfred está en fase BETA. Algunas funciones pueden cambiar.
+            </span>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content container">
+            <div class="hero-text">
+                <span class="badge">100% Local • 100% Privado</span>
+                <h1 class="hero-title">
+                    Tu Asistente Personal con <span class="gradient-text">IA Local</span>
+                </h1>
+                <p class="hero-description">
+                    Alfred procesa tus documentos personales con inteligencia artificial directamente en tu computadora.
+                    Sin enviar datos a la nube. Sin suscripciones. Sin comprometer tu privacidad.
+                </p>
+                <div class="hero-buttons">
+                    <a href="#download" class="btn btn-primary">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                        Descargar para Windows
+                    </a>
+                    <a href="#features" class="btn btn-secondary">
+                        Ver características
+                    </a>
+                </div>
+                <p class="version-info">
+                    <span class="version-badge">v0.3.0</span>
+                    <span class="separator">•</span>
+                    <span>Requiere Windows 10 o superior</span>
+                </p>
+            </div>
+            <div class="hero-image">
+                <div class="mockup-window">
+                    <div class="mockup-header">
+                        <div class="mockup-logo">
+                            <span>Alfred</span>
+                        </div>
+                        <button class="mockup-work-btn">WORK</button>
+                    </div>
+                    <div class="mockup-content">
+                        <div class="mockup-sidebar">
+                            <button class="new-chat-btn">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                </svg>
+                                Nueva conversación
+                            </button>
+                            <div class="sidebar-section">
+                                <div class="sidebar-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                                            stroke="currentColor" stroke-width="2" />
+                                    </svg>
+                                </div>
+                                <span>Conversaciones</span>
+                            </div>
+                            <div class="sidebar-section">
+                                <div class="sidebar-icon">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                        <path
+                                            d="M10 3a7 7 0 100 14 7 7 0 000-14zm0 12a5 5 0 110-10 5 5 0 010 10zm1-8H9v4l3.5 2.1.7-1.2-2.2-1.3V7z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <span>Historial</span>
+                            </div>
+                            <div class="sidebar-section">
+                                <div class="sidebar-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path
+                                            d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <span>Configuración</span>
+                            </div>
+                        </div>
+                        <div class="mockup-chat">
+                            <div class="chat-message bot">
+                                <div class="message-avatar bot-avatar"></div>
+                                <div class="message-content">
+                                    <p>Buenas noches, Juan Manuel García. Es un placer saludarte. ¿En qué puedo ayudarte
+                                        esta noche?</p>
+                                </div>
+                            </div>
+                            <div class="chat-actions">
+                                <button class="action-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path
+                                            d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"
+                                            stroke="currentColor" stroke-width="2" />
+                                    </svg>
+                                    8.49s
+                                </button>
+                                <button class="action-btn save-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+                                            stroke="currentColor" stroke-width="2" />
+                                        <polyline points="17 21 17 13 7 13 7 21" stroke="currentColor"
+                                            stroke-width="2" />
+                                        <polyline points="7 3 7 8 15 8" stroke="currentColor" stroke-width="2" />
+                                    </svg>
+                                    Guardar
+                                </button>
+                            </div>
+                            <div class="typing-indicator">
+                                <span></span><span></span><span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">Características</span>
+                <h2 class="section-title">Potencia e Inteligencia en tu Escritorio</h2>
+                <p class="section-description">
+                    Todo lo que necesitas en un asistente con IA, sin comprometer tu privacidad
+                </p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M12 16V12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M12 8H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">IA 100% Local</h3>
+                    <p class="feature-description">
+                        Usa modelos GGUF directamente con llama.cpp. Sin Ollama, sin Python, sin dependencias externas.
+                        Todo corre en tu máquina.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path
+                                d="M7 11V7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7V11"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Privacidad Total</h3>
+                    <p class="feature-description">
+                        Encriptación AES-256-GCM para tus datos. Nunca enviamos información a servidores externos. Tu
+                        privacidad es nuestra prioridad.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M21 16V8C20.9996 7.64927 20.9071 7.30481 20.7315 7.00116C20.556 6.69751 20.3037 6.44536 20 6.27L13 2.27C12.696 2.09446 12.3511 2.00205 12 2.00205C11.6489 2.00205 11.304 2.09446 11 2.27L4 6.27C3.69626 6.44536 3.44398 6.69751 3.26846 7.00116C3.09294 7.30481 3.00036 7.64927 3 8V16C3.00036 16.3507 3.09294 16.6952 3.26846 16.9988C3.44398 17.3025 3.69626 17.5546 4 17.73L11 21.73C11.304 21.9055 11.6489 21.998 12 21.998C12.3511 21.998 12.696 21.9055 13 21.73L20 17.73C20.3037 17.5546 20.556 17.3025 20.7315 16.9988C20.9071 16.6952 20.9996 16.3507 21 16Z"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M3.27 6.96L12 12.01L20.73 6.96" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M12 22.08V12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Soporte de PDFs</h3>
+                    <p class="feature-description">
+                        Extrae y consulta el contenido de tus archivos PDF con PDFium. Adjunta documentos directamente
+                        en la conversación.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Aceleración GPU</h3>
+                    <p class="feature-description">
+                        Soporte nativo NVIDIA CUDA (Turing, Ampere, Ada) con llama.cpp. Inferencia rápida sin capas
+                        intermedias ni configuración adicional.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon pink">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Interfaz Moderna</h3>
+                    <p class="feature-description">
+                        Chat con efectos visuales, renderizado Markdown completo, tablas profesionales y gestión de
+                        conversaciones.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon cyan">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Múltiples Formatos</h3>
+                    <p class="feature-description">
+                        Procesa PDF, Word, Excel, texto plano y más. Gestiona grandes colecciones de documentos sin
+                        esfuerzo.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Privacy Section -->
+    <section id="privacy" class="privacy">
+        <div class="container">
+            <div class="privacy-content">
+                <div class="privacy-text">
+                    <span class="section-badge">Privacidad</span>
+                    <h2 class="section-title">Tus Datos, Solo Tuyos</h2>
+                    <p class="privacy-description">
+                        A diferencia de otros asistentes con IA, Alfred no requiere conexión a internet para funcionar.
+                        Todo se procesa localmente en tu dispositivo.
+                    </p>
+                    <ul class="privacy-list">
+                        <li>
+                            <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span>Sin conexiones a APIs externas ni servicios en la nube</span>
+                        </li>
+                        <li>
+                            <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span>Encriptación AES-256-GCM para datos sensibles</span>
+                        </li>
+                        <li>
+                            <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span>Almacenamiento local seguro de documentos y conversaciones</span>
+                        </li>
+                        <li>
+                            <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.7088 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span>Código abierto y auditable bajo Apache License 2.0</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="privacy-visual">
+                    <div class="shield-container">
+                        <svg class="shield-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 22C12 22 20 18 20 12V5L12 2L4 5V12C4 18 12 22 12 22Z" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                        <div class="pulse-ring"></div>
+                        <div class="pulse-ring delayed"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Requirements Section -->
+    <section id="requirements" class="requirements">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">Requisitos</span>
+                <h2 class="section-title">Lo Que Necesitas para Empezar</h2>
+            </div>
+
+            <div class="requirements-grid">
+                <div class="requirement-card">
+                    <div class="requirement-header">
+                        <svg class="requirement-icon" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M8 21H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M12 17V21" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                        <h3>Sistema Operativo</h3>
+                    </div>
+                    <ul class="requirement-list">
+                        <li>Windows 10 o superior</li>
+                        <li>64-bit requerido</li>
+                    </ul>
+                </div>
+
+                <div class="requirement-card">
+                    <div class="requirement-header">
+                        <svg class="requirement-icon" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <rect x="9" y="9" width="6" height="6" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M9 1V4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M15 1V4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M9 20V23" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M15 20V23" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M20 9H23" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M20 14H23" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M1 9H4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M1 14H4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                        <h3>Hardware</h3>
+                    </div>
+                    <ul class="requirement-list">
+                        <li>RAM: 8 GB mínimo (16 GB recomendado)</li>
+                        <li>Almacenamiento: 20 GB libres (30 GB recomendado)</li>
+                        <li>GPU: NVIDIA recomendada para versión CUDA (opcional)</li>
+                    </ul>
+                </div>
+
+                <div class="requirement-card">
+                    <div class="requirement-header">
+                        <svg class="requirement-icon" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M12 16V12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M12 8H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                        <h3>Modelo de IA</h3>
+                    </div>
+                    <ul class="requirement-list">
+                        <li>Modelo GGUF compatible (formato llama.cpp)</li>
+                        <li>Descarga desde HuggingFace u otra fuente</li>
+                        <li>No se incluye en el instalador</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <svg class="info-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M12 16V12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M12 8H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                </svg>
+                <p>
+                    <strong>Nota:</strong> Alfred no requiere Ollama ni Python. Solo necesitas un modelo en formato
+                    GGUF descargado desde HuggingFace. Una vez configurada la ruta del modelo en la app, todo
+                    funciona offline.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section id="download" class="download">
+        <div class="container">
+            <div class="download-content">
+                <span class="section-badge">Descarga</span>
+                <h2 class="section-title">Comienza a Usar Alfred Ahora</h2>
+                <p class="download-description">
+                    Instalación simple en minutos. Sin registro ni suscripciones.
+                </p>
+
+                <!-- Version chooser -->
+                <div class="installation-warning">
+                    <div class="warning-icon">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+                            <path d="M12 6V12L16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                    </div>
+                    <div class="warning-content">
+                        <h4>¿Qué versión elegir?</h4>
+                        <p>
+                            Si tienes una GPU <strong>NVIDIA (RTX 20xx o superior)</strong>, descarga la versión GPU
+                            para inferencia acelerada con CUDA. Si no tienes GPU NVIDIA o no estás seguro,
+                            descarga la versión <strong>CPU</strong> — funciona en cualquier PC con Windows.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Two download cards -->
+                <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center;">
+
+                    <div class="download-card" style="flex: 1; min-width: 280px;">
+                        <div class="download-header">
+                            <div>
+                                <h3>Alfred — GPU (CUDA)</h3>
+                                <p class="download-version">v0.3.0 • NVIDIA RTX 20xx+ • Windows 10+</p>
+                            </div>
+                        </div>
+                        <div class="download-details">
+                            <div class="detail-item">
+                                <span class="detail-label">Aceleración</span>
+                                <span class="detail-value">NVIDIA CUDA</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Recomendado para</span>
+                                <span class="detail-value">RTX 20xx / 30xx / 40xx</span>
+                            </div>
+                        </div>
+                        <a href="https://github.com/Adalk033/Alfred/releases/latest" target="_blank" rel="noopener"
+                            class="btn btn-primary btn-large">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                            Descargar versión GPU
+                        </a>
+                    </div>
+
+                    <div class="download-card" style="flex: 1; min-width: 280px;">
+                        <div class="download-header">
+                            <div>
+                                <h3>Alfred — CPU</h3>
+                                <p class="download-version">v0.3.0 • Sin GPU requerida • Windows 10+</p>
+                            </div>
+                        </div>
+                        <div class="download-details">
+                            <div class="detail-item">
+                                <span class="detail-label">Aceleración</span>
+                                <span class="detail-value">Solo CPU</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Compatible con</span>
+                                <span class="detail-value">Cualquier PC Windows</span>
+                            </div>
+                        </div>
+                        <a href="https://github.com/Adalk033/Alfred/releases/latest" target="_blank" rel="noopener"
+                            class="btn btn-secondary btn-large">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                            Descargar versión CPU
+                        </a>
+                    </div>
+
+                </div>
+
+                <div class="steps">
+                    <h3 class="steps-title">Pasos de Instalación</h3>
+                    <div class="steps-grid">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h4>Descarga un modelo GGUF</h4>
+                                <p>Obtén un modelo compatible desde HuggingFace (ej. Llama 3, Mistral, Phi)</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h4>Ejecuta el Instalador</h4>
+                                <p>Abre Alfred-Setup.exe y sigue el asistente de instalación</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h4>Configura el modelo</h4>
+                                <p>En Configuración, indica la ruta a tu archivo .gguf</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h4>¡Listo!</h4>
+                                <p>El modelo carga de forma lazy al primer mensaje. Todo offline.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-badge">FAQ</span>
+                <h2 class="section-title">Preguntas Frecuentes</h2>
+            </div>
+
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <h3 class="faq-question">¿Es realmente gratis?</h3>
+                    <p class="faq-answer">
+                        Sí, Alfred es completamente gratis y de código abierto bajo Apache License 2.0. No hay costos
+                        ocultos,
+                        suscripciones ni límites de uso.
+                    </p>
+                </div>
+
+                <div class="faq-item">
+                    <h3 class="faq-question">¿Necesito conexión a internet?</h3>
+                    <p class="faq-answer">
+                        Solo para descargar el modelo GGUF desde HuggingFace antes del primer uso. Una vez que tienes
+                        el archivo, Alfred funciona completamente offline.
+                    </p>
+                </div>
+
+                <div class="faq-item">
+                    <h3 class="faq-question">¿Qué tan privado es realmente?</h3>
+                    <p class="faq-answer">
+                        100% privado. Todo se procesa localmente. No hay telemetría, no hay servidores externos,
+                        no se envían datos a ningún lugar.
+                    </p>
+                </div>
+
+                <div class="faq-item">
+                    <h3 class="faq-question">¿Puedo usar mi GPU?</h3>
+                    <p class="faq-answer">
+                        Sí, si tienes una GPU NVIDIA (Turing RTX 20xx o superior), descarga la versión GPU. Alfred
+                        usa CUDA nativo para acelerar la inferencia significativamente.
+                    </p>
+                </div>
+
+                <div class="faq-item">
+                    <h3 class="faq-question">¿Qué formatos de documentos soporta?</h3>
+                    <p class="faq-answer">
+                        Actualmente Alfred soporta extracción de texto desde archivos PDF (via PDFium). El soporte
+                        de otros formatos está en desarrollo.
+                    </p>
+                </div>
+
+                <div class="faq-item">
+                    <h3 class="faq-question">¿Está disponible para Mac o Linux?</h3>
+                    <p class="faq-answer">
+                        De momento solo para Windows. Las versiones para macOS y Linux están en desarrollo.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                        <span class="logo-text">Alfred</span>
+                    </div>
+                    <p class="footer-description">
+                        Tu asistente personal con IA local.<br>
+                        100% privado. 100% tuyo.
+                    </p>
+                </div>
+
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Producto</h4>
+                        <ul>
+                            <li><a href="#features">Características</a></li>
+                            <li><a href="#privacy">Privacidad</a></li>
+                            <li><a href="#download">Descargar</a></li>
+                            <li><a href="#requirements">Requisitos</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Recursos</h4>
+                        <ul>
+                            <li><a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener">GitHub</a>
+                            </li>
+                            <li><a href="https://github.com/Adalk033/Alfred/releases" target="_blank" rel="noopener">Releases</a></li>
+                            <li><a href="#faq">FAQ</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <ul>
+                            <li><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank"
+                                    rel="noopener">Apache License 2.0</a></li>
+                            <li><a href="terms.html">Términos de Uso</a></li>
+                            <li><a href="privacy.html">Política de Privacidad</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2026 Alfred. Código abierto bajo Apache License 2.0.</p>
+                <div class="footer-social">
+                    <a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener" aria-label="GitHub">
+                        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
