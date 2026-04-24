@@ -198,17 +198,27 @@ public sealed partial class ChatPage : Page
             reasoningText = cleaned.Reasoning;
         }
 
-        var contentBlock = new TextBlock
-        {
-            Text = mainText,
-            TextWrapping = TextWrapping.Wrap,
-            FontSize = 14,
-            Foreground = new SolidColorBrush(Colors.White),
-            IsTextSelectionEnabled = true
-        };
-
         var stack = new StackPanel { Spacing = 4 };
-        stack.Children.Add(contentBlock);
+
+        if (isUser || isError)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = mainText,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Colors.White),
+                IsTextSelectionEnabled = true
+            });
+        }
+        else
+        {
+            // Respuestas del asistente: renderizamos Markdown a UIElements nativos
+            var mdPanel = new StackPanel { Spacing = 6 };
+            foreach (var element in MarkdownRenderer.Render(mainText))
+                mdPanel.Children.Add(element);
+            stack.Children.Add(mdPanel);
+        }
 
         if (reasoningText != null)
         {
