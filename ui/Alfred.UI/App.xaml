@@ -8,12 +8,53 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <SolidColorBrush x:Key="AlfredAccent" Color="#6366F1" />
+            <!-- Brushes de marca (mutados en runtime por UiPreferences.ApplyAccent) -->
+            <SolidColorBrush x:Key="AlfredAccent"  Color="#6366F1" />
             <SolidColorBrush x:Key="AlfredSuccess" Color="#10B981" />
             <SolidColorBrush x:Key="AlfredWarning" Color="#F59E0B" />
-            <SolidColorBrush x:Key="AlfredError" Color="#EF4444" />
-            <SolidColorBrush x:Key="UserBubble" Color="#6366F1" />
-            <SolidColorBrush x:Key="AssistantBubble" Color="#1F2937" />
+            <SolidColorBrush x:Key="AlfredError"   Color="#EF4444" />
+            <SolidColorBrush x:Key="UserBubble"    Color="#6366F1" />
+
+            <!-- Brushes sensibles al tema. Se resuelven dinamicamente -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="AssistantBubbleBrush"      Color="#1F2937" />
+                    <SolidColorBrush x:Key="AlfredCodeBlockBg"         Color="#111622" />
+                    <SolidColorBrush x:Key="AlfredCodeHeaderBg"        Color="#1A2030" />
+                    <SolidColorBrush x:Key="AlfredCodeText"            Color="#E6E8EE" />
+                    <SolidColorBrush x:Key="AlfredCodeInline"          Color="#FFD797" />
+                    <SolidColorBrush x:Key="AlfredRule"                Color="#33FFFFFF" />
+                    <SolidColorBrush x:Key="AlfredTableBorder"         Color="#46FFFFFF" />
+                    <SolidColorBrush x:Key="AlfredTableHeaderBg"       Color="#33818CF8" />
+                    <SolidColorBrush x:Key="AlfredBlockquoteBg"        Color="#1E818CF8" />
+                    <SolidColorBrush x:Key="AlfredUserBubbleText"      Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AlfredTextPrimary"         Color="#F2F4F8" />
+                    <SolidColorBrush x:Key="AlfredTextSecondary"       Color="#A8AFBC" />
+                    <SolidColorBrush x:Key="AlfredReasoningBg"         Color="#22FFFFFF" />
+                    <SolidColorBrush x:Key="AlfredChipBg"              Color="#306366F1" />
+                    <SolidColorBrush x:Key="AlfredChipDimText"         Color="#B0FFFFFF" />
+                    <SolidColorBrush x:Key="AlfredSwatchBorder"        Color="#FFFFFFFF" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="AssistantBubbleBrush"      Color="#F3F4F6" />
+                    <SolidColorBrush x:Key="AlfredCodeBlockBg"         Color="#0F172A" />
+                    <SolidColorBrush x:Key="AlfredCodeHeaderBg"        Color="#1E293B" />
+                    <SolidColorBrush x:Key="AlfredCodeText"            Color="#E2E8F0" />
+                    <SolidColorBrush x:Key="AlfredCodeInline"          Color="#B45309" />
+                    <SolidColorBrush x:Key="AlfredRule"                Color="#33000000" />
+                    <SolidColorBrush x:Key="AlfredTableBorder"         Color="#33000000" />
+                    <SolidColorBrush x:Key="AlfredTableHeaderBg"       Color="#33818CF8" />
+                    <SolidColorBrush x:Key="AlfredBlockquoteBg"        Color="#1F818CF8" />
+                    <SolidColorBrush x:Key="AlfredUserBubbleText"      Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AlfredTextPrimary"         Color="#1F2937" />
+                    <SolidColorBrush x:Key="AlfredTextSecondary"       Color="#64748B" />
+                    <SolidColorBrush x:Key="AlfredReasoningBg"         Color="#14000000" />
+                    <SolidColorBrush x:Key="AlfredChipBg"              Color="#306366F1" />
+                    <SolidColorBrush x:Key="AlfredChipDimText"         Color="#A0334155" />
+                    <SolidColorBrush x:Key="AlfredSwatchBorder"        Color="#FF1F2937" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

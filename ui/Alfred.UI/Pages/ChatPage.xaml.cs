@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -32,9 +33,37 @@ public sealed partial class ChatPage : Page
     public ObservableCollection<string> Messages { get; } = [];
     private readonly List<ChatBubble> _bubbles = [];
 
+    // Tips rotativos mientras Alfred genera la respuesta. Se eligen
+    // tomando rotaciones cortas para que el usuario sepa que sigue trabajando.
+    private static readonly string[] LoadingTips =
+    [
+        "Procesando tu consulta…",
+        "Cargando contexto local…",
+        "Generando tokens…",
+        "Refinando la respuesta…",
+        "Casi listo…",
+    ];
+    private DispatcherTimer? _loadingTipsTimer;
+    private DateTime _loadingStarted;
+    private int _loadingTipIndex;
+
+    /// <summary>Accesor para que XAML pueda hacer x:Bind a las preferencias.</summary>
+    public UiPreferences Prefs => UiPreferences.Instance;
+
     public ChatPage()
     {
         InitializeComponent();
+        ApplyAnimationPreferences();
+        ActualThemeChanged += OnActualThemeChanged;
+        Unloaded += (_, _) => ActualThemeChanged -= OnActualThemeChanged;
+    }
+
+    private void OnActualThemeChanged(FrameworkElement sender, object args)
+    {
+        // Cuando el tema efectivo cambia (ya sea por cambio del usuario o del sistema),
+        // los brushes capturados en burbujas previas quedaron del tema anterior. Las
+        // reconstruimos para que adopten los nuevos colores.
+        DispatcherQueue.TryEnqueue(RebuildAllBubbles);
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -42,6 +71,47 @@ public sealed partial class ChatPage : Page
         base.OnNavigatedTo(e);
         if (e.Parameter is AlfredApiClient api)
             _api = api;
+
+        // Suscripción aquí (no en el ctor) para que sobreviva a los Unloaded
+        // de las navegaciones cuando la página está cacheada.
+        UiPreferences.Instance.Changed += OnUiPreferencesChanged;
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        UiPreferences.Instance.Changed -= OnUiPreferencesChanged;
+    }
+
+    private void OnUiPreferencesChanged()
+    {
+        // Repinta burbujas usando los nuevos brushes / fontSize / densidad.
+        DispatcherQueue.TryEnqueue(RebuildAllBubbles);
+        ApplyAnimationPreferences();
+    }
+
+    private void RebuildAllBubbles()
+    {
+        MessagesPanel.Children.Clear();
+        foreach (var b in _bubbles)
+        {
+            MessagesPanel.Children.Add(
+                CreateBubbleElement(b.Text, b.Role, b.TimeMs, b.FromCache, b.AttachmentNames));
+        }
+    }
+
+    private void ApplyAnimationPreferences()
+    {
+        // Activa o desactiva la transicion de entrada para nuevas burbujas.
+        if (UiPreferences.Instance.Animations)
+        {
+            if (MessagesPanel.ChildrenTransitions.Count == 0)
+                MessagesPanel.ChildrenTransitions.Add(new EntranceThemeTransition { FromVerticalOffset = 12 });
+        }
+        else
+        {
+            MessagesPanel.ChildrenTransitions.Clear();
+        }
     }
 
     // ========================================================================
@@ -103,11 +173,12 @@ public sealed partial class ChatPage : Page
         }
         AddBubble(displayQuestion, "user", attachmentNames: attachmentNames);
 
-        // Mostrar indicador de carga
+        // Mostrar indicador de carga con tips rotativos
         LoadingIndicator.Visibility = Visibility.Visible;
         LoadingText.Text = attachments != null
-            ? "Procesando archivos y generando respuesta..."
-            : "Alfred esta pensando...";
+            ? "Procesando archivos y generando respuesta…"
+            : "Alfred está pensando…";
+        StartLoadingTips();
 
         try
         {
@@ -153,11 +224,36 @@ public sealed partial class ChatPage : Page
         }
         finally
         {
+            StopLoadingTips();
             LoadingIndicator.Visibility = Visibility.Collapsed;
             _isSending = false;
             SendButton.IsEnabled = !string.IsNullOrWhiteSpace(InputBox.Text);
             InputBox.Focus(FocusState.Programmatic);
         }
+    }
+
+    private void StartLoadingTips()
+    {
+        _loadingStarted = DateTime.UtcNow;
+        _loadingTipIndex = 0;
+        LoadingHint.Text = LoadingTips[0];
+
+        _loadingTipsTimer?.Stop();
+        _loadingTipsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2200) };
+        _loadingTipsTimer.Tick += (_, _) =>
+        {
+            _loadingTipIndex = (_loadingTipIndex + 1) % LoadingTips.Length;
+            var elapsed = DateTime.UtcNow - _loadingStarted;
+            LoadingHint.Text = $"{LoadingTips[_loadingTipIndex]}  ·  {elapsed.TotalSeconds:F0}s";
+        };
+        _loadingTipsTimer.Start();
+    }
+
+    private void StopLoadingTips()
+    {
+        _loadingTipsTimer?.Stop();
+        _loadingTipsTimer = null;
+        LoadingHint.Text = "";
     }
 
     // ========================================================================
@@ -198,7 +294,16 @@ public sealed partial class ChatPage : Page
             reasoningText = cleaned.Reasoning;
         }
 
-        var stack = new StackPanel { Spacing = 4 };
+        double baseSize = UiPreferences.Instance.FontSize;
+        bool compact = UiPreferences.Instance.Density == UiDensity.Compact;
+        Brush userText      = ThemedBrushes.Get("AlfredUserBubbleText", Colors.White);
+        Brush dimText       = ThemedBrushes.Get("AlfredTextSecondary", Colors.LightGray);
+        Brush assistantBg   = ThemedBrushes.Get("AssistantBubbleBrush", Windows.UI.Color.FromArgb(255, 31, 41, 55));
+        Brush userBg        = ThemedBrushes.Get("UserBubble",          Windows.UI.Color.FromArgb(255, 99, 102, 241));
+        Brush errorBg       = ThemedBrushes.Get("AlfredError",         Windows.UI.Color.FromArgb(255, 239, 68, 68));
+        Brush reasoningBg   = ThemedBrushes.Get("AlfredReasoningBg",   Windows.UI.Color.FromArgb(40, 255, 255, 255));
+
+        var stack = new StackPanel { Spacing = compact ? 2 : 4 };
 
         if (isUser || isError)
         {
@@ -206,15 +311,15 @@ public sealed partial class ChatPage : Page
             {
                 Text = mainText,
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 14,
-                Foreground = new SolidColorBrush(Colors.White),
+                FontSize = baseSize,
+                Foreground = userText,
                 IsTextSelectionEnabled = true
             });
         }
         else
         {
             // Respuestas del asistente: renderizamos Markdown a UIElements nativos
-            var mdPanel = new StackPanel { Spacing = 6 };
+            var mdPanel = new StackPanel { Spacing = compact ? 4 : 6 };
             foreach (var element in MarkdownRenderer.Render(mainText))
                 mdPanel.Children.Add(element);
             stack.Children.Add(mdPanel);
@@ -228,20 +333,20 @@ public sealed partial class ChatPage : Page
                 {
                     Text = "Análisis interno",
                     FontSize = 11,
-                    Foreground = new SolidColorBrush(Colors.LightGray)
+                    Foreground = dimText
                 },
                 Content = new TextBlock
                 {
                     Text = reasoningText,
                     TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                    Foreground = new SolidColorBrush(Colors.LightGray),
+                    FontSize = Math.Max(11, baseSize - 2),
+                    Foreground = dimText,
                     IsTextSelectionEnabled = true
                 },
                 Margin = new Thickness(0, 6, 0, 0),
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 255, 255, 255))
+                Background = reasoningBg
             };
             stack.Children.Add(reasoningExpander);
         }
@@ -260,7 +365,7 @@ public sealed partial class ChatPage : Page
             {
                 Glyph = "\uE723",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Colors.LightGray)
+                Foreground = dimText
             };
             attachPanel.Children.Add(icon);
 
@@ -270,7 +375,7 @@ public sealed partial class ChatPage : Page
                 Text = names,
                 FontSize = 11,
                 FontStyle = Windows.UI.Text.FontStyle.Italic,
-                Foreground = new SolidColorBrush(Colors.LightGray),
+                Foreground = dimText,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 MaxWidth = 400
             });
@@ -282,30 +387,37 @@ public sealed partial class ChatPage : Page
         if (!isUser && !isError && timeMs > 0)
         {
             string meta = timeMs >= 1000 ? $"{timeMs / 1000.0:F1}s" : $"{timeMs:F0}ms";
-            if (fromCache) meta += " (cache)";
+            if (fromCache)
+            {
+                meta += " · cache";
+            }
+            else if (timeMs > 200)
+            {
+                // Estimacion ~1 token cada 4 chars (sin streaming real desde el backend).
+                int approxTokens = Math.Max(1, mainText.Length / 4);
+                double tps = approxTokens / (timeMs / 1000.0);
+                meta += $" · ~{tps:F1} tok/s";
+            }
 
             stack.Children.Add(new TextBlock
             {
                 Text = meta,
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Colors.LightGray),
+                Foreground = dimText,
                 HorizontalAlignment = HorizontalAlignment.Right
             });
         }
 
-        SolidColorBrush bg;
-        if (isError)
-            bg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 239, 68, 68));
-        else if (isUser)
-            bg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 99, 102, 241));
-        else
-            bg = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 31, 41, 55));
+        Brush bg = isError ? errorBg : isUser ? userBg : assistantBg;
+        var bubblePadding = compact
+            ? new Thickness(12, 7, 12, 7)
+            : new Thickness(16, 10, 16, 10);
 
         return new Border
         {
             Background = bg,
             CornerRadius = new CornerRadius(isUser ? 16 : 4, 16, isUser ? 4 : 16, 16),
-            Padding = new Thickness(16, 10, 16, 10),
+            Padding = bubblePadding,
             MaxWidth = 600,
             HorizontalAlignment = isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left,
             Child = stack
@@ -434,11 +546,15 @@ public sealed partial class ChatPage : Page
 
         AttachmentPanel.Visibility = Visibility.Visible;
 
+        Brush chipBg     = ThemedBrushes.Get("AlfredChipBg",      Windows.UI.Color.FromArgb(48, 99, 102, 241));
+        Brush chipName   = ThemedBrushes.Get("AlfredTextPrimary", Windows.UI.Color.FromArgb(255, 230, 232, 238));
+        Brush chipSize   = ThemedBrushes.Get("AlfredChipDimText", Windows.UI.Color.FromArgb(180, 255, 255, 255));
+
         var chips = _attachedFiles.Select((f, i) =>
         {
             var chip = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(30, 99, 102, 241)),
+                Background = chipBg,
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(8, 4, 8, 4)
             };
@@ -448,6 +564,7 @@ public sealed partial class ChatPage : Page
             {
                 Text = f.Name,
                 FontSize = 12,
+                Foreground = chipName,
                 VerticalAlignment = VerticalAlignment.Center,
                 MaxWidth = 150,
                 TextTrimming = TextTrimming.CharacterEllipsis
@@ -456,7 +573,7 @@ public sealed partial class ChatPage : Page
             {
                 Text = FormatFileSize(f.SizeBytes),
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(180, 255, 255, 255)),
+                Foreground = chipSize,
                 VerticalAlignment = VerticalAlignment.Center
             });
 

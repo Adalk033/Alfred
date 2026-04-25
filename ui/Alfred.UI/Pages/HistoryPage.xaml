@@ -1,9 +1,10 @@
 <Page
     x:Class="Alfred.UI.Pages.HistoryPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid Padding="24">
+    <Grid Padding="{x:Bind Prefs.PagePadding, Mode=OneWay}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -17,8 +18,11 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Historial de preguntas" FontSize="24" FontWeight="Bold" />
-            <TextBlock x:Name="CountText" Grid.Column="1" FontSize="13"
+            <TextBlock Grid.Column="0" Text="Historial de preguntas"
+                       FontSize="{x:Bind Prefs.PageTitleFontSize, Mode=OneWay}"
+                       FontWeight="Bold" />
+            <TextBlock x:Name="CountText" Grid.Column="1"
+                       FontSize="{x:Bind Prefs.SmallFontSize, Mode=OneWay}"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        VerticalAlignment="Center" />
         </Grid>
@@ -46,7 +50,9 @@
             <ListView.ItemTemplate>
                 <DataTemplate>
                     <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            CornerRadius="8" Padding="16,12" Margin="0,4">
+                            CornerRadius="8"
+                            Padding="{Binding CardPadding, Source={StaticResource Prefs}}"
+                            Margin="0,4">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -60,13 +66,16 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{Binding Question}"
-                                               FontWeight="SemiBold" FontSize="14"
+                                               FontWeight="SemiBold"
+                                               FontSize="{Binding BodyFontSize, Source={StaticResource Prefs}}"
                                                TextTrimming="CharacterEllipsis" MaxLines="2" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Timestamp}" FontSize="11"
+                                    <TextBlock Grid.Column="1" Text="{Binding Timestamp}"
+                                               FontSize="{Binding TinyFontSize, Source={StaticResource Prefs}}"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                VerticalAlignment="Center" />
                                 </Grid>
-                                <TextBlock Text="{Binding Answer}" FontSize="13"
+                                <TextBlock Text="{Binding Answer}"
+                                           FontSize="{Binding SmallFontSize, Source={StaticResource Prefs}}"
                                            TextTrimming="CharacterEllipsis" MaxLines="3"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </StackPanel>

@@ -17,6 +17,8 @@ public sealed partial class ModelsPage : Page
     private bool _isAutoTuned;          // true cuando los valores mostrados son del auto-tune
     private bool _suppressConfigChange; // evita que ValueChanged dispare durante auto-tune/reset
 
+    public UiPreferences Prefs => UiPreferences.Instance;
+
     public ModelsPage()
     {
         InitializeComponent();

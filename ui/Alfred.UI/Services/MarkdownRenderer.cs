@@ -5,7 +5,9 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.UI;
 using Windows.UI.Text;
 
@@ -16,22 +18,14 @@ namespace Alfred.UI.Services;
 /// Soporta: headings (#,##,###), negrita (**), cursiva (*), codigo inline (`),
 /// bloques de codigo (```), listas ordenadas/no ordenadas, enlaces, blockquotes,
 /// tablas y reglas horizontales.
+///
+/// Sensible al tema: los brushes se resuelven desde Application.Resources con
+/// fallback a valores explicitos para casos donde el resource no esta presente.
+/// El tamaño y densidad se ajustan via UiPreferences.
 /// </summary>
 public static class MarkdownRenderer
 {
-    private const string MonoFont = "Consolas";
-    private const double BaseFontSize = 14;
-
-    private static readonly SolidColorBrush TextBrush = new(Colors.White);
-    private static readonly SolidColorBrush DimBrush = new(Color.FromArgb(220, 200, 200, 210));
-    private static readonly SolidColorBrush CodeInlineBrush = new(Color.FromArgb(255, 255, 215, 150));
-    private static readonly SolidColorBrush CodeBlockBg = new(Color.FromArgb(255, 17, 22, 34));
-    private static readonly SolidColorBrush CodeHeaderBg = new(Color.FromArgb(255, 26, 32, 48));
-    private static readonly SolidColorBrush AccentBrush = new(Color.FromArgb(255, 129, 140, 248));
-    private static readonly SolidColorBrush RuleBrush = new(Color.FromArgb(80, 255, 255, 255));
-    private static readonly SolidColorBrush TableBorderBrush = new(Color.FromArgb(70, 255, 255, 255));
-    private static readonly SolidColorBrush TableHeaderBg = new(Color.FromArgb(50, 129, 140, 248));
-    private static readonly SolidColorBrush BlockquoteBg = new(Color.FromArgb(30, 129, 140, 248));
+    private const string MonoFont = "Cascadia Code, Consolas, Courier New";
 
     private static readonly Regex FenceOpenRegex = new(@"^\s*```([\w+.\-]*)\s*$", RegexOptions.Compiled);
     private static readonly Regex FenceCloseRegex = new(@"^\s*```\s*$", RegexOptions.Compiled);
@@ -42,12 +36,31 @@ public static class MarkdownRenderer
     private static readonly Regex OrderedItemRegex = new(@"^\s*(\d+)[.\)]\s+(.+)$", RegexOptions.Compiled);
     private static readonly Regex TableSeparatorRegex = new(@"^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$", RegexOptions.Compiled);
 
+    // ====================================================================
+    // Resolucion de brushes / tipografia
+    // ====================================================================
+
+    private static double BaseSize => UiPreferences.Instance.FontSize;
+    private static double BlockSpacingMul => UiPreferences.Instance.Density == UiDensity.Compact ? 0.65 : 1.0;
+
+    private static Brush TextBrush       => ThemedBrushes.Get("AlfredTextPrimary",     Color.FromArgb(255, 230, 232, 238));
+    private static Brush DimBrush        => ThemedBrushes.Get("AlfredTextSecondary",   Color.FromArgb(220, 200, 200, 210));
+    private static Brush AccentBrush     => ThemedBrushes.Get("AlfredAccent",          Color.FromArgb(255, 129, 140, 248));
+    private static Brush CodeInlineBrush => ThemedBrushes.Get("AlfredCodeInline",      Color.FromArgb(255, 255, 215, 150));
+    private static Brush CodeBlockBg     => ThemedBrushes.Get("AlfredCodeBlockBg",     Color.FromArgb(255, 17, 22, 34));
+    private static Brush CodeHeaderBg    => ThemedBrushes.Get("AlfredCodeHeaderBg",    Color.FromArgb(255, 26, 32, 48));
+    private static Brush CodeTextBrush   => ThemedBrushes.Get("AlfredCodeText",        Color.FromArgb(255, 230, 232, 238));
+    private static Brush RuleBrush       => ThemedBrushes.Get("AlfredRule",            Color.FromArgb(80, 255, 255, 255));
+    private static Brush TableBorderBrush=> ThemedBrushes.Get("AlfredTableBorder",     Color.FromArgb(70, 255, 255, 255));
+    private static Brush TableHeaderBg   => ThemedBrushes.Get("AlfredTableHeaderBg",   Color.FromArgb(50, 129, 140, 248));
+    private static Brush BlockquoteBg    => ThemedBrushes.Get("AlfredBlockquoteBg",    Color.FromArgb(30, 129, 140, 248));
+
     public static IReadOnlyList<UIElement> Render(string? markdown)
     {
         var result = new List<UIElement>();
         if (string.IsNullOrEmpty(markdown))
         {
-            result.Add(new TextBlock { Text = "", Foreground = TextBrush, FontSize = BaseFontSize });
+            result.Add(new TextBlock { Text = "", Foreground = TextBrush, FontSize = BaseSize });
             return result;
         }
 
@@ -83,7 +96,7 @@ public static class MarkdownRenderer
                 {
                     Height = 1,
                     Background = RuleBrush,
-                    Margin = new Thickness(0, 6, 0, 6)
+                    Margin = new Thickness(0, 6 * BlockSpacingMul, 0, 6 * BlockSpacingMul)
                 });
                 i++;
                 continue;
@@ -205,10 +218,10 @@ public static class MarkdownRenderer
     {
         double size = level switch
         {
-            1 => 20,
-            2 => 18,
-            3 => 16,
-            _ => 14
+            1 => BaseSize + 6,
+            2 => BaseSize + 4,
+            3 => BaseSize + 2,
+            _ => BaseSize
         };
         var tb = new TextBlock
         {
@@ -217,7 +230,7 @@ public static class MarkdownRenderer
             FontWeight = FontWeights.SemiBold,
             Foreground = TextBrush,
             IsTextSelectionEnabled = true,
-            Margin = new Thickness(0, level <= 2 ? 6 : 4, 0, 2)
+            Margin = new Thickness(0, (level <= 2 ? 6 : 4) * BlockSpacingMul, 0, 2 * BlockSpacingMul)
         };
         AddInlines(tb.Inlines, text);
         return tb;
@@ -229,22 +242,36 @@ public static class MarkdownRenderer
         {
             Background = CodeBlockBg,
             CornerRadius = new CornerRadius(6),
-            Margin = new Thickness(0, 4, 0, 4)
+            Margin = new Thickness(0, 4 * BlockSpacingMul, 0, 4 * BlockSpacingMul)
         };
 
         var stack = new StackPanel();
 
+        // ---- Header con etiqueta de lenguaje + boton "Copiar" ----
+        var headerGrid = new Grid();
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var langLabel = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(language) ? "code" : language.ToLowerInvariant(),
+            FontSize = 11,
+            Foreground = DimBrush,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(langLabel, 0);
+        headerGrid.Children.Add(langLabel);
+
+        var copyButton = CreateCopyButton(code);
+        Grid.SetColumn(copyButton, 1);
+        headerGrid.Children.Add(copyButton);
+
         var header = new Border
         {
             Background = CodeHeaderBg,
-            Padding = new Thickness(10, 4, 10, 4),
+            Padding = new Thickness(10, 2, 4, 2),
             CornerRadius = new CornerRadius(6, 6, 0, 0),
-            Child = new TextBlock
-            {
-                Text = string.IsNullOrWhiteSpace(language) ? "code" : language.ToLowerInvariant(),
-                FontSize = 11,
-                Foreground = DimBrush
-            }
+            Child = headerGrid
         };
         stack.Children.Add(header);
 
@@ -252,8 +279,8 @@ public static class MarkdownRenderer
         {
             Text = code,
             FontFamily = new FontFamily(MonoFont),
-            FontSize = 13,
-            Foreground = TextBrush,
+            FontSize = Math.Max(11, BaseSize - 1),
+            Foreground = CodeTextBrush,
             IsTextSelectionEnabled = true,
             TextWrapping = TextWrapping.NoWrap
         };
@@ -272,6 +299,55 @@ public static class MarkdownRenderer
         return outer;
     }
 
+    private static Button CreateCopyButton(string code)
+    {
+        var icon = new FontIcon { Glyph = "", FontSize = 12 }; // Copy glyph
+        var label = new TextBlock { Text = "Copiar", FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        var content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { icon, label }
+        };
+        var btn = new Button
+        {
+            Content = content,
+            Padding = new Thickness(8, 2, 8, 2),
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Foreground = DimBrush
+        };
+        ToolTipService.SetToolTip(btn, "Copiar al portapapeles");
+
+        btn.Click += (_, _) =>
+        {
+            try
+            {
+                var pkg = new DataPackage();
+                pkg.SetText(code);
+                Clipboard.SetContent(pkg);
+                label.Text = "Copiado";
+                icon.Glyph = ""; // checkmark
+                _ = ResetButtonAfterAsync(btn, label, icon);
+            }
+            catch
+            {
+                label.Text = "Error";
+            }
+        };
+        return btn;
+    }
+
+    private static async Task ResetButtonAfterAsync(Button btn, TextBlock label, FontIcon icon)
+    {
+        await Task.Delay(1500);
+        btn.DispatcherQueue.TryEnqueue(() =>
+        {
+            label.Text = "Copiar";
+            icon.Glyph = "";
+        });
+    }
+
     private static Border CreateBlockquote(string text)
     {
         var border = new Border
@@ -280,7 +356,7 @@ public static class MarkdownRenderer
             BorderThickness = new Thickness(3, 0, 0, 0),
             Background = BlockquoteBg,
             Padding = new Thickness(10, 6, 8, 6),
-            Margin = new Thickness(0, 2, 0, 2)
+            Margin = new Thickness(0, 2 * BlockSpacingMul, 0, 2 * BlockSpacingMul)
         };
 
         var stack = new StackPanel { Spacing = 2 };
@@ -297,7 +373,7 @@ public static class MarkdownRenderer
     {
         var stack = new StackPanel
         {
-            Margin = new Thickness(6, 2, 0, 2),
+            Margin = new Thickness(6, 2 * BlockSpacingMul, 0, 2 * BlockSpacingMul),
             Spacing = 3
         };
 
@@ -310,7 +386,7 @@ public static class MarkdownRenderer
             var marker = new TextBlock
             {
                 Text = ordered ? $"{start + idx}." : "•",
-                FontSize = BaseFontSize,
+                FontSize = BaseSize,
                 Foreground = TextBrush,
                 Margin = new Thickness(0, 0, 8, 0),
                 MinWidth = 18
@@ -330,7 +406,7 @@ public static class MarkdownRenderer
 
     private static Grid CreateTable(List<string> rows)
     {
-        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        var grid = new Grid { Margin = new Thickness(0, 4 * BlockSpacingMul, 0, 4 * BlockSpacingMul) };
         if (rows.Count == 0) return grid;
 
         var headerCells = SplitRow(rows[0]);
@@ -362,7 +438,7 @@ public static class MarkdownRenderer
             var tb = new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 13,
+                FontSize = Math.Max(11, BaseSize - 1),
                 FontWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal,
                 Foreground = TextBrush,
                 IsTextSelectionEnabled = true
@@ -386,7 +462,7 @@ public static class MarkdownRenderer
     private static TextBlock NewTextBlock() => new()
     {
         TextWrapping = TextWrapping.Wrap,
-        FontSize = BaseFontSize,
+        FontSize = BaseSize,
         Foreground = TextBrush,
         IsTextSelectionEnabled = true
     };

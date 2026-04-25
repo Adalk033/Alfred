@@ -14,9 +14,13 @@ public sealed partial class SettingsPage : Page
     private AlfredApiClient? _api;
     private bool _isLoadingEncryption;
 
+    public UiPreferences Prefs => UiPreferences.Instance;
+
     public SettingsPage()
     {
+        _suppressAppearanceEvents = true;
         InitializeComponent();
+        _suppressAppearanceEvents = false;
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -24,7 +28,123 @@ public sealed partial class SettingsPage : Page
         base.OnNavigatedTo(e);
         if (e.Parameter is AlfredApiClient api)
             _api = api;
+        LoadAppearanceSettings();
         await LoadAllSettings();
+    }
+
+    // ========================================================================
+    // Apariencia
+    // ========================================================================
+
+    private bool _suppressAppearanceEvents;
+
+    private void LoadAppearanceSettings()
+    {
+        var prefs = UiPreferences.Instance;
+        _suppressAppearanceEvents = true;
+        try
+        {
+            // Tema
+            for (int i = 0; i < ThemeCombo.Items.Count; i++)
+            {
+                if (ThemeCombo.Items[i] is ComboBoxItem item
+                    && item.Tag?.ToString() == prefs.Theme.ToString())
+                {
+                    ThemeCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+
+            // Densidad
+            for (int i = 0; i < DensityCombo.Items.Count; i++)
+            {
+                if (DensityCombo.Items[i] is ComboBoxItem item
+                    && item.Tag?.ToString() == prefs.Density.ToString())
+                {
+                    DensityCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+
+            // Tamaño fuente
+            FontSizeSlider.Value = prefs.FontSize;
+            FontSizeLabel.Text = $"{(int)prefs.FontSize} px";
+
+            // Animaciones
+            AnimationsToggle.IsOn = prefs.Animations;
+
+            // Swatches de acento
+            BuildAccentSwatches();
+        }
+        finally
+        {
+            _suppressAppearanceEvents = false;
+        }
+    }
+
+    private void BuildAccentSwatches()
+    {
+        var items = new List<FrameworkElement>();
+        foreach (var (name, hex) in UiPreferences.AccentPalette)
+        {
+            var color = UiPreferences.TryParseHex(hex) ?? Microsoft.UI.Colors.Indigo;
+            bool isSelected = string.Equals(hex, UiPreferences.Instance.AccentHex, StringComparison.OrdinalIgnoreCase);
+
+            var swatch = new Border
+            {
+                Width = 28,
+                Height = 28,
+                CornerRadius = new Microsoft.UI.Xaml.CornerRadius(14),
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(color),
+                BorderThickness = new Microsoft.UI.Xaml.Thickness(isSelected ? 3 : 0),
+                BorderBrush = ThemedBrushes.Get("AlfredSwatchBorder", Microsoft.UI.Colors.White, this),
+                Tag = hex
+            };
+            ToolTipService.SetToolTip(swatch, name);
+            swatch.PointerPressed += (s, _) =>
+            {
+                if (s is Border b && b.Tag is string h)
+                {
+                    UiPreferences.Instance.SetAccent(h);
+                    BuildAccentSwatches();
+                }
+            };
+            items.Add(swatch);
+        }
+        AccentSwatches.ItemsSource = items;
+    }
+
+    private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressAppearanceEvents) return;
+        if (ThemeCombo.SelectedItem is ComboBoxItem item
+            && Enum.TryParse<AppTheme>(item.Tag?.ToString() ?? "System", out var t))
+        {
+            UiPreferences.Instance.SetTheme(t);
+        }
+    }
+
+    private void OnDensityChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressAppearanceEvents) return;
+        if (DensityCombo.SelectedItem is ComboBoxItem item
+            && Enum.TryParse<UiDensity>(item.Tag?.ToString() ?? "Comfortable", out var d))
+        {
+            UiPreferences.Instance.SetDensity(d);
+        }
+    }
+
+    private void OnFontSizeChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_suppressAppearanceEvents) return;
+        UiPreferences.Instance.SetFontSize(e.NewValue);
+        FontSizeLabel.Text = $"{(int)e.NewValue} px";
+    }
+
+    private void OnAnimationsToggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressAppearanceEvents) return;
+        UiPreferences.Instance.SetAnimations(AnimationsToggle.IsOn);
     }
 
     // ========================================================================

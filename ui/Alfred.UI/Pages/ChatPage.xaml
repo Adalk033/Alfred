@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:converters="using:Alfred.UI.Converters"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
     NavigationCacheMode="Required">
 
     <Page.Resources>
@@ -11,63 +12,94 @@
 
     <Grid Padding="0">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- InfoBar local (no tapa los mensajes) -->
+        <InfoBar x:Name="NotificationBar" Grid.Row="0"
+                 IsOpen="False" IsClosable="True"
+                 HorizontalAlignment="Stretch"
+                 Margin="24,8,24,0" />
+
         <!-- Lista de mensajes -->
-        <ScrollViewer x:Name="ChatScroll" Grid.Row="0" VerticalScrollBarVisibility="Auto"
+        <ScrollViewer x:Name="ChatScroll" Grid.Row="1"
+                      VerticalScrollMode="Enabled"
+                      VerticalScrollBarVisibility="Visible"
+                      HorizontalScrollMode="Disabled"
+                      HorizontalScrollBarVisibility="Disabled"
                       Padding="24,16,24,8">
-            <StackPanel x:Name="MessagesPanel" Spacing="12" />
+            <StackPanel x:Name="MessagesPanel" Spacing="12"
+                        HorizontalAlignment="Stretch" />
         </ScrollViewer>
 
         <!-- Panel de bienvenida (visible cuando no hay mensajes) -->
-        <StackPanel x:Name="WelcomePanel" Grid.Row="0"
+        <StackPanel x:Name="WelcomePanel" Grid.Row="1"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Spacing="12" MaxWidth="600">
-            <TextBlock Text="Alfred" FontSize="32" FontWeight="Bold"
+                    Spacing="{x:Bind Prefs.SectionSpacing, Mode=OneWay}" MaxWidth="600"
+                    IsHitTestVisible="False">
+            <TextBlock Text="Alfred"
+                       FontSize="{x:Bind Prefs.PageTitleFontSize, Mode=OneWay}"
+                       FontWeight="Bold"
                        HorizontalAlignment="Center"
                        Foreground="{StaticResource AlfredAccent}" />
             <TextBlock Text="Asistente IA local con privacidad total"
-                       FontSize="14" HorizontalAlignment="Center"
+                       FontSize="{x:Bind Prefs.BodyFontSize, Mode=OneWay}"
+                       HorizontalAlignment="Center"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16" Margin="0,16,0,0">
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="8" Padding="16,12" MinWidth="150">
+                        CornerRadius="8"
+                        Padding="{x:Bind Prefs.CardPadding, Mode=OneWay}"
+                        MinWidth="150">
                     <StackPanel Spacing="4">
                         <FontIcon Glyph="&#xE8BD;" FontSize="20" Foreground="{StaticResource AlfredAccent}" />
-                        <TextBlock Text="Respuestas Inteligentes" FontWeight="SemiBold" FontSize="13" />
-                        <TextBlock Text="Precision con contexto local" FontSize="11"
+                        <TextBlock Text="Respuestas Inteligentes" FontWeight="SemiBold"
+                                   FontSize="{x:Bind Prefs.SmallFontSize, Mode=OneWay}" />
+                        <TextBlock Text="Precision con contexto local"
+                                   FontSize="{x:Bind Prefs.TinyFontSize, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="8" Padding="16,12" MinWidth="150">
+                        CornerRadius="8"
+                        Padding="{x:Bind Prefs.CardPadding, Mode=OneWay}"
+                        MinWidth="150">
                     <StackPanel Spacing="4">
                         <FontIcon Glyph="&#xE7BA;" FontSize="20" Foreground="{StaticResource AlfredAccent}" />
-                        <TextBlock Text="Adjuntar Archivos" FontWeight="SemiBold" FontSize="13" />
-                        <TextBlock Text="PDF, DOCX, TXT y mas" FontSize="11"
+                        <TextBlock Text="Adjuntar Archivos" FontWeight="SemiBold"
+                                   FontSize="{x:Bind Prefs.SmallFontSize, Mode=OneWay}" />
+                        <TextBlock Text="PDF, DOCX, TXT y mas"
+                                   FontSize="{x:Bind Prefs.TinyFontSize, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
             </StackPanel>
-            <TextBlock Text="Escribe tu pregunta o adjunta un archivo" FontSize="13"
+            <TextBlock Text="Escribe tu pregunta o adjunta un archivo"
+                       FontSize="{x:Bind Prefs.SmallFontSize, Mode=OneWay}"
                        HorizontalAlignment="Center" Margin="0,8,0,0"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>
 
         <!-- Indicador de carga y panel de adjuntos -->
-        <StackPanel Grid.Row="1" Spacing="4" Margin="24,0,24,4">
+        <StackPanel Grid.Row="2" Spacing="4" Margin="24,0,24,4">
             <!-- Indicador de carga -->
             <Border x:Name="LoadingIndicator"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="8" Padding="12,8"
-                    Visibility="Collapsed" HorizontalAlignment="Left" MaxWidth="300">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ProgressRing IsActive="True" Width="16" Height="16" />
-                    <TextBlock x:Name="LoadingText" Text="Alfred esta pensando..." FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    Visibility="Collapsed" HorizontalAlignment="Left" MaxWidth="420">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <ProgressRing IsActive="True" Width="16" Height="16"
+                                  Foreground="{StaticResource AlfredAccent}" />
+                    <StackPanel Spacing="0">
+                        <TextBlock x:Name="LoadingText" Text="Alfred está pensando..." FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        <TextBlock x:Name="LoadingHint" FontSize="11"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="NoWrap" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -99,7 +131,7 @@
         </StackPanel>
 
         <!-- Barra de entrada -->
-        <Grid Grid.Row="2" Padding="24,4,24,16">
+        <Grid Grid.Row="3" Padding="24,4,24,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -117,6 +149,7 @@
 
             <TextBox x:Name="InputBox" Grid.Column="1"
                      PlaceholderText="Escribe tu pregunta..."
+                     FontSize="{x:Bind Prefs.BodyFontSize, Mode=OneWay}"
                      AcceptsReturn="False"
                      MaxHeight="120"
                      TextWrapping="Wrap"
@@ -136,10 +169,5 @@
             </Button>
         </Grid>
 
-        <!-- InfoBar para notificaciones -->
-        <InfoBar x:Name="NotificationBar" Grid.Row="0"
-                 IsOpen="False" IsClosable="True"
-                 VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                 Margin="24,8,24,0" />
     </Grid>
 </Page>
