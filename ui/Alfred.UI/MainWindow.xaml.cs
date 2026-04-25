@@ -25,6 +25,8 @@ public sealed partial class MainWindow : Window
     private string _modelState = "idle";   // idle|loading|processing
     private DateTime _lastTokenFetch = DateTime.MinValue;
 
+    public UiPreferences Prefs => UiPreferences.Instance;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -55,7 +57,6 @@ public sealed partial class MainWindow : Window
         Closed += OnWindowClosed;
         _ = StartBackendAsync();
 
-        // Navegar al chat por defecto
         NavView.SelectedItem = NavView.MenuItems[0];
         ContentFrame.Navigate(typeof(ChatPage), _api);
     }

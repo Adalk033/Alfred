@@ -13,6 +13,8 @@ public sealed partial class ConversationsPage : Page
     private AlfredApiClient? _api;
     private List<ConversationThread> _allConversations = [];
 
+    public UiPreferences Prefs => UiPreferences.Instance;
+
     public ConversationsPage()
     {
         InitializeComponent();

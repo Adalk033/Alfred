@@ -18,6 +18,8 @@ public sealed partial class HistoryPage : Page
     private int _totalItems;
     private bool _isSearching;
 
+    public UiPreferences Prefs => UiPreferences.Instance;
+
     public HistoryPage()
     {
         InitializeComponent();
