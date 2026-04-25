@@ -21,6 +21,11 @@ public sealed partial class ChatPage : Page
     private string? _conversationId;
     private bool _isSending;
 
+    // Streaming en curso: token de cancelacion (usuario aborta) y request_id
+    // asignado por el backend (necesario para cancelar inferencia activa).
+    private CancellationTokenSource? _streamCts;
+    private long _activeRequestId;
+
     // Archivos adjuntos (maximo 5)
     private const int MaxAttachedFiles = 5;
     private readonly List<AttachedFileInfo> _attachedFiles = [];
@@ -95,6 +100,7 @@ public sealed partial class ChatPage : Page
         MessagesPanel.Children.Clear();
         foreach (var b in _bubbles)
         {
+            if (b.Role == "__live__") continue;   // burbuja en streaming, se reconstruye sola
             MessagesPanel.Children.Add(
                 CreateBubbleElement(b.Text, b.Role, b.TimeMs, b.FromCache, b.AttachmentNames));
         }
@@ -149,6 +155,9 @@ public sealed partial class ChatPage : Page
         InputBox.Text = "";
         ChatContext.Draft = "";
         SendButton.IsEnabled = false;
+        SendButton.Visibility = Visibility.Collapsed;
+        StopButton.Visibility = Visibility.Visible;
+        StopButton.IsEnabled = true;
         WelcomePanel.Visibility = Visibility.Collapsed;
 
         // Preparar adjuntos antes de limpiarlos
@@ -173,63 +182,226 @@ public sealed partial class ChatPage : Page
         }
         AddBubble(displayQuestion, "user", attachmentNames: attachmentNames);
 
-        // Mostrar indicador de carga con tips rotativos
+        // Mostrar indicador de carga con tips rotativos hasta que llegue el primer token
         LoadingIndicator.Visibility = Visibility.Visible;
         LoadingText.Text = attachments != null
             ? "Procesando archivos y generando respuesta…"
             : "Alfred está pensando…";
         StartLoadingTips();
 
-        try
+        // Crear conversacion si todavia no existe (para que el streaming use
+        // el endpoint con contexto). Antes /query auto-creaba; aqui lo hacemos
+        // explicito para usar /conversations/:id/query/stream y que el backend
+        // persista los mensajes.
+        if (_conversationId == null)
         {
-            QueryResponse? response;
-
-            if (_conversationId != null)
+            try
             {
-                response = await _api.SendConversationQueryAsync(
-                    _conversationId, question, attachments, useHistory: true);
-            }
-            else
-            {
-                if (attachments != null)
+                var conv = await _api.CreateConversationAsync();
+                if (conv != null)
                 {
-                    response = await _api.SendQueryWithAttachmentAsync(
-                        question, attachments, useHistory: true);
-                }
-                else
-                {
-                    response = await _api.SendQueryAsync(
-                        question, useHistory: true);
-                }
-
-                if (response?.ConversationId != null)
-                {
-                    _conversationId = response.ConversationId;
+                    _conversationId = conv.Id;
                     ChatContext.ConversationId = _conversationId;
                 }
             }
-
-            if (response != null)
+            catch
             {
-                AddBubble(response.Answer, "assistant", response.TimeMs, response.FromCache);
+                // Sin conversacion seguimos con /query/stream (sin persistencia)
+            }
+        }
+
+        // Burbuja viva del asistente que se va llenando con tokens.
+        var liveBubble = CreateLiveAssistantBubble();
+
+        _streamCts = new CancellationTokenSource();
+        _activeRequestId = 0;
+        bool firstToken = true;
+        var sb = new System.Text.StringBuilder();
+
+        try
+        {
+            QueryResponse? response = await _api.SendQueryStreamingAsync(
+                question,
+                _conversationId,
+                attachments,
+                useHistory: true,
+                onStarted: id =>
+                {
+                    DispatcherQueue.TryEnqueue(() => _activeRequestId = id);
+                },
+                onToken: tok =>
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (firstToken)
+                        {
+                            firstToken = false;
+                            StopLoadingTips();
+                            LoadingIndicator.Visibility = Visibility.Collapsed;
+                        }
+                        sb.Append(tok);
+                        liveBubble.Text.Text = sb.ToString();
+                        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+                    });
+                },
+                cancellationToken: _streamCts.Token);
+
+            // Reemplazar la burbuja viva por la versión final (con metadata,
+            // markdown formateado y panel de razonamiento si aplica).
+            string finalText = response?.Answer ?? sb.ToString();
+            ReplaceLiveBubbleWithFinal(liveBubble, finalText, response);
+
+            if (response?.Cancelled == true)
+            {
+                ShowNotification(InfoBarSeverity.Informational, "Generación detenida.");
+            }
+            else if (response == null)
+            {
+                if (sb.Length == 0)
+                {
+                    AddBubble("Error: no se recibio respuesta del backend.", "error");
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelacion local: ya pedimos al backend cancelar via OnStopClick.
+            string partial = sb.ToString();
+            if (string.IsNullOrEmpty(partial))
+            {
+                MessagesPanel.Children.Remove(liveBubble.Border);
+                _bubbles.RemoveAll(b => b.Role == "__live__");
             }
             else
             {
-                AddBubble("Error: no se recibio respuesta del backend.", "error");
+                ReplaceLiveBubbleWithFinal(liveBubble, partial, null, cancelled: true);
             }
+            ShowNotification(InfoBarSeverity.Informational, "Generación detenida.");
         }
         catch (Exception ex)
         {
+            MessagesPanel.Children.Remove(liveBubble.Border);
+            _bubbles.RemoveAll(b => b.Role == "__live__");
             AddBubble($"Error: {ex.Message}", "error");
         }
         finally
         {
             StopLoadingTips();
             LoadingIndicator.Visibility = Visibility.Collapsed;
+            _streamCts?.Dispose();
+            _streamCts = null;
+            _activeRequestId = 0;
             _isSending = false;
+            StopButton.Visibility = Visibility.Collapsed;
+            SendButton.Visibility = Visibility.Visible;
             SendButton.IsEnabled = !string.IsNullOrWhiteSpace(InputBox.Text);
             InputBox.Focus(FocusState.Programmatic);
         }
+    }
+
+    private async void OnStopClick(object sender, RoutedEventArgs e)
+    {
+        if (!_isSending || _api == null) return;
+        StopButton.IsEnabled = false;   // evita doble-click
+
+        // Pedir al backend que detenga la inferencia. La conexion SSE va a
+        // emitir 'done' con cancelled=true y el bucle de lectura saldra.
+        try
+        {
+            await _api.CancelQueryAsync(_activeRequestId);
+        }
+        catch
+        {
+            // Si fallo el cancel remoto, abortamos al menos el lado cliente.
+        }
+
+        // Cancelacion local como respaldo: cierra la conexion HTTP si el
+        // backend no responde a tiempo (ej: red rota).
+        _streamCts?.Cancel();
+    }
+
+    // ========================================================================
+    // Burbuja viva (streaming)
+    // ========================================================================
+
+    private sealed class LiveAssistantBubble
+    {
+        public Border Border { get; init; } = null!;
+        public TextBlock Text { get; init; } = null!;
+    }
+
+    private LiveAssistantBubble CreateLiveAssistantBubble()
+    {
+        bool compact = UiPreferences.Instance.Density == UiDensity.Compact;
+        double baseSize = UiPreferences.Instance.FontSize;
+        Brush bg = ThemedBrushes.Get("AssistantBubbleBrush",
+            Windows.UI.Color.FromArgb(255, 31, 41, 55));
+        Brush textBrush = ThemedBrushes.Get("AlfredTextPrimary",
+            Windows.UI.Color.FromArgb(255, 230, 232, 238));
+
+        var text = new TextBlock
+        {
+            Text = "",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = baseSize,
+            Foreground = textBrush,
+            IsTextSelectionEnabled = false
+        };
+
+        var border = new Border
+        {
+            Background = bg,
+            CornerRadius = new CornerRadius(4, 16, 16, 16),
+            Padding = compact
+                ? new Thickness(12, 7, 12, 7)
+                : new Thickness(16, 10, 16, 10),
+            MaxWidth = 600,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = text
+        };
+
+        // Marcador interno para que rebuilds y removes la encuentren.
+        _bubbles.Add(new ChatBubble { Text = "", Role = "__live__" });
+        MessagesPanel.Children.Add(border);
+        ChatScroll.UpdateLayout();
+        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+
+        return new LiveAssistantBubble { Border = border, Text = text };
+    }
+
+    private void ReplaceLiveBubbleWithFinal(LiveAssistantBubble live,
+        string answer, QueryResponse? response, bool cancelled = false)
+    {
+        // Quitar burbuja en vivo y su entrada de marcador
+        int idx = MessagesPanel.Children.IndexOf(live.Border);
+        MessagesPanel.Children.Remove(live.Border);
+        _bubbles.RemoveAll(b => b.Role == "__live__");
+
+        bool from_cache = response?.FromCache ?? false;
+        double timeMs   = response?.TimeMs ?? 0;
+        bool wasCancelled = cancelled || (response?.Cancelled ?? false);
+
+        // Si fue cancelado mostramos la respuesta parcial con un sufijo discreto.
+        string displayed = wasCancelled && !string.IsNullOrEmpty(answer)
+            ? answer + "\n\n_(generación detenida)_"
+            : answer;
+
+        _bubbles.Add(new ChatBubble
+        {
+            Text = displayed,
+            Role = "assistant",
+            TimeMs = timeMs,
+            FromCache = from_cache
+        });
+
+        var final = CreateBubbleElement(displayed, "assistant", timeMs, from_cache);
+        if (idx >= 0 && idx <= MessagesPanel.Children.Count)
+            MessagesPanel.Children.Insert(idx, final);
+        else
+            MessagesPanel.Children.Add(final);
+
+        ChatScroll.UpdateLayout();
+        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
     }
 
     private void StartLoadingTips()

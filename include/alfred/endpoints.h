@@ -27,6 +27,16 @@ void handle_health(const httplib::Request& req, httplib::Response& res,
 void handle_query(const httplib::Request& req, httplib::Response& res,
                   AlfredCore& core);
 
+// Query con streaming SSE (Server-Sent Events)
+void handle_query_stream(const httplib::Request& req, httplib::Response& res,
+                          AlfredCore& core);
+void handle_conversation_query_stream(const httplib::Request& req, httplib::Response& res,
+                                        AlfredCore& core);
+
+// Cancelacion de un query streaming en curso
+void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
+                          AlfredCore& core);
+
 // Conversaciones
 void handle_create_conversation(const httplib::Request& req, httplib::Response& res);
 void handle_list_conversations(const httplib::Request& req, httplib::Response& res);

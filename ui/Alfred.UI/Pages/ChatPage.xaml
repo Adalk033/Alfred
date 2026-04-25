@@ -164,8 +164,18 @@
                     Style="{StaticResource AccentButtonStyle}"
                     Click="OnSendClick" Margin="8,0,0,0"
                     VerticalAlignment="Bottom" Width="38" Height="38"
-                    IsEnabled="False">
+                    IsEnabled="False"
+                    ToolTipService.ToolTip="Enviar">
                 <FontIcon Glyph="&#xE724;" FontSize="16" />
+            </Button>
+
+            <Button x:Name="StopButton" Grid.Column="2"
+                    Click="OnStopClick" Margin="8,0,0,0"
+                    VerticalAlignment="Bottom" Width="38" Height="38"
+                    Visibility="Collapsed"
+                    Background="{ThemeResource SystemFillColorCriticalBrush}"
+                    ToolTipService.ToolTip="Detener generación">
+                <FontIcon Glyph="&#xE73B;" FontSize="14" Foreground="White" />
             </Button>
         </Grid>
 

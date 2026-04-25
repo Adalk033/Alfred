@@ -508,6 +508,137 @@ QueryResult AlfredCore::query(const std::string& question,
     return result;
 }
 
+// ============================================================================
+// Query con streaming de tokens (SSE)
+// ============================================================================
+QueryResult AlfredCore::query_streaming(const std::string& question,
+                                        StartedCallback on_started,
+                                        TokenStreamCallback on_token,
+                                        bool use_history,
+                                        const std::string& conversation_id) {
+    ensure_model_loaded();
+    ModelLifecycle::Scope scope(lifecycle_);
+
+    // Reservar request_id y resetear flag de cancelacion antes de cualquier
+    // trabajo. Esto debe ocurrir antes de notificar a la UI.
+    uint64_t my_id = next_request_id_.fetch_add(1);
+    active_request_id_.store(my_id);
+    cancel_flag_.store(false);
+
+    if (on_started) on_started(my_id);
+
+    auto cleanup_active = [this, my_id]() {
+        uint64_t expected = my_id;
+        active_request_id_.compare_exchange_strong(expected, 0);
+    };
+
+    auto start = std::chrono::steady_clock::now();
+    QueryResult result;
+
+    // 1. Buscar en cache (servir como un unico token)
+    auto cached = cache_lookup(question);
+    if (cached) {
+        log_debug("Streaming: respuesta servida desde cache");
+        cached->total_time_ms = 0.1;
+        if (on_token && !cancel_flag_.load()) on_token(cached->answer);
+        cleanup_active();
+        return *cached;
+    }
+
+    // 2. Buscar en historial Q&A
+    if (use_history) {
+        auto history_results = HistoryManager::instance().search(question, 0.6f, 1);
+        if (!history_results.empty() && history_results[0].score > 0.6f) {
+            result.answer = history_results[0].entry.answer;
+            result.personal_data = history_results[0].entry.personal_data;
+            result.from_history = true;
+
+            auto end = std::chrono::steady_clock::now();
+            result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+            cache_insert(question, result);
+            log_debug("Streaming: respuesta servida desde historial (score=" +
+                      std::to_string(history_results[0].score) + ")");
+            if (on_token && !cancel_flag_.load()) on_token(result.answer);
+            cleanup_active();
+            return result;
+        }
+    }
+
+    // 3. Construir contexto de conversacion
+    std::string conversation_context;
+    if (!conversation_id.empty() && llm_->is_loaded()) {
+        const int context_max = llm_->context_length();
+        const int reserved    = get_config().max_tokens;
+        const int safety      = 128;
+
+        int system_toks   = llm_->count_tokens(resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS));
+        int question_toks = llm_->count_tokens(question);
+        if (system_toks   < 0) system_toks   = 512;
+        if (question_toks < 0) question_toks = static_cast<int>(question.size()) / 4;
+
+        const int history_budget = context_max - reserved - system_toks - question_toks - safety;
+        if (history_budget > 0) {
+            auto msgs = ConversationManager::instance()
+                .select_history_within_budget(conversation_id, *llm_, history_budget);
+            conversation_context = ConversationManager::format_messages_as_context(msgs);
+        }
+    }
+
+    // 4. Generar con streaming
+    if (!llm_->is_loaded()) {
+        result.answer = "Error: Modelo LLM no cargado. "
+                        "Coloca un modelo GGUF en la carpeta de modelos.";
+        if (on_token) on_token(result.answer);
+        auto end = std::chrono::steady_clock::now();
+        result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
+        cleanup_active();
+        return result;
+    }
+
+    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS,
+                                       conversation_context, question);
+
+    auto wrapped_cb = [this, &on_token](const std::string& tok) -> bool {
+        if (cancel_flag_.load()) return false;          // cancelado por el usuario
+        if (!on_token) return true;
+        return on_token(tok);                            // permite que el sink corte el stream
+    };
+
+    auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
+    const bool was_cancelled = cancel_flag_.load();
+
+    if (llm_result.success || !llm_result.text.empty()) {
+        result.answer = trim(llm_result.text);
+    } else {
+        result.answer = "Error generando respuesta: " + llm_result.error;
+    }
+    result.cancelled = was_cancelled;
+
+    auto end = std::chrono::steady_clock::now();
+    result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+    // 5. Guardar en historial y cache solo si la respuesta es completa
+    if (!was_cancelled && !result.answer.empty() &&
+        result.answer.find("Error") == std::string::npos) {
+        HistoryManager::instance().save(question, result.answer,
+                                         result.personal_data, "");
+        cache_insert(question, result);
+    }
+
+    cleanup_active();
+    return result;
+}
+
+bool AlfredCore::cancel_query(uint64_t request_id) {
+    uint64_t active = active_request_id_.load();
+    if (active == 0) return false;
+    if (request_id != 0 && request_id != active) return false;
+    cancel_flag_.store(true);
+    log_info("Cancelacion solicitada para request_id=" + std::to_string(active));
+    return true;
+}
+
 void AlfredCore::unload_current_model() {
     std::lock_guard<std::mutex> lock(model_load_mutex_);
     if (llm_->is_loaded()) {

@@ -28,6 +28,7 @@ struct QueryResult {
     std::string personal_data;      // JSON de datos personales extraidos
     bool from_cache = false;
     bool from_history = false;
+    bool cancelled = false;         // true si el usuario cancelo el streaming
     double total_time_ms = 0.0;
 };
 
@@ -55,6 +56,25 @@ public:
     QueryResult query(const std::string& question,
                       bool use_history = true,
                       const std::string& conversation_id = "");
+
+    // Callbacks para query_streaming
+    using StartedCallback = std::function<void(uint64_t request_id)>;
+    using TokenStreamCallback = std::function<bool(const std::string& token)>;
+
+    // Query con streaming de tokens. Llama on_started con el id antes de generar
+    // (permite a la UI registrar el id para cancelar). on_token recibe cada
+    // fragmento de respuesta (incluyendo respuestas servidas desde cache o
+    // historial, que se entregan como un unico token). Devuelve QueryResult
+    // con resultado final; result.cancelled=true si fue interrumpido.
+    QueryResult query_streaming(const std::string& question,
+                                 StartedCallback on_started,
+                                 TokenStreamCallback on_token,
+                                 bool use_history = true,
+                                 const std::string& conversation_id = "");
+
+    // Cancela un query streaming en curso. Si request_id == 0, cancela el
+    // activo sin importar id. Devuelve true si habia algo que cancelar.
+    bool cancel_query(uint64_t request_id = 0);
 
     // Cambiar modelo LLM
     ModelChangeResult change_model(const std::string& model_path);
@@ -88,6 +108,11 @@ private:
     // Cache LRU
     std::unordered_map<size_t, CacheEntry> query_cache_;
     mutable std::shared_mutex cache_mutex_;
+
+    // Cancelacion de streaming: id incremental del request activo y flag.
+    std::atomic<uint64_t> next_request_id_{1};
+    std::atomic<uint64_t> active_request_id_{0};
+    std::atomic<bool>     cancel_flag_{false};
 
     // Generar respuesta (conocimiento general)
     QueryResult generate_response(const std::string& question,
