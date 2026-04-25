@@ -36,6 +36,29 @@ jobs:
       - name: Compilar
         run: cmake --build build --config Release --parallel
 
+      - name: Copiar DLLs de OpenSSL al output
+        shell: pwsh
+        run: |
+          $dest = "build/Release"
+          $searchRoots = @(
+            "C:\Program Files\OpenSSL",
+            "C:\Program Files\OpenSSL-Win64",
+            "C:\OpenSSL-Win64",
+            "C:\ProgramData\chocolatey\lib\openssl\tools\OpenSSL"
+          )
+          $patterns = @("libcrypto*.dll", "libssl*.dll")
+          foreach ($root in $searchRoots) {
+            if (-not (Test-Path $root)) { continue }
+            foreach ($pat in $patterns) {
+              Get-ChildItem -Path $root -Filter $pat -Recurse -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                  Write-Host "Copiando $($_.FullName) -> $dest"
+                  Copy-Item $_.FullName -Destination $dest -Force
+                }
+            }
+            break
+          }
+
       - name: Subir artifact del backend
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
