@@ -180,6 +180,154 @@ void handle_query(const httplib::Request& req, httplib::Response& res,
 }
 
 // ============================================================================
+// Query con streaming (SSE)
+// ============================================================================
+
+// Helper: serializa un evento SSE.
+static std::string sse_event(const std::string& type, const json& payload) {
+    std::string out;
+    out.reserve(64 + payload.dump().size());
+    out += "event: ";
+    out += type;
+    out += "\n";
+    out += "data: ";
+    out += payload.dump();
+    out += "\n\n";
+    return out;
+}
+
+// Implementacion compartida entre /query/stream y /conversations/:id/query/stream.
+// `conv_id` vacio para /query/stream.
+static void run_query_stream(const httplib::Request& req,
+                              httplib::Response& res,
+                              AlfredCore& core,
+                              const std::string& conv_id) {
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    std::string question = body.value("question", "");
+    if (question.empty()) {
+        json_error(res, 400, "Campo 'question' requerido");
+        return;
+    }
+
+    bool use_history = body.value("use_history", true);
+
+    // Inyectar archivos adjuntos como contexto
+    std::string attached_context = extract_attached_context(body);
+    std::string full_question = question;
+    if (!attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context +
+                        "\n\nPregunta del usuario: " + question;
+    }
+
+    // En conversacion guardamos la pregunta del usuario antes de generar
+    // (igual que /conversations/:id/query). La respuesta se guarda al cerrar.
+    if (!conv_id.empty()) {
+        ConversationManager::instance().add_message(conv_id, "user", question);
+    }
+
+    log_info("Streaming query: " + truncate(question, 80) +
+             (conv_id.empty() ? "" : " (conv: " + conv_id + ")"));
+
+    // Headers de SSE: desactivar buffering intermedio.
+    res.set_header("Cache-Control", "no-cache");
+    res.set_header("Connection", "keep-alive");
+    res.set_header("X-Accel-Buffering", "no");
+
+    // Capturas por valor para sobrevivir al retorno del handler.
+    std::string captured_question = question;
+    std::string captured_full     = full_question;
+    std::string captured_conv_id  = conv_id;
+
+    res.set_chunked_content_provider(
+        "text/event-stream",
+        [&core, captured_question, captured_full, captured_conv_id, use_history]
+        (size_t /*offset*/, httplib::DataSink& sink) -> bool {
+            auto write_event = [&sink](const std::string& evt, const json& data) -> bool {
+                std::string out = sse_event(evt, data);
+                return sink.write(out.data(), out.size());
+            };
+
+            // started: ejecutado por AlfredCore antes de comenzar a generar.
+            auto on_started = [&](uint64_t request_id) {
+                json data = {{"request_id", request_id}};
+                write_event("start", data);
+            };
+
+            // token: escribe cada fragmento al cliente. Si el sink no acepta
+            // mas datos (cliente desconectado), devuelve false para que la
+            // generacion se detenga.
+            auto on_token = [&](const std::string& tok) -> bool {
+                if (sink.is_writable && !sink.is_writable()) return false;
+                json data = {{"text", tok}};
+                return write_event("token", data);
+            };
+
+            QueryResult result = core.query_streaming(
+                captured_full, on_started, on_token, use_history, captured_conv_id);
+
+            // Guardar la respuesta completa del asistente en la conversacion.
+            if (!captured_conv_id.empty() && !result.cancelled &&
+                !result.answer.empty() &&
+                result.answer.find("Error") == std::string::npos) {
+                ConversationManager::instance().add_message(
+                    captured_conv_id, "assistant", result.answer);
+            }
+
+            // Evento final con metadata.
+            json done_payload;
+            done_payload["answer"]       = result.answer;
+            done_payload["from_cache"]   = result.from_cache;
+            done_payload["from_history"] = result.from_history;
+            done_payload["cancelled"]    = result.cancelled;
+            done_payload["time_ms"]      = result.total_time_ms;
+            if (!captured_conv_id.empty())
+                done_payload["conversation_id"] = captured_conv_id;
+
+            write_event("done", done_payload);
+            sink.done();
+            return true;
+        });
+}
+
+void handle_query_stream(const httplib::Request& req, httplib::Response& res,
+                          AlfredCore& core) {
+    run_query_stream(req, res, core, "");
+}
+
+void handle_conversation_query_stream(const httplib::Request& req, httplib::Response& res,
+                                       AlfredCore& core) {
+    std::string conv_id = path_param(req, "id");
+    if (conv_id.empty()) {
+        json_error(res, 400, "ID de conversacion requerido");
+        return;
+    }
+    run_query_stream(req, res, core, conv_id);
+}
+
+void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
+                          AlfredCore& core) {
+    uint64_t request_id = 0;
+    if (!req.body.empty()) {
+        json body;
+        if (parse_body(req, res, body)) {
+            if (body.contains("request_id") && body["request_id"].is_number_unsigned()) {
+                request_id = body["request_id"].get<uint64_t>();
+            }
+        } else {
+            return;  // parse_body ya escribio el error
+        }
+    }
+
+    bool cancelled = core.cancel_query(request_id);
+    json data;
+    data["cancelled"] = cancelled;
+    data["request_id"] = request_id;
+    json_ok(res, data);
+}
+
+// ============================================================================
 // Conversaciones
 // ============================================================================
 void handle_create_conversation(const httplib::Request& req, httplib::Response& res) {
@@ -1090,6 +1238,12 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     server.Post("/query", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_query(req, res, core);
     });
+    server.Post("/query/stream", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_query_stream(req, res, core);
+    });
+    server.Post("/query/cancel", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_query_cancel(req, res, core);
+    });
 
     // Conversaciones
     server.Post("/conversations", [](const httplib::Request& req, httplib::Response& res) {
@@ -1115,6 +1269,9 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Post("/conversations/:id/query", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_conversation_query(req, res, core);
+    });
+    server.Post("/conversations/:id/query/stream", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_conversation_query_stream(req, res, core);
     });
 
     // Historial

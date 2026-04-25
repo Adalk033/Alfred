@@ -87,6 +87,156 @@ public sealed class AlfredApiClient : IDisposable
     }
 
     /// <summary>
+    /// Envia una consulta y recibe la respuesta token-a-token via SSE.
+    /// Si <paramref name="conversationId"/> esta presente, usa el endpoint
+    /// de conversacion (que persiste mensajes). Devuelve el QueryResponse final.
+    /// El callback <paramref name="onStarted"/> recibe el request_id asignado
+    /// por el backend (necesario para cancelar). <paramref name="onToken"/>
+    /// recibe cada fragmento generado.
+    /// </summary>
+    public async Task<QueryResponse?> SendQueryStreamingAsync(
+        string question,
+        string? conversationId,
+        List<AttachedFileData>? attachedFiles,
+        bool useHistory,
+        Action<long> onStarted,
+        Action<string> onToken,
+        CancellationToken cancellationToken)
+    {
+        string endpoint = string.IsNullOrEmpty(conversationId)
+            ? "/query/stream"
+            : $"/conversations/{conversationId}/query/stream";
+
+        object request = attachedFiles != null && attachedFiles.Count > 0
+            ? new QueryWithAttachmentRequest
+            {
+                Question = question,
+                UseHistory = useHistory,
+                AttachedFiles = attachedFiles
+            }
+            : (object)new QueryRequest
+            {
+                Question = question,
+                UseHistory = useHistory
+            };
+
+        using var httpReq = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = ToJsonContent(request)
+        };
+        httpReq.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+        QueryResponse? finalResponse = null;
+        try
+        {
+            using var response = await _http.SendAsync(httpReq,
+                HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Stream error {response.StatusCode}: {errBody}");
+                return null;
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
+
+            string? currentEvent = null;
+            var dataBuffer = new StringBuilder();
+
+            while (!reader.EndOfStream)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var line = await reader.ReadLineAsync(cancellationToken);
+                if (line == null) break;
+
+                if (line.Length == 0)
+                {
+                    // Fin de un evento SSE: despachar
+                    if (currentEvent != null && dataBuffer.Length > 0)
+                    {
+                        var json = dataBuffer.ToString();
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(json);
+                            switch (currentEvent)
+                            {
+                                case "start":
+                                    if (doc.RootElement.TryGetProperty("request_id", out var idEl)
+                                        && idEl.TryGetInt64(out var id))
+                                    {
+                                        onStarted?.Invoke(id);
+                                    }
+                                    break;
+                                case "token":
+                                    if (doc.RootElement.TryGetProperty("text", out var txtEl))
+                                    {
+                                        var tok = txtEl.GetString();
+                                        if (!string.IsNullOrEmpty(tok))
+                                            onToken?.Invoke(tok);
+                                    }
+                                    break;
+                                case "done":
+                                    finalResponse = JsonSerializer.Deserialize<QueryResponse>(json, JsonOptions);
+                                    break;
+                            }
+                        }
+                        catch (JsonException ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] SSE parse error: {ex.Message}");
+                        }
+                    }
+                    currentEvent = null;
+                    dataBuffer.Clear();
+                    continue;
+                }
+
+                if (line.StartsWith("event:", StringComparison.Ordinal))
+                {
+                    currentEvent = line.Substring(6).Trim();
+                }
+                else if (line.StartsWith("data:", StringComparison.Ordinal))
+                {
+                    if (dataBuffer.Length > 0) dataBuffer.Append('\n');
+                    dataBuffer.Append(line.AsSpan(5).TrimStart());
+                }
+                // Ignorar comentarios (":") y otros campos no usados
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelacion por parte del usuario: propagada para que el caller
+            // sepa que debe limpiar el estado.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Stream exception: {ex.Message}");
+        }
+
+        return finalResponse;
+    }
+
+    /// <summary>
+    /// Solicita al backend cancelar el query streaming en curso.
+    /// Si request_id es 0, cancela el activo sin importar id.
+    /// </summary>
+    public async Task<bool> CancelQueryAsync(long requestId = 0)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var response = await _http.PostAsync("/query/cancel",
+                ToJsonContent(new { request_id = requestId }), cts.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Envia una consulta dentro de una conversacion, con archivos adjuntos opcionales.
     /// </summary>
     public async Task<QueryResponse?> SendConversationQueryAsync(

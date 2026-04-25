@@ -65,6 +65,9 @@ public sealed class QueryResponse
     [JsonPropertyName("from_history")]
     public bool FromHistory { get; set; }
 
+    [JsonPropertyName("cancelled")]
+    public bool Cancelled { get; set; }
+
     [JsonPropertyName("time_ms")]
     public double TimeMs { get; set; }
 
