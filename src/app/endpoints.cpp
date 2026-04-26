@@ -5,9 +5,8 @@
 // ============================================================================
 #include "alfred/endpoints.h"
 #include "alfred/alfred_core.h"
-#include "alfred/db_manager.h"
 #include "alfred/conversation_manager.h"
-#include "alfred/history_manager.h"
+#include "alfred/db_manager.h"
 #include "alfred/gpu_manager.h"
 #include "alfred/encryption.h"
 #include "alfred/config.h"
@@ -155,8 +154,6 @@ void handle_query(const httplib::Request& req, httplib::Response& res,
         return;
     }
 
-    bool use_history = body.value("use_history", true);
-
     // Inyectar contenido de archivos adjuntos como contexto adicional
     std::string attached_context = extract_attached_context(body);
     std::string full_question = question;
@@ -167,14 +164,13 @@ void handle_query(const httplib::Request& req, httplib::Response& res,
 
     log_info("Query: " + truncate(question, 80));
 
-    auto result = core.query(full_question, use_history);
+    auto result = core.query(full_question);
 
     json data;
     data["answer"] = result.answer;
     data["personal_data"] = result.personal_data.empty() ? json(nullptr)
                             : json::parse(result.personal_data, nullptr, false);
     data["from_cache"] = result.from_cache;
-    data["from_history"] = result.from_history;
     data["time_ms"] = result.total_time_ms;
     json_ok(res, data);
 }
@@ -211,8 +207,6 @@ static void run_query_stream(const httplib::Request& req,
         return;
     }
 
-    bool use_history = body.value("use_history", true);
-
     // Inyectar archivos adjuntos como contexto
     std::string attached_context = extract_attached_context(body);
     std::string full_question = question;
@@ -222,7 +216,6 @@ static void run_query_stream(const httplib::Request& req,
     }
 
     // En conversacion guardamos la pregunta del usuario antes de generar
-    // (igual que /conversations/:id/query). La respuesta se guarda al cerrar.
     if (!conv_id.empty()) {
         ConversationManager::instance().add_message(conv_id, "user", question);
     }
@@ -230,34 +223,28 @@ static void run_query_stream(const httplib::Request& req,
     log_info("Streaming query: " + truncate(question, 80) +
              (conv_id.empty() ? "" : " (conv: " + conv_id + ")"));
 
-    // Headers de SSE: desactivar buffering intermedio.
     res.set_header("Cache-Control", "no-cache");
     res.set_header("Connection", "keep-alive");
     res.set_header("X-Accel-Buffering", "no");
 
-    // Capturas por valor para sobrevivir al retorno del handler.
     std::string captured_question = question;
     std::string captured_full     = full_question;
     std::string captured_conv_id  = conv_id;
 
     res.set_chunked_content_provider(
         "text/event-stream",
-        [&core, captured_question, captured_full, captured_conv_id, use_history]
+        [&core, captured_question, captured_full, captured_conv_id]
         (size_t /*offset*/, httplib::DataSink& sink) -> bool {
             auto write_event = [&sink](const std::string& evt, const json& data) -> bool {
                 std::string out = sse_event(evt, data);
                 return sink.write(out.data(), out.size());
             };
 
-            // started: ejecutado por AlfredCore antes de comenzar a generar.
             auto on_started = [&](uint64_t request_id) {
                 json data = {{"request_id", request_id}};
                 write_event("start", data);
             };
 
-            // token: escribe cada fragmento al cliente. Si el sink no acepta
-            // mas datos (cliente desconectado), devuelve false para que la
-            // generacion se detenga.
             auto on_token = [&](const std::string& tok) -> bool {
                 if (sink.is_writable && !sink.is_writable()) return false;
                 json data = {{"text", tok}};
@@ -265,9 +252,9 @@ static void run_query_stream(const httplib::Request& req,
             };
 
             QueryResult result = core.query_streaming(
-                captured_full, on_started, on_token, use_history, captured_conv_id);
+                captured_full, on_started, on_token, captured_conv_id);
 
-            // Guardar la respuesta completa del asistente en la conversacion.
+            // Guardar la respuesta completa del asistente en la conversacion
             if (!captured_conv_id.empty() && !result.cancelled &&
                 !result.answer.empty() &&
                 result.answer.find("Error") == std::string::npos) {
@@ -275,13 +262,11 @@ static void run_query_stream(const httplib::Request& req,
                     captured_conv_id, "assistant", result.answer);
             }
 
-            // Evento final con metadata.
             json done_payload;
-            done_payload["answer"]       = result.answer;
-            done_payload["from_cache"]   = result.from_cache;
-            done_payload["from_history"] = result.from_history;
-            done_payload["cancelled"]    = result.cancelled;
-            done_payload["time_ms"]      = result.total_time_ms;
+            done_payload["answer"]     = result.answer;
+            done_payload["from_cache"] = result.from_cache;
+            done_payload["cancelled"]  = result.cancelled;
+            done_payload["time_ms"]    = result.total_time_ms;
             if (!captured_conv_id.empty())
                 done_payload["conversation_id"] = captured_conv_id;
 
@@ -327,230 +312,6 @@ void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
     json_ok(res, data);
 }
 
-// ============================================================================
-// Conversaciones
-// ============================================================================
-void handle_create_conversation(const httplib::Request& req, httplib::Response& res) {
-    json body;
-    if (!req.body.empty()) {
-        if (!parse_body(req, res, body)) return;
-    }
-
-    std::string title = body.is_null() ? "" : body.value("title", "");
-    auto& cm = ConversationManager::instance();
-    std::string id = cm.create_conversation(title);
-
-    json data;
-    data["id"] = id;
-    data["title"] = title.empty() ? "Nueva conversacion" : title;
-    res.status = 201;
-    res.set_content(data.dump(), "application/json");
-}
-
-void handle_list_conversations(const httplib::Request& req, httplib::Response& res) {
-    int limit = 50, offset = 0;
-    if (!get_int_param(req, res, "limit",  limit,  1, 500)) return;
-    if (!get_int_param(req, res, "offset", offset, 0, INT_MAX)) return;
-
-    auto conversations = ConversationManager::instance().list_conversations(limit, offset);
-
-    json data = json::array();
-    for (const auto& conv : conversations) {
-        data.push_back({
-            {"id", conv.id},
-            {"title", conv.title},
-            {"created_at", conv.created_at},
-            {"updated_at", conv.updated_at}
-        });
-    }
-    json_ok(res, data);
-}
-
-void handle_get_conversation(const httplib::Request& req, httplib::Response& res) {
-    std::string id = path_param(req, "id");
-    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
-
-    auto conv = ConversationManager::instance().get_conversation(id);
-    if (!conv) { json_error(res, 404, "Conversacion no encontrada"); return; }
-
-    auto messages = ConversationManager::instance().get_history(id);
-
-    json data;
-    data["id"] = conv->id;
-    data["title"] = conv->title;
-    data["created_at"] = conv->created_at;
-    data["updated_at"] = conv->updated_at;
-
-    json msgs = json::array();
-    for (const auto& m : messages) {
-        msgs.push_back({
-            {"id", m.id},
-            {"role", m.role},
-            {"content", m.content},
-            {"timestamp", m.timestamp}
-        });
-    }
-    data["messages"] = msgs;
-    json_ok(res, data);
-}
-
-void handle_update_conversation_title(const httplib::Request& req, httplib::Response& res) {
-    std::string id = path_param(req, "id");
-    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
-
-    json body;
-    if (!parse_body(req, res, body)) return;
-
-    std::string title = body.value("title", "");
-    if (title.empty()) { json_error(res, 400, "Campo 'title' requerido"); return; }
-
-    ConversationManager::instance().update_title(id, title);
-    json_ok(res, {{"status", "updated"}});
-}
-
-void handle_delete_conversation(const httplib::Request& req, httplib::Response& res) {
-    std::string id = path_param(req, "id");
-    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
-
-    ConversationManager::instance().delete_conversation(id);
-    json_ok(res, {{"status", "deleted"}});
-}
-
-void handle_add_message(const httplib::Request& req, httplib::Response& res) {
-    std::string id = path_param(req, "id");
-    if (id.empty()) { json_error(res, 400, "ID de conversacion requerido"); return; }
-
-    json body;
-    if (!parse_body(req, res, body)) return;
-
-    std::string role = body.value("role", "");
-    std::string content = body.value("content", "");
-
-    if (role.empty() || content.empty()) {
-        json_error(res, 400, "Campos 'role' y 'content' requeridos");
-        return;
-    }
-
-    ConversationManager::instance().add_message(id, role, content);
-    res.status = 201;
-    res.set_content(R"({"status":"created"})", "application/json");
-}
-
-void handle_clear_messages(const httplib::Request& req, httplib::Response& res) {
-    std::string id = path_param(req, "id");
-    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
-
-    ConversationManager::instance().clear_messages(id);
-    json_ok(res, {{"status", "cleared"}});
-}
-
-void handle_conversation_query(const httplib::Request& req, httplib::Response& res,
-                                AlfredCore& core) {
-    std::string conv_id = path_param(req, "id");
-    if (conv_id.empty()) { json_error(res, 400, "ID de conversacion requerido"); return; }
-
-    json body;
-    if (!parse_body(req, res, body)) return;
-
-    std::string question = body.value("question", "");
-    if (question.empty()) { json_error(res, 400, "Campo 'question' requerido"); return; }
-
-    bool use_history = body.value("use_history", true);
-
-    // Inyectar contenido de archivos adjuntos como contexto adicional
-    std::string attached_context = extract_attached_context(body);
-    std::string full_question = question;
-    if (!attached_context.empty()) {
-        full_question = "Contexto de archivos adjuntos:\n" + attached_context + "\n\nPregunta del usuario: " + question;
-        log_info("Conversation query con archivos adjuntos (conv: " + conv_id + ")");
-    }
-
-    // Guardar pregunta del usuario (la original, no la expandida)
-    ConversationManager::instance().add_message(conv_id, "user", question);
-
-    // Generar respuesta con contexto expandido
-    auto result = core.query(full_question, use_history, conv_id);
-
-    // Guardar respuesta del asistente
-    ConversationManager::instance().add_message(conv_id, "assistant", result.answer);
-
-    json data;
-    data["answer"] = result.answer;
-    data["personal_data"] = result.personal_data.empty() ? json(nullptr)
-                            : json::parse(result.personal_data, nullptr, false);
-    data["from_cache"] = result.from_cache;
-    data["from_history"] = result.from_history;
-    data["time_ms"] = result.total_time_ms;
-    data["conversation_id"] = conv_id;
-    json_ok(res, data);
-}
-
-// ============================================================================
-// Historial Q&A
-// ============================================================================
-void handle_search_history(const httplib::Request& req, httplib::Response& res) {
-    std::string query_str = req.has_param("q") ? req.get_param_value("q") : "";
-    if (query_str.empty()) {
-        json_error(res, 400, "Parametro 'q' requerido");
-        return;
-    }
-
-    float threshold = 0.3f;
-    int top_k = 10;
-    if (!get_float_param(req, res, "threshold", threshold, 0.0f, 1.0f)) return;
-    if (!get_int_param(req,   res, "top_k",     top_k,    1,    100))   return;
-
-    auto results = HistoryManager::instance().search(query_str, threshold, top_k);
-
-    json data = json::array();
-    for (const auto& r : results) {
-        data.push_back({
-            {"question", r.entry.question},
-            {"answer", r.entry.answer},
-            {"score", r.score},
-            {"timestamp", r.entry.timestamp},
-            {"personal_data", r.entry.personal_data.empty() ? json(nullptr)
-                              : json::parse(r.entry.personal_data, nullptr, false)},
-            {"sources", r.entry.sources.empty() ? json(nullptr)
-                        : json::parse(r.entry.sources, nullptr, false)}
-        });
-    }
-    json_ok(res, data);
-}
-
-void handle_list_history(const httplib::Request& req, httplib::Response& res) {
-    int limit = 100, offset = 0;
-    if (!get_int_param(req, res, "limit",  limit,  1, 500)) return;
-    if (!get_int_param(req, res, "offset", offset, 0, INT_MAX)) return;
-
-    auto entries = DBManager::instance().get_qa_history(limit, offset);
-
-    json data = json::array();
-    for (const auto& e : entries) {
-        data.push_back({
-            {"id", e.id},
-            {"question", e.question},
-            {"answer", e.answer},
-            {"timestamp", e.timestamp},
-            {"personal_data", e.personal_data.empty() ? json(nullptr)
-                              : json::parse(e.personal_data, nullptr, false)},
-            {"sources", e.sources.empty() ? json(nullptr)
-                        : json::parse(e.sources, nullptr, false)}
-        });
-    }
-    json_ok(res, data);
-}
-
-void handle_delete_history(const httplib::Request& req, httplib::Response& res) {
-    json body;
-    if (!parse_body(req, res, body)) return;
-
-    std::string timestamp = body.value("timestamp", "");
-    if (timestamp.empty()) { json_error(res, 400, "Campo 'timestamp' requerido"); return; }
-
-    DBManager::instance().delete_qa_history(timestamp);
-    json_ok(res, {{"status", "deleted"}});
-}
 
 // ============================================================================
 // Seguridad
@@ -1079,11 +840,8 @@ void handle_autotune(const httplib::Request& req, httplib::Response& res,
 // Optimizaciones
 // ============================================================================
 void handle_optimization_stats(const httplib::Request& /*req*/, httplib::Response& res,
-                                AlfredCore& core) {
-    json data;
-    data["cache"] = core.get_cache_stats();
-    data["qa_history"] = DBManager::instance().get_qa_history_stats();
-    json_ok(res, data);
+                                AlfredCore& /*core*/) {
+    json_ok(res, json::object());
 }
 
 // ============================================================================
@@ -1114,14 +872,13 @@ void handle_token_count(const httplib::Request& req, httplib::Response& res,
 
 void handle_token_budget(const httplib::Request& req, httplib::Response& res,
                          AlfredCore& core) {
-    const std::string conv_id   = req.get_param_value("conversation_id");
-    const std::string draft     = req.has_param("draft") ? req.get_param_value("draft") : "";
+    const std::string conv_id = req.has_param("conversation_id")
+                                ? req.get_param_value("conversation_id") : "";
+    const std::string draft   = req.has_param("draft") ? req.get_param_value("draft") : "";
 
     int context_max         = core.llm().context_length();
     int reserved_for_reply  = get_config().max_tokens;
 
-    // Resolver el system prompt con perfil, tono y custom_instructions reales
-    // para que el conteo coincida con lo que realmente llega al modelo.
     std::string system_prompt = core.resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS);
 
     std::vector<ConversationMessage> history;
@@ -1129,11 +886,7 @@ void handle_token_budget(const httplib::Request& req, httplib::Response& res,
         history = ConversationManager::instance().get_history(conv_id, 200);
     }
 
-    // Archivos adjuntos (cuando este listo el upload de PDFs esto se
-    // rellena con los tokens ya contados durante la extraccion).
     std::vector<FileTokenInfo> files;
-
-    // Tools aun no implementado en este backend; queda en 0.
     std::string tools_text;
 
     auto budget = TokenAccountant::instance().compute(
@@ -1223,6 +976,157 @@ void handle_extract_pdf(const httplib::Request& req, httplib::Response& res,
 }
 
 // ============================================================================
+// Conversaciones
+// ============================================================================
+void handle_create_conversation(const httplib::Request& req, httplib::Response& res) {
+    json body;
+    if (!req.body.empty()) {
+        if (!parse_body(req, res, body)) return;
+    }
+
+    std::string title = body.is_null() ? "" : body.value("title", "");
+    auto& cm = ConversationManager::instance();
+    std::string id = cm.create_conversation(title);
+
+    json data;
+    data["id"] = id;
+    data["title"] = title.empty() ? "Nueva conversacion" : title;
+    res.status = 201;
+    res.set_content(data.dump(), "application/json");
+}
+
+void handle_list_conversations(const httplib::Request& req, httplib::Response& res) {
+    int limit = 50, offset = 0;
+    if (!get_int_param(req, res, "limit",  limit,  1, 500)) return;
+    if (!get_int_param(req, res, "offset", offset, 0, INT_MAX)) return;
+
+    auto conversations = ConversationManager::instance().list_conversations(limit, offset);
+
+    json data = json::array();
+    for (const auto& conv : conversations) {
+        data.push_back({
+            {"id", conv.id},
+            {"title", conv.title},
+            {"created_at", conv.created_at},
+            {"updated_at", conv.updated_at}
+        });
+    }
+    json_ok(res, data);
+}
+
+void handle_get_conversation(const httplib::Request& req, httplib::Response& res) {
+    std::string id = path_param(req, "id");
+    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
+
+    auto conv = ConversationManager::instance().get_conversation(id);
+    if (!conv) { json_error(res, 404, "Conversacion no encontrada"); return; }
+
+    auto messages = ConversationManager::instance().get_history(id);
+
+    json data;
+    data["id"] = conv->id;
+    data["title"] = conv->title;
+    data["created_at"] = conv->created_at;
+    data["updated_at"] = conv->updated_at;
+
+    json msgs = json::array();
+    for (const auto& m : messages) {
+        msgs.push_back({
+            {"id", m.id},
+            {"role", m.role},
+            {"content", m.content},
+            {"timestamp", m.timestamp}
+        });
+    }
+    data["messages"] = msgs;
+    json_ok(res, data);
+}
+
+void handle_update_conversation_title(const httplib::Request& req, httplib::Response& res) {
+    std::string id = path_param(req, "id");
+    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
+
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    std::string title = body.value("title", "");
+    if (title.empty()) { json_error(res, 400, "Campo 'title' requerido"); return; }
+
+    ConversationManager::instance().update_title(id, title);
+    json_ok(res, {{"status", "updated"}});
+}
+
+void handle_delete_conversation(const httplib::Request& req, httplib::Response& res) {
+    std::string id = path_param(req, "id");
+    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
+
+    ConversationManager::instance().delete_conversation(id);
+    json_ok(res, {{"status", "deleted"}});
+}
+
+void handle_add_message(const httplib::Request& req, httplib::Response& res) {
+    std::string id = path_param(req, "id");
+    if (id.empty()) { json_error(res, 400, "ID de conversacion requerido"); return; }
+
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    std::string role = body.value("role", "");
+    std::string content = body.value("content", "");
+
+    if (role.empty() || content.empty()) {
+        json_error(res, 400, "Campos 'role' y 'content' requeridos");
+        return;
+    }
+
+    ConversationManager::instance().add_message(id, role, content);
+    res.status = 201;
+    res.set_content(R"({"status":"created"})", "application/json");
+}
+
+void handle_clear_messages(const httplib::Request& req, httplib::Response& res) {
+    std::string id = path_param(req, "id");
+    if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
+
+    ConversationManager::instance().clear_messages(id);
+    json_ok(res, {{"status", "cleared"}});
+}
+
+void handle_conversation_query(const httplib::Request& req, httplib::Response& res,
+                                AlfredCore& core) {
+    std::string conv_id = path_param(req, "id");
+    if (conv_id.empty()) { json_error(res, 400, "ID de conversacion requerido"); return; }
+
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    std::string question = body.value("question", "");
+    if (question.empty()) { json_error(res, 400, "Campo 'question' requerido"); return; }
+
+    std::string attached_context = extract_attached_context(body);
+    std::string full_question = question;
+    if (!attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context +
+                        "\n\nPregunta del usuario: " + question;
+    }
+
+    ConversationManager::instance().add_message(conv_id, "user", question);
+
+    auto result = core.query(full_question, conv_id);
+
+    ConversationManager::instance().add_message(conv_id, "assistant", result.answer);
+
+    json data;
+    data["answer"] = result.answer;
+    data["personal_data"] = result.personal_data.empty() ? json(nullptr)
+                            : json::parse(result.personal_data, nullptr, false);
+    data["from_cache"] = result.from_cache;
+    data["time_ms"] = result.total_time_ms;
+    data["conversation_id"] = conv_id;
+    json_ok(res, data);
+}
+
+// ============================================================================
 // Registro de todos los endpoints
 // ============================================================================
 void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
@@ -1272,17 +1176,6 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Post("/conversations/:id/query/stream", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_conversation_query_stream(req, res, core);
-    });
-
-    // Historial
-    server.Get("/history/search", [](const httplib::Request& req, httplib::Response& res) {
-        handle_search_history(req, res);
-    });
-    server.Get("/history", [](const httplib::Request& req, httplib::Response& res) {
-        handle_list_history(req, res);
-    });
-    server.Delete("/history", [](const httplib::Request& req, httplib::Response& res) {
-        handle_delete_history(req, res);
     });
 
     // Seguridad

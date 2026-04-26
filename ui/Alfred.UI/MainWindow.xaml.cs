@@ -357,7 +357,6 @@ public sealed partial class MainWindow : Window
             {
                 "chat" => typeof(ChatPage),
                 "conversations" => typeof(ConversationsPage),
-                "history" => typeof(HistoryPage),
                 "models" => typeof(ModelsPage),
                 "settings" => typeof(SettingsPage),
                 _ => typeof(ChatPage)
@@ -367,8 +366,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Sincroniza la seleccion del NavigationView cuando una pagina navega internamente
-    /// (por ejemplo, ConversationsPage o HistoryPage navegan a ChatPage).
+    /// Sincroniza la seleccion del NavigationView cuando una pagina navega internamente.
     /// </summary>
     private void OnContentFrameNavigated(object sender, NavigationEventArgs e)
     {
@@ -376,7 +374,6 @@ public sealed partial class MainWindow : Window
         {
             Type t when t == typeof(ChatPage) => "chat",
             Type t when t == typeof(ConversationsPage) => "conversations",
-            Type t when t == typeof(HistoryPage) => "history",
             Type t when t == typeof(ModelsPage) => "models",
             Type t when t == typeof(SettingsPage) => "settings",
             _ => null
@@ -432,9 +429,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ========================================================================
-    // Nueva conversacion desde el sidebar (accesible desde cualquier pagina)
-    // ========================================================================
+    private async void OnRestartBackend(object sender, RoutedEventArgs e)
+    {
+        UpdateStatus("Reiniciando...", Colors.Orange);
+        _healthTimer.Stop();
+        await _backend.StopAsync();
+        await Task.Delay(1000);
+        await StartBackendAsync();
+    }
+
     private async void OnNewConversationFromSidebar(object sender, RoutedEventArgs e)
     {
         NewConversationButton.IsEnabled = false;
@@ -448,7 +451,6 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            // Seleccionar "Chat" en el NavView y navegar a la conversacion limpia
             foreach (var item in NavView.MenuItems.OfType<NavigationViewItem>())
             {
                 if ((item.Tag?.ToString() ?? "") == "chat")
@@ -470,15 +472,6 @@ public sealed partial class MainWindow : Window
         {
             NewConversationButton.IsEnabled = true;
         }
-    }
-
-    private async void OnRestartBackend(object sender, RoutedEventArgs e)
-    {
-        UpdateStatus("Reiniciando...", Colors.Orange);
-        _healthTimer.Stop();
-        await _backend.StopAsync();
-        await Task.Delay(1000);
-        await StartBackendAsync();
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs args)

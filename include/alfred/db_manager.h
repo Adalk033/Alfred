@@ -1,9 +1,7 @@
 // ============================================================================
 // db_manager.h - Gestor de base de datos SQLite
 // ============================================================================
-// Equivalente a: OldProject/backend/core/db_manager.py
-// Gestiona todas las tablas: conversaciones, historial Q&A, memoria,
-// configuracion de usuario, metadatos de documentos, etc.
+// Gestiona: conversaciones, memoria, configuracion, metadatos de documentos.
 // Datos sensibles se encriptan con AES-256-GCM.
 // ============================================================================
 #pragma once
@@ -19,7 +17,6 @@ namespace alfred {
 
 using json = nlohmann::json;
 
-// Estructuras de datos
 struct ConversationThread {
     std::string id;
     std::string title;
@@ -35,15 +32,6 @@ struct ConversationMessage {
     std::string content;
     std::string timestamp;
     std::string metadata;
-};
-
-struct QAHistoryEntry {
-    int64_t id = 0;
-    std::string question;
-    std::string answer;
-    std::string personal_data;  // JSON string
-    std::string sources;        // JSON string
-    std::string timestamp;
 };
 
 struct DocumentMeta {
@@ -84,15 +72,6 @@ public:
     std::vector<ConversationThread> search_conversations(const std::string& query);
     std::optional<std::string> get_conversation_metadata(const std::string& id);
     void update_conversation_metadata(const std::string& id, const std::string& metadata);
-
-    // --- Historial Q&A ---
-    void insert_qa_history(const std::string& question, const std::string& answer,
-                           const std::string& personal_data = "",
-                           const std::string& sources = "");
-    std::vector<QAHistoryEntry> get_qa_history(int limit = 100, int offset = 0);
-    std::vector<QAHistoryEntry> search_qa_history(const std::string& query);
-    void delete_qa_history(const std::string& timestamp);
-    json get_qa_history_stats();
 
     // --- Memoria (key-value encriptado) ---
     void set_memory(const std::string& key, const std::string& value);

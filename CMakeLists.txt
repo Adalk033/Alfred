@@ -208,11 +208,10 @@ set(ALFRED_SOURCES
     src/app/gpu_manager.cpp
     src/app/encryption.cpp
     src/app/db_manager.cpp
-    src/app/conversation_manager.cpp
-    src/app/history_manager.cpp
     src/app/llm_engine.cpp
     src/app/model_lifecycle.cpp
     src/app/alfred_core.cpp
+    src/app/conversation_manager.cpp
     src/app/token_accountant.cpp
     src/app/tone.cpp
     src/app/pdf_extractor.cpp

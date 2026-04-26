@@ -58,47 +58,28 @@ public sealed class AlfredApiClient : IDisposable
     // Query
     // ========================================================================
 
-    public async Task<QueryResponse?> SendQueryAsync(string question, bool useHistory = true)
+    public async Task<QueryResponse?> SendQueryAsync(string question)
     {
-        var request = new QueryRequest
-        {
-            Question = question,
-            UseHistory = useHistory
-        };
+        var request = new QueryRequest { Question = question };
         return await PostAsync<QueryResponse>("/query", request, 180);
     }
 
-    /// <summary>
-    /// Envia una consulta con archivos adjuntos (PDF, DOCX, etc.).
-    /// Los archivos se envian como contenido inline en JSON.
-    /// </summary>
     public async Task<QueryResponse?> SendQueryWithAttachmentAsync(
         string question,
-        List<AttachedFileData>? attachedFiles = null,
-        bool useHistory = true)
+        List<AttachedFileData>? attachedFiles = null)
     {
         var request = new QueryWithAttachmentRequest
         {
             Question = question,
-            UseHistory = useHistory,
             AttachedFiles = attachedFiles
         };
         return await PostAsync<QueryResponse>("/query", request, 180);
     }
 
-    /// <summary>
-    /// Envia una consulta y recibe la respuesta token-a-token via SSE.
-    /// Si <paramref name="conversationId"/> esta presente, usa el endpoint
-    /// de conversacion (que persiste mensajes). Devuelve el QueryResponse final.
-    /// El callback <paramref name="onStarted"/> recibe el request_id asignado
-    /// por el backend (necesario para cancelar). <paramref name="onToken"/>
-    /// recibe cada fragmento generado.
-    /// </summary>
     public async Task<QueryResponse?> SendQueryStreamingAsync(
         string question,
         string? conversationId,
         List<AttachedFileData>? attachedFiles,
-        bool useHistory,
         Action<long> onStarted,
         Action<string> onToken,
         CancellationToken cancellationToken)
@@ -111,14 +92,9 @@ public sealed class AlfredApiClient : IDisposable
             ? new QueryWithAttachmentRequest
             {
                 Question = question,
-                UseHistory = useHistory,
                 AttachedFiles = attachedFiles
             }
-            : (object)new QueryRequest
-            {
-                Question = question,
-                UseHistory = useHistory
-            };
+            : (object)new QueryRequest { Question = question };
 
         using var httpReq = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
@@ -228,102 +204,6 @@ public sealed class AlfredApiClient : IDisposable
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var response = await _http.PostAsync("/query/cancel",
                 ToJsonContent(new { request_id = requestId }), cts.Token);
-            return response.IsSuccessStatusCode;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Envia una consulta dentro de una conversacion, con archivos adjuntos opcionales.
-    /// </summary>
-    public async Task<QueryResponse?> SendConversationQueryAsync(
-        string conversationId,
-        string question,
-        List<AttachedFileData>? attachedFiles = null,
-        bool useHistory = true)
-    {
-        var request = new ConversationQueryRequest
-        {
-            Question = question,
-            UseHistory = useHistory,
-            AttachedFiles = attachedFiles
-        };
-        return await PostAsync<QueryResponse>($"/conversations/{conversationId}/query", request, 180);
-    }
-
-    // ========================================================================
-    // Conversaciones
-    // ========================================================================
-
-    public async Task<List<ConversationThread>> ListConversationsAsync(int limit = 50, int offset = 0)
-    {
-        return await GetAsync<List<ConversationThread>>($"/conversations?limit={limit}&offset={offset}") ?? [];
-    }
-
-    public async Task<ConversationThread?> CreateConversationAsync(string title = "")
-    {
-        var body = string.IsNullOrEmpty(title)
-            ? new { }
-            : (object)new { title };
-        return await PostAsync<ConversationThread>("/conversations", body);
-    }
-
-    public async Task<ConversationDetail?> GetConversationAsync(string id)
-    {
-        return await GetAsync<ConversationDetail>($"/conversations/{id}");
-    }
-
-    public async Task<bool> UpdateConversationTitleAsync(string id, string title)
-    {
-        return await PutAsync($"/conversations/{id}/title", new { title });
-    }
-
-    public async Task<bool> DeleteConversationAsync(string id)
-    {
-        return await DeleteAsync($"/conversations/{id}");
-    }
-
-    public async Task<bool> ClearConversationAsync(string id)
-    {
-        return await DeleteAsync($"/conversations/{id}/messages");
-    }
-
-    public async Task<List<ConversationThread>> SearchConversationsAsync(string query)
-    {
-        var all = await ListConversationsAsync(200, 0);
-        if (string.IsNullOrWhiteSpace(query)) return all;
-
-        return all.Where(c =>
-            c.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-    }
-
-    // ========================================================================
-    // Historial
-    // ========================================================================
-
-    public async Task<List<HistoryEntry>> GetHistoryAsync(int limit = 100, int offset = 0)
-    {
-        return await GetAsync<List<HistoryEntry>>($"/history?limit={limit}&offset={offset}") ?? [];
-    }
-
-    public async Task<List<HistoryEntry>> SearchHistoryAsync(string query, float threshold = 0.3f, int topK = 10)
-    {
-        return await GetAsync<List<HistoryEntry>>(
-            $"/history/search?q={Uri.EscapeDataString(query)}&threshold={threshold}&top_k={topK}") ?? [];
-    }
-
-    public async Task<bool> DeleteHistoryAsync(string timestamp)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        try
-        {
-            var content = ToJsonContent(new { timestamp });
-            var request = new HttpRequestMessage(HttpMethod.Delete, "/history") { Content = content };
-            var response = await _http.SendAsync(request, cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -479,6 +359,48 @@ public sealed class AlfredApiClient : IDisposable
             qs.Add($"draft={Uri.EscapeDataString(draft)}");
         var endpoint = "/tokens/budget" + (qs.Count > 0 ? "?" + string.Join("&", qs) : "");
         return await GetAsync<TokenBudget>(endpoint, 10);
+    }
+
+    // ========================================================================
+    // Conversaciones
+    // ========================================================================
+
+    public async Task<ConversationThread?> CreateConversationAsync(string title = "")
+    {
+        return await PostAsync<ConversationThread>("/conversations", new { title });
+    }
+
+    public async Task<List<ConversationThread>> ListConversationsAsync(int limit = 50, int offset = 0)
+    {
+        return await GetAsync<List<ConversationThread>>($"/conversations?limit={limit}&offset={offset}") ?? [];
+    }
+
+    public async Task<ConversationDetail?> GetConversationAsync(string id)
+    {
+        return await GetAsync<ConversationDetail>($"/conversations/{id}");
+    }
+
+    public async Task<bool> UpdateConversationTitleAsync(string id, string title)
+    {
+        return await PutAsync($"/conversations/{id}/title", new { title });
+    }
+
+    public async Task<bool> DeleteConversationAsync(string id)
+    {
+        return await DeleteAsync($"/conversations/{id}");
+    }
+
+    public async Task<bool> ClearConversationAsync(string id)
+    {
+        return await DeleteAsync($"/conversations/{id}/messages");
+    }
+
+    public async Task<List<ConversationThread>> SearchConversationsAsync(string query)
+    {
+        var all = await ListConversationsAsync(200, 0);
+        if (string.IsNullOrWhiteSpace(query)) return all;
+        return all.Where(c =>
+            c.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     // ========================================================================

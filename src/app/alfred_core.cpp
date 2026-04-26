@@ -1,7 +1,7 @@
 // ============================================================================
 // alfred_core.cpp - Motor central de Alfred
 // ============================================================================
-// Orquesta: query -> cache LRU -> historial -> LLM
+// Orquesta: query -> cache LRU -> LLM
 // ============================================================================
 #include "alfred/alfred_core.h"
 #include "alfred/config.h"
@@ -9,7 +9,6 @@
 #include "alfred/logger.h"
 #include "alfred/gpu_manager.h"
 #include "alfred/db_manager.h"
-#include "alfred/history_manager.h"
 #include "alfred/conversation_manager.h"
 #include "alfred/string_utils.h"
 #include "alfred/token_accountant.h"
@@ -289,82 +288,6 @@ void AlfredCore::stop_idle_monitor() {
 }
 
 // ============================================================================
-// Cache LRU
-// ============================================================================
-std::optional<QueryResult> AlfredCore::cache_lookup(const std::string& question) {
-    auto& cfg = get_config();
-
-    std::string normalized = trim(to_lower(question));
-    size_t hash = std::hash<std::string>{}(normalized);
-
-    {
-        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
-        auto it = query_cache_.find(hash);
-        if (it == query_cache_.end()) return std::nullopt;
-
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - it->second.timestamp).count();
-
-        if (elapsed <= cfg.query_cache_ttl_seconds) {
-            auto result = it->second.result;
-            result.from_cache = true;
-            return result;
-        }
-    }
-    // Expirado: promover a unique_lock para borrar
-    std::unique_lock<std::shared_mutex> lock(cache_mutex_);
-    auto it = query_cache_.find(hash);
-    if (it != query_cache_.end()) {
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - it->second.timestamp).count();
-        if (elapsed > cfg.query_cache_ttl_seconds)
-            query_cache_.erase(it);
-    }
-    return std::nullopt;
-}
-
-void AlfredCore::cache_insert(const std::string& question, const QueryResult& result) {
-    std::unique_lock<std::shared_mutex> lock(cache_mutex_);
-    auto& cfg = get_config();
-
-    // Evictar si cache lleno
-    if (static_cast<int>(query_cache_.size()) >= cfg.query_cache_max) {
-        cache_evict_expired();
-        // Si aun esta lleno, eliminar el mas antiguo
-        if (static_cast<int>(query_cache_.size()) >= cfg.query_cache_max) {
-            auto oldest = query_cache_.begin();
-            for (auto it = query_cache_.begin(); it != query_cache_.end(); ++it) {
-                if (it->second.timestamp < oldest->second.timestamp) {
-                    oldest = it;
-                }
-            }
-            query_cache_.erase(oldest);
-        }
-    }
-
-    std::string normalized = trim(to_lower(question));
-    size_t hash = std::hash<std::string>{}(normalized);
-    query_cache_[hash] = {result, std::chrono::steady_clock::now()};
-}
-
-void AlfredCore::cache_evict_expired() {
-    auto& cfg = get_config();
-    auto now = std::chrono::steady_clock::now();
-
-    for (auto it = query_cache_.begin(); it != query_cache_.end();) {
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - it->second.timestamp).count();
-        if (elapsed > cfg.query_cache_ttl_seconds) {
-            it = query_cache_.erase(it);
-        } else {
-            ++it;
-        }
-    }
-}
-
-// ============================================================================
 // Prompt building
 // ============================================================================
 std::string AlfredCore::resolve_system_prompt(const std::string& template_str) {
@@ -431,141 +354,16 @@ QueryResult AlfredCore::generate_response(
 // Query principal
 // ============================================================================
 QueryResult AlfredCore::query(const std::string& question,
-                               bool use_history,
                                const std::string& conversation_id) {
     ensure_model_loaded();
 
-    // Marca PROCESSING mientras viva este scope. El monitor de inactividad
-    // no podra descargar el modelo aunque la generacion dure horas.
     ModelLifecycle::Scope scope(lifecycle_);
 
     auto start = std::chrono::steady_clock::now();
     QueryResult result;
 
-    // 1. Buscar en cache
-    auto cached = cache_lookup(question);
-    if (cached) {
-        log_debug("Respuesta servida desde cache");
-        cached->total_time_ms = 0.1;
-        return *cached;
-    }
-
-    // 2. Buscar en historial Q&A
-    if (use_history) {
-        auto history_results = HistoryManager::instance().search(question, 0.6f, 1);
-        if (!history_results.empty() && history_results[0].score > 0.6f) {
-            result.answer = history_results[0].entry.answer;
-            result.personal_data = history_results[0].entry.personal_data;
-            result.from_history = true;
-
-            auto end = std::chrono::steady_clock::now();
-            result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-
-            cache_insert(question, result);
-            log_debug("Respuesta servida desde historial (score=" +
-                      std::to_string(history_results[0].score) + ")");
-            return result;
-        }
-    }
-
-    // 3. Obtener contexto de conversacion: truncado por tokens reales contra
-    //    el tokenizer del modelo cargado. El presupuesto se calcula como
-    //    n_ctx - (system + pregunta + tokens reservados para la respuesta
-    //    + margen de seguridad). Si por algun motivo da negativo, se omite
-    //    el historial para no desbordar el contexto.
-    std::string conversation_context;
-    if (!conversation_id.empty() && llm_->is_loaded()) {
-        const int context_max = llm_->context_length();
-        const int reserved    = get_config().max_tokens;
-        const int safety      = 128;
-
-        int system_toks   = llm_->count_tokens(resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS));
-        int question_toks = llm_->count_tokens(question);
-        if (system_toks   < 0) system_toks   = 512;   // estimado conservador
-        if (question_toks < 0) question_toks = static_cast<int>(question.size()) / 4;
-
-        const int history_budget = context_max - reserved - system_toks - question_toks - safety;
-        if (history_budget > 0) {
-            auto msgs = ConversationManager::instance()
-                .select_history_within_budget(conversation_id, *llm_, history_budget);
-            conversation_context = ConversationManager::format_messages_as_context(msgs);
-        }
-    }
-
-    // 4. Generar respuesta
-    result = generate_response(question, conversation_context);
-
-    auto end = std::chrono::steady_clock::now();
-    result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-
-    // 5. Guardar en historial y cache
-    if (!result.answer.empty() && result.answer.find("Error") == std::string::npos) {
-        HistoryManager::instance().save(question, result.answer,
-                                         result.personal_data, "");
-        cache_insert(question, result);
-    }
-
-    return result;
-}
-
-// ============================================================================
-// Query con streaming de tokens (SSE)
-// ============================================================================
-QueryResult AlfredCore::query_streaming(const std::string& question,
-                                        StartedCallback on_started,
-                                        TokenStreamCallback on_token,
-                                        bool use_history,
-                                        const std::string& conversation_id) {
-    ensure_model_loaded();
-    ModelLifecycle::Scope scope(lifecycle_);
-
-    // Reservar request_id y resetear flag de cancelacion antes de cualquier
-    // trabajo. Esto debe ocurrir antes de notificar a la UI.
-    uint64_t my_id = next_request_id_.fetch_add(1);
-    active_request_id_.store(my_id);
-    cancel_flag_.store(false);
-
-    if (on_started) on_started(my_id);
-
-    auto cleanup_active = [this, my_id]() {
-        uint64_t expected = my_id;
-        active_request_id_.compare_exchange_strong(expected, 0);
-    };
-
-    auto start = std::chrono::steady_clock::now();
-    QueryResult result;
-
-    // 1. Buscar en cache (servir como un unico token)
-    auto cached = cache_lookup(question);
-    if (cached) {
-        log_debug("Streaming: respuesta servida desde cache");
-        cached->total_time_ms = 0.1;
-        if (on_token && !cancel_flag_.load()) on_token(cached->answer);
-        cleanup_active();
-        return *cached;
-    }
-
-    // 2. Buscar en historial Q&A
-    if (use_history) {
-        auto history_results = HistoryManager::instance().search(question, 0.6f, 1);
-        if (!history_results.empty() && history_results[0].score > 0.6f) {
-            result.answer = history_results[0].entry.answer;
-            result.personal_data = history_results[0].entry.personal_data;
-            result.from_history = true;
-
-            auto end = std::chrono::steady_clock::now();
-            result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-
-            cache_insert(question, result);
-            log_debug("Streaming: respuesta servida desde historial (score=" +
-                      std::to_string(history_results[0].score) + ")");
-            if (on_token && !cancel_flag_.load()) on_token(result.answer);
-            cleanup_active();
-            return result;
-        }
-    }
-
-    // 3. Construir contexto de conversacion
+    // 1. Obtener contexto de conversacion: truncado por tokens reales contra
+    //    el tokenizer del modelo cargado.
     std::string conversation_context;
     if (!conversation_id.empty() && llm_->is_loaded()) {
         const int context_max = llm_->context_length();
@@ -585,7 +383,60 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
         }
     }
 
-    // 4. Generar con streaming
+    // 2. Generar respuesta
+    result = generate_response(question, conversation_context);
+
+    auto end = std::chrono::steady_clock::now();
+    result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+    return result;
+}
+
+// ============================================================================
+// Query con streaming de tokens (SSE)
+// ============================================================================
+QueryResult AlfredCore::query_streaming(const std::string& question,
+                                        StartedCallback on_started,
+                                        TokenStreamCallback on_token,
+                                        const std::string& conversation_id) {
+    ensure_model_loaded();
+    ModelLifecycle::Scope scope(lifecycle_);
+
+    uint64_t my_id = next_request_id_.fetch_add(1);
+    active_request_id_.store(my_id);
+    cancel_flag_.store(false);
+
+    if (on_started) on_started(my_id);
+
+    auto cleanup_active = [this, my_id]() {
+        uint64_t expected = my_id;
+        active_request_id_.compare_exchange_strong(expected, 0);
+    };
+
+    auto start = std::chrono::steady_clock::now();
+    QueryResult result;
+
+    // 1. Construir contexto de conversacion
+    std::string conversation_context;
+    if (!conversation_id.empty() && llm_->is_loaded()) {
+        const int context_max = llm_->context_length();
+        const int reserved    = get_config().max_tokens;
+        const int safety      = 128;
+
+        int system_toks   = llm_->count_tokens(resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS));
+        int question_toks = llm_->count_tokens(question);
+        if (system_toks   < 0) system_toks   = 512;
+        if (question_toks < 0) question_toks = static_cast<int>(question.size()) / 4;
+
+        const int history_budget = context_max - reserved - system_toks - question_toks - safety;
+        if (history_budget > 0) {
+            auto msgs = ConversationManager::instance()
+                .select_history_within_budget(conversation_id, *llm_, history_budget);
+            conversation_context = ConversationManager::format_messages_as_context(msgs);
+        }
+    }
+
+    // 3. Generar con streaming
     if (!llm_->is_loaded()) {
         result.answer = "Error: Modelo LLM no cargado. "
                         "Coloca un modelo GGUF en la carpeta de modelos.";
@@ -596,13 +447,12 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
         return result;
     }
 
-    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS,
-                                       conversation_context, question);
+    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, conversation_context, question);
 
     auto wrapped_cb = [this, &on_token](const std::string& tok) -> bool {
-        if (cancel_flag_.load()) return false;          // cancelado por el usuario
+        if (cancel_flag_.load()) return false;
         if (!on_token) return true;
-        return on_token(tok);                            // permite que el sink corte el stream
+        return on_token(tok);
     };
 
     auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
@@ -617,14 +467,6 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
 
     auto end = std::chrono::steady_clock::now();
     result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-
-    // 5. Guardar en historial y cache solo si la respuesta es completa
-    if (!was_cancelled && !result.answer.empty() &&
-        result.answer.find("Error") == std::string::npos) {
-        HistoryManager::instance().save(question, result.answer,
-                                         result.personal_data, "");
-        cache_insert(question, result);
-    }
 
     cleanup_active();
     return result;
@@ -730,7 +572,6 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
     if (result.success) {
         pending_model_path_ = model_path;
         DBManager::instance().set_model_setting("last_used_model", model_path);
-        clear_cache();
         TokenAccountant::instance().clear();   // distinto tokenizer
         warmup_model();
         lifecycle_.set_idle_now();
@@ -755,25 +596,7 @@ json AlfredCore::get_stats() {
         case ModelState::PROCESSING: stats["model_state"] = "processing"; break;
     }
     stats["in_flight_requests"]     = lifecycle_.in_flight();
-    {
-        std::shared_lock<std::shared_mutex> lock(cache_mutex_);
-        stats["cache_size"] = query_cache_.size();
-    }
     stats["gpu"]                    = json::parse(GPUManager::instance().status_json());
-    return stats;
-}
-
-void AlfredCore::clear_cache() {
-    std::unique_lock<std::shared_mutex> lock(cache_mutex_);
-    query_cache_.clear();
-}
-
-json AlfredCore::get_cache_stats() {
-    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
-    json stats;
-    stats["entries"] = query_cache_.size();
-    stats["max_entries"] = get_config().query_cache_max;
-    stats["ttl_seconds"] = get_config().query_cache_ttl_seconds;
     return stats;
 }
 

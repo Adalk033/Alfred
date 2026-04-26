@@ -18,8 +18,8 @@ namespace Alfred.UI.Pages;
 public sealed partial class ChatPage : Page
 {
     private AlfredApiClient? _api;
-    private string? _conversationId;
     private bool _isSending;
+    private string? _conversationId;
 
     // Streaming en curso: token de cancelacion (usuario aborta) y request_id
     // asignado por el backend (necesario para cancelar inferencia activa).
@@ -189,10 +189,8 @@ public sealed partial class ChatPage : Page
             : "Alfred está pensando…";
         StartLoadingTips();
 
-        // Crear conversacion si todavia no existe (para que el streaming use
-        // el endpoint con contexto). Antes /query auto-creaba; aqui lo hacemos
-        // explicito para usar /conversations/:id/query/stream y que el backend
-        // persista los mensajes.
+        // Crear conversacion si todavia no existe para que el streaming use
+        // el endpoint con contexto y el backend persista los mensajes.
         if (_conversationId == null)
         {
             try
@@ -224,7 +222,6 @@ public sealed partial class ChatPage : Page
                 question,
                 _conversationId,
                 attachments,
-                useHistory: true,
                 onStarted: id =>
                 {
                     DispatcherQueue.TryEnqueue(() => _activeRequestId = id);
@@ -853,21 +850,6 @@ public sealed partial class ChatPage : Page
 
         ChatScroll.UpdateLayout();
         ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
-    }
-
-    /// <summary>
-    /// Carga un par Q&amp;A del historial como contexto visual en el chat.
-    /// </summary>
-    public void LoadHistoryEntry(string question, string answer)
-    {
-        _conversationId = null;
-        ChatContext.ConversationId = null;
-        _bubbles.Clear();
-        MessagesPanel.Children.Clear();
-        WelcomePanel.Visibility = Visibility.Collapsed;
-
-        AddBubble(question, "user");
-        AddBubble(answer, "assistant");
     }
 
     // ========================================================================

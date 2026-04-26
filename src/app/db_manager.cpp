@@ -92,18 +92,6 @@ void DBManager::create_tables() {
         )
     )");
 
-    // Historial Q&A
-    g_db->exec(R"(
-        CREATE TABLE IF NOT EXISTS qa_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question TEXT NOT NULL,
-            answer TEXT NOT NULL,
-            personal_data TEXT DEFAULT '',
-            sources TEXT DEFAULT '[]',
-            timestamp TEXT NOT NULL
-        )
-    )");
-
     // Memoria key-value
     g_db->exec(R"(
         CREATE TABLE IF NOT EXISTS memory (
@@ -162,7 +150,6 @@ void DBManager::create_tables() {
     // Indices
     g_db->exec("CREATE INDEX IF NOT EXISTS idx_messages_conv ON conversation_messages(conversation_id)");
     g_db->exec("CREATE INDEX IF NOT EXISTS idx_messages_ts ON conversation_messages(timestamp)");
-    g_db->exec("CREATE INDEX IF NOT EXISTS idx_qa_ts ON qa_history(timestamp)");
     g_db->exec("CREATE INDEX IF NOT EXISTS idx_docs_path ON documents_meta(file_path)");
 
     log_debug("Tablas de base de datos creadas/verificadas");
@@ -262,6 +249,9 @@ void DBManager::run_migrations() {
         g_db->exec("CREATE INDEX IF NOT EXISTS idx_docs_path ON documents_meta(file_path)");
     }
 
+    // Eliminar tabla de historial Q&A si existe en bases de datos antiguas
+    g_db->exec("DROP TABLE IF EXISTS qa_history");
+
     log_debug("Migraciones de DB completadas");
 }
 
@@ -330,7 +320,6 @@ void DBManager::update_conversation_title(const std::string& id, const std::stri
 }
 
 void DBManager::delete_conversation(const std::string& id) {
-    // CASCADE eliminara mensajes automaticamente
     SQLite::Statement query(*g_db, "DELETE FROM conversation_threads WHERE id = ?");
     query.bind(1, id);
     query.exec();
@@ -351,7 +340,6 @@ void DBManager::add_message(const std::string& conversation_id, const std::strin
     query.bind(5, metadata);
     query.exec();
 
-    // Actualizar timestamp del hilo
     SQLite::Statement update(*g_db,
         "UPDATE conversation_threads SET updated_at = ? WHERE id = ?");
     update.bind(1, current_timestamp());
@@ -382,7 +370,6 @@ std::vector<ConversationMessage> DBManager::get_messages(const std::string& conv
         result.push_back(std::move(msg));
     }
 
-    // Invertir para orden cronologico
     std::reverse(result.begin(), result.end());
     return result;
 }
@@ -436,77 +423,6 @@ void DBManager::update_conversation_metadata(const std::string& id, const std::s
     query.bind(2, current_timestamp());
     query.bind(3, id);
     query.exec();
-}
-
-// ============================================================================
-// Historial Q&A
-// ============================================================================
-void DBManager::insert_qa_history(const std::string& question, const std::string& answer,
-                                   const std::string& personal_data, const std::string& sources) {
-    auto& enc = Encryption::instance();
-
-    SQLite::Statement query(*g_db,
-        "INSERT INTO qa_history (question, answer, personal_data, sources, timestamp) "
-        "VALUES (?, ?, ?, ?, ?)");
-    query.bind(1, enc.encrypt_if_enabled(question));
-    query.bind(2, enc.encrypt_if_enabled(answer));
-    query.bind(3, enc.encrypt_if_enabled(personal_data));
-    query.bind(4, enc.encrypt_if_enabled(sources));
-    query.bind(5, current_timestamp());
-    query.exec();
-}
-
-std::vector<QAHistoryEntry> DBManager::get_qa_history(int limit, int offset) {
-    auto& enc = Encryption::instance();
-    std::vector<QAHistoryEntry> result;
-
-    SQLite::Statement query(*g_db,
-        "SELECT id, question, answer, personal_data, sources, timestamp "
-        "FROM qa_history ORDER BY timestamp DESC LIMIT ? OFFSET ?");
-    query.bind(1, limit);
-    query.bind(2, offset);
-
-    while (query.executeStep()) {
-        QAHistoryEntry entry;
-        entry.id = query.getColumn(0).getInt64();
-        entry.question = enc.decrypt_if_enabled(query.getColumn(1).getString());
-        entry.answer = enc.decrypt_if_enabled(query.getColumn(2).getString());
-        entry.personal_data = enc.decrypt_if_enabled(query.getColumn(3).getString());
-        entry.sources = enc.decrypt_if_enabled(query.getColumn(4).getString());
-        entry.timestamp = query.getColumn(5).getString();
-        result.push_back(std::move(entry));
-    }
-    return result;
-}
-
-std::vector<QAHistoryEntry> DBManager::search_qa_history(const std::string& query_str) {
-    // Cargamos todo y filtramos en memoria (datos estan encriptados en DB)
-    auto all = get_qa_history(500, 0);
-    std::vector<QAHistoryEntry> result;
-    std::string lower_query = to_lower(query_str);
-
-    for (auto& entry : all) {
-        if (to_lower(entry.question).find(lower_query) != std::string::npos ||
-            to_lower(entry.answer).find(lower_query) != std::string::npos) {
-            result.push_back(std::move(entry));
-        }
-    }
-    return result;
-}
-
-void DBManager::delete_qa_history(const std::string& timestamp) {
-    SQLite::Statement query(*g_db, "DELETE FROM qa_history WHERE timestamp = ?");
-    query.bind(1, timestamp);
-    query.exec();
-}
-
-json DBManager::get_qa_history_stats() {
-    json stats;
-    SQLite::Statement query(*g_db, "SELECT COUNT(*) FROM qa_history");
-    if (query.executeStep()) {
-        stats["total_entries"] = query.getColumn(0).getInt();
-    }
-    return stats;
 }
 
 // ============================================================================

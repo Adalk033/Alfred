@@ -19,9 +19,6 @@ public sealed class QueryRequest
 {
     [JsonPropertyName("question")]
     public string Question { get; set; } = "";
-
-    [JsonPropertyName("use_history")]
-    public bool UseHistory { get; set; } = true;
 }
 
 /// <summary>
@@ -31,9 +28,6 @@ public sealed class QueryWithAttachmentRequest
 {
     [JsonPropertyName("question")]
     public string Question { get; set; } = "";
-
-    [JsonPropertyName("use_history")]
-    public bool UseHistory { get; set; } = true;
 
     [JsonPropertyName("attached_files")]
     public List<AttachedFileData>? AttachedFiles { get; set; }
@@ -61,9 +55,6 @@ public sealed class QueryResponse
 
     [JsonPropertyName("from_cache")]
     public bool FromCache { get; set; }
-
-    [JsonPropertyName("from_history")]
-    public bool FromHistory { get; set; }
 
     [JsonPropertyName("cancelled")]
     public bool Cancelled { get; set; }
@@ -128,32 +119,8 @@ public sealed class ConversationQueryRequest
     [JsonPropertyName("question")]
     public string Question { get; set; } = "";
 
-    [JsonPropertyName("use_history")]
-    public bool UseHistory { get; set; } = true;
-
     [JsonPropertyName("attached_files")]
     public List<AttachedFileData>? AttachedFiles { get; set; }
-}
-
-public sealed class HistoryEntry
-{
-    [JsonPropertyName("id")]
-    public long Id { get; set; }
-
-    [JsonPropertyName("question")]
-    public string Question { get; set; } = "";
-
-    [JsonPropertyName("answer")]
-    public string Answer { get; set; } = "";
-
-    [JsonPropertyName("timestamp")]
-    public string Timestamp { get; set; } = "";
-
-    [JsonPropertyName("score")]
-    public double? Score { get; set; }
-
-    [JsonPropertyName("personal_data")]
-    public object? PersonalData { get; set; }
 }
 
 public sealed class ModelInfo

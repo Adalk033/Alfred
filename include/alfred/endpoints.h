@@ -48,11 +48,6 @@ void handle_clear_messages(const httplib::Request& req, httplib::Response& res);
 void handle_conversation_query(const httplib::Request& req, httplib::Response& res,
                                 AlfredCore& core);
 
-// Historial Q&A
-void handle_search_history(const httplib::Request& req, httplib::Response& res);
-void handle_list_history(const httplib::Request& req, httplib::Response& res);
-void handle_delete_history(const httplib::Request& req, httplib::Response& res);
-
 // Seguridad
 void handle_encryption_status(const httplib::Request& req, httplib::Response& res);
 void handle_encryption_key(const httplib::Request& req, httplib::Response& res);
