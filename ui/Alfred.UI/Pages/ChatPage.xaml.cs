@@ -4,6 +4,7 @@ using Alfred.UI.Services;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -21,25 +22,24 @@ public sealed partial class ChatPage : Page
     private bool _isSending;
     private string? _conversationId;
 
-    // Streaming en curso: token de cancelacion (usuario aborta) y request_id
-    // asignado por el backend (necesario para cancelar inferencia activa).
     private CancellationTokenSource? _streamCts;
     private long _activeRequestId;
 
-    // Archivos adjuntos (maximo 5)
     private const int MaxAttachedFiles = 5;
     private readonly List<AttachedFileInfo> _attachedFiles = [];
 
-    // Extensiones binarias que requieren base64
     private static readonly string[] BinaryExtensions = [".pdf", ".docx", ".xlsx", ".pptx"];
     private static readonly string[] AllowedExtensions =
         [".txt", ".pdf", ".docx", ".xlsx", ".pptx", ".md", ".json", ".xml", ".csv", ".html", ".htm", ".log", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf"];
 
     public ObservableCollection<string> Messages { get; } = [];
-    private readonly List<ChatBubble> _bubbles = [];
 
-    // Tips rotativos mientras Alfred genera la respuesta. Se eligen
-    // tomando rotaciones cortas para que el usuario sepa que sigue trabajando.
+    // Arbol de conversacion. _root es el primer turno; cada variante apunta al
+    // turno siguiente via NextTurn. El "active path" se obtiene siguiendo
+    // turn.Active.NextTurn desde la raiz.
+    private ChatTurn? _root;
+    private LiveAssistantBubble? _liveBubble;
+
     private static readonly string[] LoadingTips =
     [
         "Procesando tu consulta…",
@@ -52,7 +52,10 @@ public sealed partial class ChatPage : Page
     private DateTime _loadingStarted;
     private int _loadingTipIndex;
 
-    /// <summary>Accesor para que XAML pueda hacer x:Bind a las preferencias.</summary>
+    // Estado de busqueda local (Ctrl+F)
+    private readonly List<SearchHit> _searchHits = [];
+    private int _searchHitIndex = -1;
+
     public UiPreferences Prefs => UiPreferences.Instance;
 
     public ChatPage()
@@ -65,9 +68,6 @@ public sealed partial class ChatPage : Page
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
-        // Cuando el tema efectivo cambia (ya sea por cambio del usuario o del sistema),
-        // los brushes capturados en burbujas previas quedaron del tema anterior. Las
-        // reconstruimos para que adopten los nuevos colores.
         DispatcherQueue.TryEnqueue(RebuildAllBubbles);
     }
 
@@ -77,8 +77,6 @@ public sealed partial class ChatPage : Page
         if (e.Parameter is AlfredApiClient api)
             _api = api;
 
-        // Suscripción aquí (no en el ctor) para que sobreviva a los Unloaded
-        // de las navegaciones cuando la página está cacheada.
         UiPreferences.Instance.Changed += OnUiPreferencesChanged;
     }
 
@@ -90,25 +88,12 @@ public sealed partial class ChatPage : Page
 
     private void OnUiPreferencesChanged()
     {
-        // Repinta burbujas usando los nuevos brushes / fontSize / densidad.
         DispatcherQueue.TryEnqueue(RebuildAllBubbles);
         ApplyAnimationPreferences();
     }
 
-    private void RebuildAllBubbles()
-    {
-        MessagesPanel.Children.Clear();
-        foreach (var b in _bubbles)
-        {
-            if (b.Role == "__live__") continue;   // burbuja en streaming, se reconstruye sola
-            MessagesPanel.Children.Add(
-                CreateBubbleElement(b.Text, b.Role, b.TimeMs, b.FromCache, b.AttachmentNames));
-        }
-    }
-
     private void ApplyAnimationPreferences()
     {
-        // Activa o desactiva la transicion de entrada para nuevas burbujas.
         if (UiPreferences.Instance.Animations)
         {
             if (MessagesPanel.ChildrenTransitions.Count == 0)
@@ -121,12 +106,46 @@ public sealed partial class ChatPage : Page
     }
 
     // ========================================================================
-    // Envio de mensajes
+    // Active path helpers
+    // ========================================================================
+
+    private List<ChatTurn> GetActivePath()
+    {
+        var path = new List<ChatTurn>();
+        var cur = _root;
+        while (cur != null && cur.Variants.Count > 0)
+        {
+            path.Add(cur);
+            cur = cur.Active.NextTurn;
+        }
+        return path;
+    }
+
+    private ChatTurn AppendNewTurn(TurnVariant initial)
+    {
+        var newTurn = new ChatTurn();
+        newTurn.Variants.Add(initial);
+        newTurn.ActiveIndex = 0;
+
+        if (_root == null)
+        {
+            _root = newTurn;
+        }
+        else
+        {
+            var path = GetActivePath();
+            path[^1].Active.NextTurn = newTurn;
+        }
+        return newTurn;
+    }
+
+    // ========================================================================
+    // Envio inicial
     // ========================================================================
 
     private async void OnSendClick(object sender, RoutedEventArgs e)
     {
-        await SendMessage();
+        await SendNewMessage();
     }
 
     private async void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
@@ -134,7 +153,7 @@ public sealed partial class ChatPage : Page
         if (e.Key == VirtualKey.Enter && !_isSending)
         {
             e.Handled = true;
-            await SendMessage();
+            await SendNewMessage();
         }
     }
 
@@ -144,23 +163,16 @@ public sealed partial class ChatPage : Page
         ChatContext.Draft = InputBox.Text ?? "";
     }
 
-    private async Task SendMessage()
+    private async Task SendNewMessage()
     {
         if (_api == null || _isSending) return;
 
         string question = InputBox.Text.Trim();
         if (string.IsNullOrEmpty(question) && _attachedFiles.Count == 0) return;
 
-        _isSending = true;
         InputBox.Text = "";
         ChatContext.Draft = "";
-        SendButton.IsEnabled = false;
-        SendButton.Visibility = Visibility.Collapsed;
-        StopButton.Visibility = Visibility.Visible;
-        StopButton.IsEnabled = true;
-        WelcomePanel.Visibility = Visibility.Collapsed;
 
-        // Preparar adjuntos antes de limpiarlos
         List<AttachedFileData>? attachments = null;
         List<string>? attachmentNames = null;
         if (_attachedFiles.Count > 0)
@@ -174,42 +186,57 @@ public sealed partial class ChatPage : Page
             ClearAttachments();
         }
 
-        // Agregar burbuja del usuario con indicadores de adjuntos
-        string displayQuestion = question;
-        if (string.IsNullOrEmpty(displayQuestion) && attachmentNames != null)
+        var variant = new TurnVariant
         {
-            displayQuestion = "[Archivos adjuntos]";
-        }
-        AddBubble(displayQuestion, "user", attachmentNames: attachmentNames);
+            UserText = question,
+            AttachmentNames = attachmentNames,
+            Attachments = attachments,
+            Pending = true,
+        };
+        AppendNewTurn(variant);
 
-        // Mostrar indicador de carga con tips rotativos hasta que llegue el primer token
+        await EnsureConversationCreated();
+        RebuildAllBubbles();
+        await GenerateForActiveVariantAsync(variant, attachments);
+    }
+
+    private async Task EnsureConversationCreated()
+    {
+        if (_conversationId != null || _api == null) return;
+        try
+        {
+            var conv = await _api.CreateConversationAsync();
+            if (conv != null)
+            {
+                _conversationId = conv.Id;
+                ChatContext.ConversationId = _conversationId;
+            }
+        }
+        catch
+        {
+            // Sin conversacion seguimos sin persistencia
+        }
+    }
+
+    // Genera la respuesta del asistente para una variante "Pending". El backend
+    // ya debe estar sincronizado con el path activo hasta el turno previo.
+    private async Task GenerateForActiveVariantAsync(TurnVariant variant,
+        List<AttachedFileData>? attachments)
+    {
+        if (_api == null) return;
+
+        _isSending = true;
+        SendButton.IsEnabled = false;
+        SendButton.Visibility = Visibility.Collapsed;
+        StopButton.Visibility = Visibility.Visible;
+        StopButton.IsEnabled = true;
+        WelcomePanel.Visibility = Visibility.Collapsed;
+
         LoadingIndicator.Visibility = Visibility.Visible;
-        LoadingText.Text = attachments != null
+        LoadingText.Text = (attachments != null && attachments.Count > 0)
             ? "Procesando archivos y generando respuesta…"
             : "Alfred está pensando…";
         StartLoadingTips();
-
-        // Crear conversacion si todavia no existe para que el streaming use
-        // el endpoint con contexto y el backend persista los mensajes.
-        if (_conversationId == null)
-        {
-            try
-            {
-                var conv = await _api.CreateConversationAsync();
-                if (conv != null)
-                {
-                    _conversationId = conv.Id;
-                    ChatContext.ConversationId = _conversationId;
-                }
-            }
-            catch
-            {
-                // Sin conversacion seguimos con /query/stream (sin persistencia)
-            }
-        }
-
-        // Burbuja viva del asistente que se va llenando con tokens.
-        var liveBubble = CreateLiveAssistantBubble();
 
         _streamCts = new CancellationTokenSource();
         _activeRequestId = 0;
@@ -219,7 +246,7 @@ public sealed partial class ChatPage : Page
         try
         {
             QueryResponse? response = await _api.SendQueryStreamingAsync(
-                question,
+                variant.UserText,
                 _conversationId,
                 attachments,
                 onStarted: id =>
@@ -237,49 +264,44 @@ public sealed partial class ChatPage : Page
                             LoadingIndicator.Visibility = Visibility.Collapsed;
                         }
                         sb.Append(tok);
-                        liveBubble.Text.Text = sb.ToString();
-                        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+                        if (_liveBubble != null)
+                        {
+                            _liveBubble.Text.Text = sb.ToString();
+                            ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+                        }
                     });
                 },
                 cancellationToken: _streamCts.Token);
 
-            // Reemplazar la burbuja viva por la versión final (con metadata,
-            // markdown formateado y panel de razonamiento si aplica).
             string finalText = response?.Answer ?? sb.ToString();
-            ReplaceLiveBubbleWithFinal(liveBubble, finalText, response);
+            variant.AssistantText = finalText;
+            variant.TimeMs = response?.TimeMs ?? 0;
+            variant.FromCache = response?.FromCache ?? false;
+            variant.Cancelled = response?.Cancelled ?? false;
+            variant.Pending = false;
+
+            RebuildAllBubbles();
 
             if (response?.Cancelled == true)
-            {
                 ShowNotification(InfoBarSeverity.Informational, "Generación detenida.");
-            }
-            else if (response == null)
-            {
-                if (sb.Length == 0)
-                {
-                    AddBubble("Error: no se recibio respuesta del backend.", "error");
-                }
-            }
+            else if (response == null && string.IsNullOrEmpty(finalText))
+                ShowNotification(InfoBarSeverity.Error, "No se recibio respuesta del backend.");
         }
         catch (OperationCanceledException)
         {
-            // Cancelacion local: ya pedimos al backend cancelar via OnStopClick.
             string partial = sb.ToString();
-            if (string.IsNullOrEmpty(partial))
-            {
-                MessagesPanel.Children.Remove(liveBubble.Border);
-                _bubbles.RemoveAll(b => b.Role == "__live__");
-            }
-            else
-            {
-                ReplaceLiveBubbleWithFinal(liveBubble, partial, null, cancelled: true);
-            }
+            variant.AssistantText = partial;
+            variant.Pending = false;
+            variant.Cancelled = true;
+            RebuildAllBubbles();
             ShowNotification(InfoBarSeverity.Informational, "Generación detenida.");
         }
         catch (Exception ex)
         {
-            MessagesPanel.Children.Remove(liveBubble.Border);
-            _bubbles.RemoveAll(b => b.Role == "__live__");
-            AddBubble($"Error: {ex.Message}", "error");
+            variant.AssistantText = $"Error: {ex.Message}";
+            variant.Pending = false;
+            variant.IsError = true;
+            RebuildAllBubbles();
         }
         finally
         {
@@ -293,113 +315,475 @@ public sealed partial class ChatPage : Page
             SendButton.Visibility = Visibility.Visible;
             SendButton.IsEnabled = !string.IsNullOrWhiteSpace(InputBox.Text);
             InputBox.Focus(FocusState.Programmatic);
+            _liveBubble = null;
         }
     }
 
     private async void OnStopClick(object sender, RoutedEventArgs e)
     {
         if (!_isSending || _api == null) return;
-        StopButton.IsEnabled = false;   // evita doble-click
+        StopButton.IsEnabled = false;
 
-        // Pedir al backend que detenga la inferencia. La conexion SSE va a
-        // emitir 'done' con cancelled=true y el bucle de lectura saldra.
-        try
-        {
-            await _api.CancelQueryAsync(_activeRequestId);
-        }
-        catch
-        {
-            // Si fallo el cancel remoto, abortamos al menos el lado cliente.
-        }
+        try { await _api.CancelQueryAsync(_activeRequestId); }
+        catch { /* fallback: cancelacion local */ }
 
-        // Cancelacion local como respaldo: cierra la conexion HTTP si el
-        // backend no responde a tiempo (ej: red rota).
         _streamCts?.Cancel();
     }
 
     // ========================================================================
-    // Burbuja viva (streaming)
+    // Edicion / Regeneracion / Variantes
     // ========================================================================
 
-    private sealed class LiveAssistantBubble
+    private async void OnEditUserBubble(ChatTurn turn, TurnVariant variant)
     {
-        public Border Border { get; init; } = null!;
-        public TextBlock Text { get; init; } = null!;
+        if (_isSending || _api == null) return;
+
+        // Inline edit: dialog con TextBox prellenado
+        var textBox = new TextBox
+        {
+            Text = variant.UserText,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinWidth = 480,
+            MinHeight = 100
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "Editar mensaje",
+            Content = textBox,
+            PrimaryButtonText = "Guardar y regenerar",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot
+        };
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        string newText = (textBox.Text ?? "").Trim();
+        if (string.IsNullOrEmpty(newText) || newText == variant.UserText) return;
+
+        // Nueva variante: mismo turno, nuevo texto de usuario, sin asistente
+        var newVariant = new TurnVariant
+        {
+            UserText = newText,
+            AttachmentNames = variant.AttachmentNames,
+            Attachments = variant.Attachments,
+            Pending = true,
+        };
+        turn.Variants.Add(newVariant);
+        turn.ActiveIndex = turn.Variants.Count - 1;
+
+        await ResyncBackendUpToTurnAsync(turn);
+        RebuildAllBubbles();
+        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
-    private LiveAssistantBubble CreateLiveAssistantBubble()
+    private async void OnRegenerateAssistant(ChatTurn turn, TurnVariant variant)
+    {
+        if (_isSending || _api == null) return;
+
+        var newVariant = new TurnVariant
+        {
+            UserText = variant.UserText,
+            AttachmentNames = variant.AttachmentNames,
+            Attachments = variant.Attachments,
+            Pending = true,
+        };
+        turn.Variants.Add(newVariant);
+        turn.ActiveIndex = turn.Variants.Count - 1;
+
+        await ResyncBackendUpToTurnAsync(turn);
+        RebuildAllBubbles();
+        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
+    }
+
+    private async void OnSwitchVariant(ChatTurn turn, int delta)
+    {
+        if (_isSending) return;
+        int newIdx = turn.ActiveIndex + delta;
+        if (newIdx < 0 || newIdx >= turn.Variants.Count) return;
+        turn.ActiveIndex = newIdx;
+
+        // Si la variante seleccionada esta pendiente (raro, no deberia ocurrir),
+        // no hacer nada mas; si tiene texto, resincronizar backend hasta DESPUES
+        // de este turno (para que tokens/budget reflejen el path activo).
+        var variant = turn.Active;
+        if (variant.Pending)
+        {
+            RebuildAllBubbles();
+            return;
+        }
+
+        await ResyncBackendIncludingTurnAsync(turn);
+        RebuildAllBubbles();
+    }
+
+    // Limpia el backend y reinyecta los mensajes del path activo HASTA (sin
+    // incluir) el turno indicado. Tras esto, el backend esta listo para que el
+    // streaming endpoint agregue el user+assistant del turno objetivo.
+    private async Task ResyncBackendUpToTurnAsync(ChatTurn target)
+    {
+        if (_api == null || string.IsNullOrEmpty(_conversationId)) return;
+
+        var path = GetActivePath();
+        await _api.ClearConversationAsync(_conversationId);
+
+        foreach (var turn in path)
+        {
+            if (turn == target) break;
+            var v = turn.Active;
+            if (string.IsNullOrEmpty(v.UserText) && v.Attachments == null) continue;
+            await _api.AddMessageAsync(_conversationId, "user", v.UserText);
+            if (!string.IsNullOrEmpty(v.AssistantText) && !v.IsError)
+                await _api.AddMessageAsync(_conversationId, "assistant", v.AssistantText);
+        }
+    }
+
+    // Reinyecta TODOS los mensajes del path activo (incluyendo el turno dado).
+    // Usado al cambiar de variante sin regenerar.
+    private async Task ResyncBackendIncludingTurnAsync(ChatTurn _)
+    {
+        if (_api == null || string.IsNullOrEmpty(_conversationId)) return;
+
+        var path = GetActivePath();
+        await _api.ClearConversationAsync(_conversationId);
+
+        foreach (var turn in path)
+        {
+            var v = turn.Active;
+            if (string.IsNullOrEmpty(v.UserText)) continue;
+            await _api.AddMessageAsync(_conversationId, "user", v.UserText);
+            if (!string.IsNullOrEmpty(v.AssistantText) && !v.IsError && !v.Pending)
+                await _api.AddMessageAsync(_conversationId, "assistant", v.AssistantText);
+        }
+    }
+
+    // ========================================================================
+    // Renderizado de burbujas
+    // ========================================================================
+
+    private void RebuildAllBubbles()
+    {
+        MessagesPanel.Children.Clear();
+        _liveBubble = null;
+
+        var path = GetActivePath();
+        if (path.Count == 0)
+        {
+            WelcomePanel.Visibility = Visibility.Visible;
+            return;
+        }
+        WelcomePanel.Visibility = Visibility.Collapsed;
+
+        foreach (var turn in path)
+        {
+            var variant = turn.Active;
+
+            // Burbuja de usuario
+            var userBubble = CreateUserBubble(turn, variant);
+            MessagesPanel.Children.Add(userBubble);
+
+            // Burbuja de asistente (final, parcial o pendiente)
+            var assistantBubble = CreateAssistantBubble(turn, variant);
+            MessagesPanel.Children.Add(assistantBubble);
+        }
+
+        ChatScroll.UpdateLayout();
+        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+
+        // Re-aplicar busqueda si esta abierta
+        if (SearchBar.Visibility == Visibility.Visible &&
+            !string.IsNullOrEmpty(SearchBox.Text))
+        {
+            ApplySearch(SearchBox.Text);
+        }
+    }
+
+    private FrameworkElement CreateUserBubble(ChatTurn turn, TurnVariant variant)
     {
         bool compact = UiPreferences.Instance.Density == UiDensity.Compact;
         double baseSize = UiPreferences.Instance.FontSize;
-        Brush bg = ThemedBrushes.Get("AssistantBubbleBrush",
-            Windows.UI.Color.FromArgb(255, 31, 41, 55));
-        Brush textBrush = ThemedBrushes.Get("AlfredTextPrimary",
-            Windows.UI.Color.FromArgb(255, 230, 232, 238));
+        Brush userText = ThemedBrushes.Get("AlfredUserBubbleText", Colors.White);
+        Brush userBg   = ThemedBrushes.Get("UserBubble", Windows.UI.Color.FromArgb(255, 99, 102, 241));
+        Brush dimText  = ThemedBrushes.Get("AlfredTextSecondary", Colors.LightGray);
 
-        var text = new TextBlock
+        var stack = new StackPanel { Spacing = compact ? 2 : 4 };
+
+        string displayText = string.IsNullOrEmpty(variant.UserText) && variant.AttachmentNames != null
+            ? "[Archivos adjuntos]"
+            : variant.UserText;
+
+        stack.Children.Add(new TextBlock
         {
-            Text = "",
+            Text = displayText,
             TextWrapping = TextWrapping.Wrap,
             FontSize = baseSize,
-            Foreground = textBrush,
-            IsTextSelectionEnabled = false
-        };
+            Foreground = userText,
+            IsTextSelectionEnabled = true,
+        });
+
+        if (variant.AttachmentNames is { Count: > 0 })
+            stack.Children.Add(BuildAttachmentLine(variant.AttachmentNames, dimText));
 
         var border = new Border
         {
-            Background = bg,
-            CornerRadius = new CornerRadius(4, 16, 16, 16),
-            Padding = compact
-                ? new Thickness(12, 7, 12, 7)
-                : new Thickness(16, 10, 16, 10),
+            Background = userBg,
+            CornerRadius = new CornerRadius(16, 16, 4, 16),
+            Padding = compact ? new Thickness(12, 7, 12, 7) : new Thickness(16, 10, 16, 10),
             MaxWidth = 600,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Child = text
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Child = stack,
         };
 
-        // Marcador interno para que rebuilds y removes la encuentren.
-        _bubbles.Add(new ChatBubble { Text = "", Role = "__live__" });
-        MessagesPanel.Children.Add(border);
-        ChatScroll.UpdateLayout();
-        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+        var toolbar = BuildBubbleToolbar(turn, variant, isUser: true,
+            HorizontalAlignment.Right);
 
-        return new LiveAssistantBubble { Border = border, Text = text };
-    }
-
-    private void ReplaceLiveBubbleWithFinal(LiveAssistantBubble live,
-        string answer, QueryResponse? response, bool cancelled = false)
-    {
-        // Quitar burbuja en vivo y su entrada de marcador
-        int idx = MessagesPanel.Children.IndexOf(live.Border);
-        MessagesPanel.Children.Remove(live.Border);
-        _bubbles.RemoveAll(b => b.Role == "__live__");
-
-        bool from_cache = response?.FromCache ?? false;
-        double timeMs   = response?.TimeMs ?? 0;
-        bool wasCancelled = cancelled || (response?.Cancelled ?? false);
-
-        // Si fue cancelado mostramos la respuesta parcial con un sufijo discreto.
-        string displayed = wasCancelled && !string.IsNullOrEmpty(answer)
-            ? answer + "\n\n_(generación detenida)_"
-            : answer;
-
-        _bubbles.Add(new ChatBubble
+        var wrapper = new StackPanel
         {
-            Text = displayed,
-            Role = "assistant",
-            TimeMs = timeMs,
-            FromCache = from_cache
-        });
-
-        var final = CreateBubbleElement(displayed, "assistant", timeMs, from_cache);
-        if (idx >= 0 && idx <= MessagesPanel.Children.Count)
-            MessagesPanel.Children.Insert(idx, final);
-        else
-            MessagesPanel.Children.Add(final);
-
-        ChatScroll.UpdateLayout();
-        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 2,
+        };
+        wrapper.Children.Add(border);
+        if (toolbar != null) wrapper.Children.Add(toolbar);
+        return wrapper;
     }
+
+    private FrameworkElement CreateAssistantBubble(ChatTurn turn, TurnVariant variant)
+    {
+        bool compact = UiPreferences.Instance.Density == UiDensity.Compact;
+        double baseSize = UiPreferences.Instance.FontSize;
+        Brush assistantBg = ThemedBrushes.Get("AssistantBubbleBrush", Windows.UI.Color.FromArgb(255, 31, 41, 55));
+        Brush errorBg     = ThemedBrushes.Get("AlfredError", Windows.UI.Color.FromArgb(255, 239, 68, 68));
+        Brush dimText     = ThemedBrushes.Get("AlfredTextSecondary", Colors.LightGray);
+        Brush textBrush   = ThemedBrushes.Get("AlfredTextPrimary", Windows.UI.Color.FromArgb(255, 230, 232, 238));
+        Brush reasoningBg = ThemedBrushes.Get("AlfredReasoningBg", Windows.UI.Color.FromArgb(40, 255, 255, 255));
+
+        var stack = new StackPanel { Spacing = compact ? 2 : 4 };
+
+        if (variant.Pending)
+        {
+            // Burbuja viva: TextBlock plano que se va llenando con tokens
+            var live = new TextBlock
+            {
+                Text = "",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = baseSize,
+                Foreground = textBrush,
+                IsTextSelectionEnabled = false,
+            };
+            stack.Children.Add(live);
+            _liveBubble = new LiveAssistantBubble { Text = live };
+        }
+        else
+        {
+            string text = variant.AssistantText ?? "";
+            string mainText = text;
+            string? reasoningText = null;
+            if (!variant.IsError)
+            {
+                var cleaned = ChatMessageCleaner.Clean(text);
+                mainText = cleaned.Text;
+                reasoningText = cleaned.Reasoning;
+            }
+            if (variant.Cancelled && !string.IsNullOrEmpty(mainText))
+                mainText += "\n\n_(generación detenida)_";
+
+            if (variant.IsError)
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = mainText,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = baseSize,
+                    Foreground = new SolidColorBrush(Colors.White),
+                    IsTextSelectionEnabled = true,
+                });
+            }
+            else
+            {
+                var mdPanel = new StackPanel { Spacing = compact ? 4 : 6 };
+                foreach (var element in MarkdownRenderer.Render(mainText))
+                    mdPanel.Children.Add(element);
+                stack.Children.Add(mdPanel);
+            }
+
+            if (reasoningText != null)
+            {
+                stack.Children.Add(new Expander
+                {
+                    Header = new TextBlock
+                    {
+                        Text = "Análisis interno",
+                        FontSize = 11,
+                        Foreground = dimText,
+                    },
+                    Content = new TextBlock
+                    {
+                        Text = reasoningText,
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = Math.Max(11, baseSize - 2),
+                        Foreground = dimText,
+                        IsTextSelectionEnabled = true,
+                    },
+                    Margin = new Thickness(0, 6, 0, 0),
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Background = reasoningBg,
+                });
+            }
+
+            if (variant.TimeMs > 0)
+            {
+                string meta = variant.TimeMs >= 1000 ? $"{variant.TimeMs / 1000.0:F1}s" : $"{variant.TimeMs:F0}ms";
+                if (variant.FromCache)
+                    meta += " · cache";
+                else if (variant.TimeMs > 200)
+                {
+                    int approxTokens = Math.Max(1, mainText.Length / 4);
+                    double tps = approxTokens / (variant.TimeMs / 1000.0);
+                    meta += $" · ~{tps:F1} tok/s";
+                }
+                stack.Children.Add(new TextBlock
+                {
+                    Text = meta,
+                    FontSize = 10,
+                    Foreground = dimText,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                });
+            }
+        }
+
+        var border = new Border
+        {
+            Background = variant.IsError ? errorBg : assistantBg,
+            CornerRadius = new CornerRadius(4, 16, 16, 16),
+            Padding = compact ? new Thickness(12, 7, 12, 7) : new Thickness(16, 10, 16, 10),
+            MaxWidth = 600,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = stack,
+        };
+
+        var toolbar = BuildBubbleToolbar(turn, variant, isUser: false,
+            HorizontalAlignment.Left);
+
+        var wrapper = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Spacing = 2,
+        };
+        wrapper.Children.Add(border);
+        if (toolbar != null) wrapper.Children.Add(toolbar);
+        return wrapper;
+    }
+
+    // Toolbar bajo cada burbuja: variant nav + accion principal (editar/regenerar).
+    private FrameworkElement? BuildBubbleToolbar(ChatTurn turn, TurnVariant variant,
+        bool isUser, HorizontalAlignment align)
+    {
+        // Para asistente pendiente no mostramos toolbar
+        if (!isUser && variant.Pending) return null;
+        // Para usuario sin texto (solo adjuntos) tampoco editamos
+        if (isUser && string.IsNullOrEmpty(variant.UserText)) return null;
+
+        Brush dim = ThemedBrushes.Get("AlfredTextSecondary", Colors.LightGray);
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 2,
+            HorizontalAlignment = align,
+            Margin = new Thickness(4, 0, 4, 0),
+            Opacity = 0.65,
+        };
+
+        // Variant navigation: solo si hay mas de una variante
+        if (turn.Variants.Count > 1)
+        {
+            var prev = MakeIconButton("", "Variante anterior",
+                () => OnSwitchVariant(turn, -1));
+            prev.IsEnabled = turn.ActiveIndex > 0;
+            panel.Children.Add(prev);
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"{turn.ActiveIndex + 1}/{turn.Variants.Count}",
+                FontSize = 10,
+                Foreground = dim,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(2, 0, 2, 0),
+            });
+
+            var next = MakeIconButton("", "Variante siguiente",
+                () => OnSwitchVariant(turn, +1));
+            next.IsEnabled = turn.ActiveIndex < turn.Variants.Count - 1;
+            panel.Children.Add(next);
+        }
+
+        if (isUser)
+        {
+            // Editar
+            panel.Children.Add(MakeIconButton("", "Editar mensaje",
+                () => OnEditUserBubble(turn, variant)));
+        }
+        else
+        {
+            // Regenerar
+            panel.Children.Add(MakeIconButton("", "Regenerar respuesta",
+                () => OnRegenerateAssistant(turn, variant)));
+            // Copiar
+            panel.Children.Add(MakeIconButton("", "Copiar al portapapeles",
+                () => CopyToClipboard(variant.AssistantText ?? "")));
+        }
+
+        return panel;
+    }
+
+    private static Button MakeIconButton(string glyph, string tooltip, Action onClick)
+    {
+        var btn = new Button
+        {
+            Padding = new Thickness(4, 2, 4, 2),
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Content = new FontIcon { Glyph = glyph, FontSize = 12 },
+        };
+        ToolTipService.SetToolTip(btn, tooltip);
+        btn.Click += (_, _) => onClick();
+        return btn;
+    }
+
+    private void CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        var dp = new DataPackage();
+        dp.SetText(text);
+        Clipboard.SetContent(dp);
+        ShowNotification(InfoBarSeverity.Success, "Copiado al portapapeles.");
+    }
+
+    private static FrameworkElement BuildAttachmentLine(List<string> names, Brush dim)
+    {
+        var p = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        p.Children.Add(new FontIcon { Glyph = "", FontSize = 12, Foreground = dim });
+        p.Children.Add(new TextBlock
+        {
+            Text = string.Join(", ", names),
+            FontSize = 11,
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Foreground = dim,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 400,
+        });
+        return p;
+    }
+
+    // ========================================================================
+    // Loading tips
+    // ========================================================================
 
     private void StartLoadingTips()
     {
@@ -426,175 +810,195 @@ public sealed partial class ChatPage : Page
     }
 
     // ========================================================================
-    // Burbujas de chat
+    // Busqueda local (Ctrl+F)
     // ========================================================================
 
-    private void AddBubble(string text, string role, double timeMs = 0, bool fromCache = false,
-        List<string>? attachmentNames = null)
+    private void OnFindAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        _bubbles.Add(new ChatBubble
-        {
-            Text = text, Role = role, TimeMs = timeMs,
-            FromCache = fromCache, AttachmentNames = attachmentNames
-        });
-
-        var bubble = CreateBubbleElement(text, role, timeMs, fromCache, attachmentNames);
-        MessagesPanel.Children.Add(bubble);
-
-        // Scroll al final
-        ChatScroll.UpdateLayout();
-        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+        args.Handled = true;
+        OpenSearchBar();
     }
 
-    private static Border CreateBubbleElement(string text, string role, double timeMs, bool fromCache,
-        List<string>? attachmentNames = null)
+    private void OnEscapeAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        bool isUser = role == "user";
-        bool isError = role == "error";
-
-        // Solo limpiamos respuestas del asistente: mensajes del usuario y errores
-        // se muestran tal cual para no alterar lo que el usuario escribio.
-        string mainText = text;
-        string? reasoningText = null;
-        if (!isUser && !isError)
+        if (SearchBar.Visibility == Visibility.Visible)
         {
-            var cleaned = ChatMessageCleaner.Clean(text);
-            mainText = cleaned.Text;
-            reasoningText = cleaned.Reasoning;
+            args.Handled = true;
+            CloseSearchBar();
+        }
+    }
+
+    private void OpenSearchBar()
+    {
+        SearchBar.Visibility = Visibility.Visible;
+        SearchBox.Focus(FocusState.Programmatic);
+        SearchBox.SelectAll();
+        if (!string.IsNullOrEmpty(SearchBox.Text))
+            ApplySearch(SearchBox.Text);
+    }
+
+    private void CloseSearchBar()
+    {
+        SearchBar.Visibility = Visibility.Collapsed;
+        ClearSearchHighlights();
+        _searchHits.Clear();
+        _searchHitIndex = -1;
+        SearchCount.Text = "";
+    }
+
+    private void OnSearchClose(object sender, RoutedEventArgs e) => CloseSearchBar();
+
+    private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
+    {
+        ApplySearch(SearchBox.Text);
+    }
+
+    private void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter)
+        {
+            e.Handled = true;
+            bool shift = (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+                & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+            if (shift) GoToSearchHit(-1); else GoToSearchHit(+1);
+        }
+        else if (e.Key == VirtualKey.Escape)
+        {
+            e.Handled = true;
+            CloseSearchBar();
+        }
+    }
+
+    private void OnSearchPrev(object sender, RoutedEventArgs e) => GoToSearchHit(-1);
+    private void OnSearchNext(object sender, RoutedEventArgs e) => GoToSearchHit(+1);
+
+    // Implementacion no-destructiva: identificamos los TextBlocks cuyo texto
+    // (plano o agregado de inlines) contiene el query, y los marcamos con un
+    // Border decorado al hacer navegacion. No alteramos los Inlines del
+    // TextBlock para no romper el formato Markdown ya renderizado.
+    private void ApplySearch(string query)
+    {
+        ClearSearchHighlights();
+        _searchHits.Clear();
+        _searchHitIndex = -1;
+
+        if (string.IsNullOrEmpty(query))
+        {
+            SearchCount.Text = "";
+            return;
         }
 
-        double baseSize = UiPreferences.Instance.FontSize;
-        bool compact = UiPreferences.Instance.Density == UiDensity.Compact;
-        Brush userText      = ThemedBrushes.Get("AlfredUserBubbleText", Colors.White);
-        Brush dimText       = ThemedBrushes.Get("AlfredTextSecondary", Colors.LightGray);
-        Brush assistantBg   = ThemedBrushes.Get("AssistantBubbleBrush", Windows.UI.Color.FromArgb(255, 31, 41, 55));
-        Brush userBg        = ThemedBrushes.Get("UserBubble",          Windows.UI.Color.FromArgb(255, 99, 102, 241));
-        Brush errorBg       = ThemedBrushes.Get("AlfredError",         Windows.UI.Color.FromArgb(255, 239, 68, 68));
-        Brush reasoningBg   = ThemedBrushes.Get("AlfredReasoningBg",   Windows.UI.Color.FromArgb(40, 255, 255, 255));
+        foreach (var child in MessagesPanel.Children)
+            FindMatches(child, query);
 
-        var stack = new StackPanel { Spacing = compact ? 2 : 4 };
-
-        if (isUser || isError)
+        if (_searchHits.Count == 0)
         {
-            stack.Children.Add(new TextBlock
-            {
-                Text = mainText,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = baseSize,
-                Foreground = userText,
-                IsTextSelectionEnabled = true
-            });
-        }
-        else
-        {
-            // Respuestas del asistente: renderizamos Markdown a UIElements nativos
-            var mdPanel = new StackPanel { Spacing = compact ? 4 : 6 };
-            foreach (var element in MarkdownRenderer.Render(mainText))
-                mdPanel.Children.Add(element);
-            stack.Children.Add(mdPanel);
+            SearchCount.Text = "0";
+            return;
         }
 
-        if (reasoningText != null)
+        _searchHitIndex = 0;
+        SearchCount.Text = $"1/{_searchHits.Count}";
+        FocusHit(_searchHits[0]);
+    }
+
+    private void FindMatches(DependencyObject root, string query)
+    {
+        if (root is TextBlock tb)
         {
-            var reasoningExpander = new Expander
+            string plain = GetPlainText(tb);
+            if (!string.IsNullOrEmpty(plain) &&
+                plain.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                Header = new TextBlock
-                {
-                    Text = "Análisis interno",
-                    FontSize = 11,
-                    Foreground = dimText
-                },
-                Content = new TextBlock
-                {
-                    Text = reasoningText,
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = Math.Max(11, baseSize - 2),
-                    Foreground = dimText,
-                    IsTextSelectionEnabled = true
-                },
-                Margin = new Thickness(0, 6, 0, 0),
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Background = reasoningBg
-            };
-            stack.Children.Add(reasoningExpander);
-        }
-
-        // Indicador de archivos adjuntos en el mensaje
-        if (attachmentNames != null && attachmentNames.Count > 0)
-        {
-            var attachPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                Margin = new Thickness(0, 4, 0, 0)
-            };
-
-            var icon = new FontIcon
-            {
-                Glyph = "\uE723",
-                FontSize = 12,
-                Foreground = dimText
-            };
-            attachPanel.Children.Add(icon);
-
-            var names = string.Join(", ", attachmentNames);
-            attachPanel.Children.Add(new TextBlock
-            {
-                Text = names,
-                FontSize = 11,
-                FontStyle = Windows.UI.Text.FontStyle.Italic,
-                Foreground = dimText,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxWidth = 400
-            });
-
-            stack.Children.Add(attachPanel);
-        }
-
-        // Metadata para respuestas del asistente
-        if (!isUser && !isError && timeMs > 0)
-        {
-            string meta = timeMs >= 1000 ? $"{timeMs / 1000.0:F1}s" : $"{timeMs:F0}ms";
-            if (fromCache)
-            {
-                meta += " · cache";
+                _searchHits.Add(new SearchHit { TextBlock = tb });
             }
-            else if (timeMs > 200)
-            {
-                // Estimacion ~1 token cada 4 chars (sin streaming real desde el backend).
-                int approxTokens = Math.Max(1, mainText.Length / 4);
-                double tps = approxTokens / (timeMs / 1000.0);
-                meta += $" · ~{tps:F1} tok/s";
-            }
-
-            stack.Children.Add(new TextBlock
-            {
-                Text = meta,
-                FontSize = 10,
-                Foreground = dimText,
-                HorizontalAlignment = HorizontalAlignment.Right
-            });
+            return;
         }
 
-        Brush bg = isError ? errorBg : isUser ? userBg : assistantBg;
-        var bubblePadding = compact
-            ? new Thickness(12, 7, 12, 7)
-            : new Thickness(16, 10, 16, 10);
-
-        return new Border
+        int count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
         {
-            Background = bg,
-            CornerRadius = new CornerRadius(isUser ? 16 : 4, 16, isUser ? 4 : 16, 16),
-            Padding = bubblePadding,
-            MaxWidth = 600,
-            HorizontalAlignment = isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-            Child = stack
-        };
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i);
+            FindMatches(child, query);
+        }
+    }
+
+    private static string GetPlainText(TextBlock tb)
+    {
+        if (!string.IsNullOrEmpty(tb.Text)) return tb.Text;
+        var sb = new System.Text.StringBuilder();
+        foreach (var inl in tb.Inlines)
+            AppendInlineText(inl, sb);
+        return sb.ToString();
+    }
+
+    private static void AppendInlineText(Inline inl, System.Text.StringBuilder sb)
+    {
+        switch (inl)
+        {
+            case Run r: sb.Append(r.Text); break;
+            case Span sp:
+                foreach (var c in sp.Inlines) AppendInlineText(c, sb);
+                break;
+            case LineBreak: sb.Append('\n'); break;
+        }
+    }
+
+    private void ClearSearchHighlights()
+    {
+        // Quitar el efecto visual del hit actual (si existe). Como no
+        // modificamos inlines, no hay nada destructivo que restaurar.
+        foreach (var hit in _searchHits)
+        {
+            if (hit.TextBlock?.FontWeight.Weight == Microsoft.UI.Text.FontWeights.Bold.Weight
+                && hit.OriginalWeightSet)
+            {
+                hit.TextBlock.FontWeight = hit.OriginalWeight;
+            }
+        }
+    }
+
+    private void GoToSearchHit(int delta)
+    {
+        if (_searchHits.Count == 0) return;
+
+        // Restaurar peso del hit actual antes de mover
+        if (_searchHitIndex >= 0 && _searchHitIndex < _searchHits.Count)
+        {
+            var prev = _searchHits[_searchHitIndex];
+            if (prev.OriginalWeightSet)
+                prev.TextBlock.FontWeight = prev.OriginalWeight;
+        }
+
+        _searchHitIndex = (_searchHitIndex + delta + _searchHits.Count) % _searchHits.Count;
+        SearchCount.Text = $"{_searchHitIndex + 1}/{_searchHits.Count}";
+        FocusHit(_searchHits[_searchHitIndex]);
+    }
+
+    private void FocusHit(SearchHit hit)
+    {
+        try
+        {
+            // Marcar visualmente el hit actual con peso Bold (capturamos el
+            // peso original para restaurarlo despues)
+            if (!hit.OriginalWeightSet)
+            {
+                hit.OriginalWeight = hit.TextBlock.FontWeight;
+                hit.OriginalWeightSet = true;
+            }
+            hit.TextBlock.FontWeight = Microsoft.UI.Text.FontWeights.Bold;
+
+            hit.TextBlock.StartBringIntoView(new BringIntoViewOptions
+            {
+                AnimationDesired = true,
+                VerticalAlignmentRatio = 0.3,
+            });
+        }
+        catch { }
     }
 
     // ========================================================================
-    // Archivos adjuntos
+    // Adjuntos
     // ========================================================================
 
     private async void OnAttachFile(object sender, RoutedEventArgs e)
@@ -646,8 +1050,6 @@ public sealed partial class ChatPage : Page
 
             if (isPdf && _api != null)
             {
-                // Los PDFs se extraen en el backend (PDFium) y viajan al modelo
-                // como texto plano. Nunca los enviamos como base64 crudo al LLM.
                 var buffer = await FileIO.ReadBufferAsync(file);
                 byte[] bytes = new byte[buffer.Length];
                 using var reader = Windows.Storage.Streams.DataReader.FromBuffer(buffer);
@@ -697,7 +1099,6 @@ public sealed partial class ChatPage : Page
 
     private void UpdateAttachmentPanel()
     {
-        // Desuscribir handlers de chips anteriores para evitar leaks
         if (AttachmentList.ItemsSource is List<UIElement> oldChips)
         {
             foreach (var elem in oldChips)
@@ -715,9 +1116,9 @@ public sealed partial class ChatPage : Page
 
         AttachmentPanel.Visibility = Visibility.Visible;
 
-        Brush chipBg     = ThemedBrushes.Get("AlfredChipBg",      Windows.UI.Color.FromArgb(48, 99, 102, 241));
-        Brush chipName   = ThemedBrushes.Get("AlfredTextPrimary", Windows.UI.Color.FromArgb(255, 230, 232, 238));
-        Brush chipSize   = ThemedBrushes.Get("AlfredChipDimText", Windows.UI.Color.FromArgb(180, 255, 255, 255));
+        Brush chipBg   = ThemedBrushes.Get("AlfredChipBg",      Windows.UI.Color.FromArgb(48, 99, 102, 241));
+        Brush chipName = ThemedBrushes.Get("AlfredTextPrimary", Windows.UI.Color.FromArgb(255, 230, 232, 238));
+        Brush chipSize = ThemedBrushes.Get("AlfredChipDimText", Windows.UI.Color.FromArgb(180, 255, 255, 255));
 
         var chips = _attachedFiles.Select((f, i) =>
         {
@@ -748,7 +1149,7 @@ public sealed partial class ChatPage : Page
 
             var removeBtn = new Button
             {
-                Content = new FontIcon { Glyph = "\uE711", FontSize = 10 },
+                Content = new FontIcon { Glyph = "", FontSize = 10 },
                 Padding = new Thickness(2),
                 Tag = i
             };
@@ -772,10 +1173,7 @@ public sealed partial class ChatPage : Page
         }
     }
 
-    private void OnRemoveAllAttachments(object sender, RoutedEventArgs e)
-    {
-        ClearAttachments();
-    }
+    private void OnRemoveAllAttachments(object sender, RoutedEventArgs e) => ClearAttachments();
 
     private void ClearAttachments()
     {
@@ -784,7 +1182,7 @@ public sealed partial class ChatPage : Page
     }
 
     // ========================================================================
-    // Drag and Drop
+    // Drag & Drop
     // ========================================================================
 
     private void OnDragOver(object sender, DragEventArgs e)
@@ -835,21 +1233,40 @@ public sealed partial class ChatPage : Page
 
         _conversationId = conversationId;
         ChatContext.ConversationId = conversationId;
-        _bubbles.Clear();
+        _root = null;
         MessagesPanel.Children.Clear();
         WelcomePanel.Visibility = Visibility.Collapsed;
 
         var detail = await _api.GetConversationAsync(conversationId);
         if (detail == null) return;
 
+        // Reconstruir turnos a partir del historial plano (alternancia user/assistant).
+        ChatTurn? lastTurn = null;
         foreach (var msg in detail.Messages)
         {
-            _bubbles.Add(new ChatBubble { Text = msg.Content, Role = msg.Role });
-            MessagesPanel.Children.Add(CreateBubbleElement(msg.Content, msg.Role, 0, false));
+            if (msg.Role == "user")
+            {
+                var v = new TurnVariant
+                {
+                    UserText = msg.Content,
+                    Pending = false,
+                };
+                var turn = new ChatTurn();
+                turn.Variants.Add(v);
+                turn.ActiveIndex = 0;
+
+                if (_root == null) _root = turn;
+                else if (lastTurn != null) lastTurn.Active.NextTurn = turn;
+                lastTurn = turn;
+            }
+            else if (msg.Role == "assistant" && lastTurn != null)
+            {
+                lastTurn.Active.AssistantText = msg.Content;
+                lastTurn.Active.Pending = false;
+            }
         }
 
-        ChatScroll.UpdateLayout();
-        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+        RebuildAllBubbles();
     }
 
     // ========================================================================
@@ -862,7 +1279,6 @@ public sealed partial class ChatPage : Page
         NotificationBar.Message = message;
         NotificationBar.IsOpen = true;
 
-        // Auto-cerrar despues de 4 segundos
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         timer.Tick += (_, _) =>
         {
@@ -871,10 +1287,6 @@ public sealed partial class ChatPage : Page
         };
         timer.Start();
     }
-
-    // ========================================================================
-    // Helpers
-    // ========================================================================
 
     private static string FormatFileSize(long bytes)
     {
@@ -888,13 +1300,30 @@ public sealed partial class ChatPage : Page
     // Tipos internos
     // ========================================================================
 
-    private sealed class ChatBubble
+    private sealed class ChatTurn
     {
-        public string Text { get; init; } = "";
-        public string Role { get; init; } = "";
-        public double TimeMs { get; init; }
-        public bool FromCache { get; init; }
-        public List<string>? AttachmentNames { get; init; }
+        public List<TurnVariant> Variants { get; } = new();
+        public int ActiveIndex { get; set; }
+        public TurnVariant Active => Variants[ActiveIndex];
+    }
+
+    private sealed class TurnVariant
+    {
+        public string UserText { get; set; } = "";
+        public List<string>? AttachmentNames { get; set; }
+        public List<AttachedFileData>? Attachments { get; set; }
+        public string AssistantText { get; set; } = "";
+        public double TimeMs { get; set; }
+        public bool FromCache { get; set; }
+        public bool Cancelled { get; set; }
+        public bool Pending { get; set; }
+        public bool IsError { get; set; }
+        public ChatTurn? NextTurn { get; set; }
+    }
+
+    private sealed class LiveAssistantBubble
+    {
+        public TextBlock Text { get; init; } = null!;
     }
 
     private sealed class AttachedFileInfo
@@ -902,5 +1331,12 @@ public sealed partial class ChatPage : Page
         public string Name { get; init; } = "";
         public long SizeBytes { get; init; }
         public string Content { get; init; } = "";
+    }
+
+    private sealed class SearchHit
+    {
+        public TextBlock TextBlock { get; init; } = null!;
+        public Windows.UI.Text.FontWeight OriginalWeight { get; set; }
+        public bool OriginalWeightSet { get; set; }
     }
 }

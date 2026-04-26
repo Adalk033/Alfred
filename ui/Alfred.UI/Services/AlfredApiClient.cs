@@ -395,6 +395,17 @@ public sealed class AlfredApiClient : IDisposable
         return await DeleteAsync($"/conversations/{id}/messages");
     }
 
+    /// <summary>
+    /// Persistir un mensaje en una conversacion existente sin disparar inferencia.
+    /// Usado para reconstruir la historia tras edit/regenerate o cambio de variante.
+    /// </summary>
+    public async Task<bool> AddMessageAsync(string id, string role, string content)
+    {
+        var response = await PostRawAsync($"/conversations/{id}/messages",
+            new { role, content }, 15);
+        return response?.IsSuccessStatusCode ?? false;
+    }
+
     public async Task<List<ConversationThread>> SearchConversationsAsync(string query)
     {
         var all = await ListConversationsAsync(200, 0);
