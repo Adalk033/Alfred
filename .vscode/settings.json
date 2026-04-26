@@ -1,7 +1,8 @@
 {
-    "cmake.generator": "MinGW Makefiles",
-    "cmake.buildDirectory": "${workspaceFolder}/build_mingw",
+    "cmake.generator": "Visual Studio 18 2026",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.configureSettings": {
-        "ALFRED_CUDA": "OFF"
+        "ALFRED_CUDA": "ON",
+        "ALFRED_CUDA_ARCH": "89"
     }
 }

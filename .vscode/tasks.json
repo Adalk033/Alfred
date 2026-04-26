@@ -5,7 +5,18 @@
             "label": "CMake: Configure",
             "type": "shell",
             "command": "cmake",
-            "args": ["-S", ".", "-B", "build_mingw", "-G", "MinGW Makefiles", "-DALFRED_CUDA=OFF"],
+            "args": [
+                "-S",
+                ".",
+                "-B",
+                "build",
+                "-G",
+                "Visual Studio 17 2022",
+                "-DALFRED_CUDA=ON",
+                "-DALFRED_CUDA_ARCH=89",
+                "-DCMAKE_CUDA_COMPILER=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2/bin/nvcc.exe",
+                "-DCUDAToolkit_ROOT=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2",
+            ],
             "group": "build",
             "problemMatcher": []
         },
@@ -13,28 +24,47 @@
             "label": "CMake: Build All",
             "type": "shell",
             "command": "cmake",
-            "args": ["--build", "build_mingw", "--config", "Debug"],
+            "args": [
+                "--build",
+                "build",
+                "--config",
+                "Debug"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "dependsOn": "CMake: Configure",
-            "problemMatcher": ["$msCompile", "$gcc"]
+            "problemMatcher": [
+                "$msCompile"
+            ]
         },
         {
             "label": "CMake: Build Release",
             "type": "shell",
             "command": "cmake",
-            "args": ["--build", "build_mingw", "--config", "Release"],
+            "args": [
+                "--build",
+                "build",
+                "--config",
+                "Release"
+            ],
             "group": "build",
             "dependsOn": "CMake: Configure",
-            "problemMatcher": ["$msCompile", "$gcc"]
+            "problemMatcher": [
+                "$msCompile"
+            ]
         },
         {
             "label": "CMake: Clean",
             "type": "shell",
             "command": "cmake",
-            "args": ["--build", "build_mingw", "--target", "clean"],
+            "args": [
+                "--build",
+                "build",
+                "--target",
+                "clean"
+            ],
             "group": "build",
             "problemMatcher": []
         },
