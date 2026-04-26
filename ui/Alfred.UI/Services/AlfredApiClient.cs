@@ -105,25 +105,37 @@ public sealed class AlfredApiClient : IDisposable
         QueryResponse? finalResponse = null;
         try
         {
+            // ConfigureAwait(false) en todos los awaits de I/O: el loop SSE no debe
+            // reanudar continuaciones en el hilo de UI (lo congelaria mientras
+            // esperamos tokens del backend). Los callbacks onStarted/onToken ya
+            // hacen marshalling explicito via DispatcherQueue.TryEnqueue.
             using var response = await _http.SendAsync(httpReq,
-                HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                var errBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                var errBody = await response.Content.ReadAsStringAsync(cancellationToken)
+                    .ConfigureAwait(false);
                 System.Diagnostics.Debug.WriteLine($"[AlfredAPI] Stream error {response.StatusCode}: {errBody}");
                 return null;
             }
 
-            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken)
+                .ConfigureAwait(false);
             using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
 
             string? currentEvent = null;
             var dataBuffer = new StringBuilder();
 
-            while (!reader.EndOfStream)
+            // Nota: NO usar reader.EndOfStream como condicion del loop. Es una
+            // propiedad sincrona que bloquea el hilo haciendo I/O sobre el stream
+            // subyacente cuando el buffer esta vacio. ReadLineAsync ya retorna
+            // null al alcanzar EOF, asi que basta con eso.
+            while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var line = await reader.ReadLineAsync(cancellationToken);
+                var line = await reader.ReadLineAsync(cancellationToken)
+                    .ConfigureAwait(false);
                 if (line == null) break;
 
                 if (line.Length == 0)

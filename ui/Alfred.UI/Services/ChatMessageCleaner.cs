@@ -38,20 +38,46 @@ public static class ChatMessageCleaner
     // Labels que marcan el inicio del bloque "reasoning".
     private static readonly string[] ReasoningLabels =
     [
-        "Analysis", "Analisis", "Analisi",
-        "Execution", "Ejecucion",
+        "Analysis", "Analisis", "Análisis", "Analisi",
+        "Execution", "Ejecucion", "Ejecución",
         "Reasoning", "Razonamiento",
         "Thinking", "Pensamiento",
-        "Internal", "Interno"
+        "Internal", "Interno",
+        "Internal Monologue", "Monologo Interno", "Monólogo Interno",
+        "Response Strategy", "Estrategia de Respuesta",
+        "Self-Correction", "Self Correction", "Autocorreccion", "Autocorrección",
+        "Language Check", "Verificacion de Idioma", "Verificación de Idioma",
     ];
 
     // Labels que marcan el inicio del bloque "respuesta final".
     private static readonly string[] ResponseLabels =
     [
-        "Response", "Respuesta",
+        "Final Output Generation", "Generacion de Respuesta Final", "Generación de Respuesta Final",
         "Final response", "Respuesta final",
-        "Answer", "Resultado", "Output"
+        "Final Output", "Salida Final",
+        "Output Generation", "Generacion de Salida", "Generación de Salida",
+        "Response", "Respuesta",
+        "Answer", "Resultado", "Output",
     ];
+
+    // Patrones unificados que aceptan dos formas para cualquier label:
+    //   1) "Label:" o "**Label:**"  (forma con dos puntos, opcionalmente en negrita)
+    //   2) "(Label)" o "(Label texto extra):"  (forma entre parentesis con colon opcional)
+    // Se ordena por longitud descendente para que labels mas largos ganen sobre
+    // los cortos (p.ej. "Final Output Generation" antes que "Output").
+    private static readonly Regex ResponseTriggerPattern = BuildLabelTriggerPattern(ResponseLabels);
+    private static readonly Regex ReasoningTriggerPattern = BuildLabelTriggerPattern(ReasoningLabels);
+
+    private static Regex BuildLabelTriggerPattern(string[] labels)
+    {
+        string alt = string.Join("|",
+            labels.OrderByDescending(s => s.Length).Select(Regex.Escape));
+        string pattern =
+            @"(?:^|\r?\n)[ \t]*(?:\*\*|__)?[ \t]*" +
+            $@"(?:\((?:{alt})[^)\n]*\)[ \t]*:?|(?:{alt})[ \t]*:)" +
+            @"[ \t]*(?:\*\*|__)?\s*";
+        return new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    }
 
     public static Cleaned Clean(string? raw)
     {
@@ -63,7 +89,18 @@ public static class ChatMessageCleaner
         text = ChannelTagPattern.Replace(text, "");
         text = InternalParenPattern.Replace(text, "");
 
-        var (reasoning, body) = SplitReasoningAndResponse(text);
+        // Modelos como Gemma 3 4B-IT a veces emiten su monologo interno DESPUES
+        // de la respuesta, separado por una linea "---". Si detectamos marcadores
+        // meta-reflexivos en ese trailing, lo extraemos como reasoning.
+        var (trailingReasoning, withoutTrailing) = TryExtractTrailingReasoning(text);
+
+        var (reasoning, body) = SplitReasoningAndResponse(withoutTrailing);
+
+        // Combinar ambos bloques de razonamiento si los hay.
+        if (trailingReasoning != null)
+            reasoning = string.IsNullOrWhiteSpace(reasoning)
+                ? trailingReasoning
+                : reasoning + "\n\n---\n\n" + trailingReasoning;
 
         body = Normalize(body);
         string? cleanedReasoning = reasoning != null ? Normalize(reasoning) : null;
@@ -83,59 +120,84 @@ public static class ChatMessageCleaner
         };
     }
 
-    private static (string? reasoning, string body) SplitReasoningAndResponse(string text)
+    // Linea separadora horizontal independiente (---, ***, ___).
+    private static readonly Regex TrailingSeparatorPattern = new(
+        @"(?:^|\r?\n)[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*(?=\r?\n|$)",
+        RegexOptions.Compiled);
+
+    // Marcadores fuertes de monologo interno tipico de Gemma/Phi/etc.
+    private static readonly Regex TrailingReasoningMarkerPattern = new(
+        @"\*\*\s*(?:Decisión|Decision|Análisis|Analisis|Analysis|Actualización de contexto|Actualizacion de contexto|Context update|Respuesta a generar|Response to generate|Razonamiento|Reasoning|Pensamiento|Thinking|Plan|Estado|State)\b[^*]*\*\*"
+        + @"|\bsoy una IA\b|\bI am an AI\b|\bdebo asumir\b|\bI should assume\b"
+        + @"|\bmi última respuesta\b|\bmi ultima respuesta\b|\bmy last response\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // Comienzo con parentesis de auto-referencia: "(El usuario...", "(The user...".
+    private static readonly Regex SelfReferenceParenStartPattern = new(
+        @"^\s*\(\s*(?:El usuario|La usuaria|The user|I |Yo |Como (?:soy|asistente))",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static (string? trailingReasoning, string body) TryExtractTrailingReasoning(string text)
     {
-        // Busca un marcador de respuesta final. Todo lo anterior (si contiene
-        // un label de reasoning) se considera analisis interno.
-        foreach (var label in ResponseLabels)
+        var matches = TrailingSeparatorPattern.Matches(text);
+        if (matches.Count == 0) return (null, text);
+
+        // Probar separadores empezando desde el ultimo: lo que aparezca despues
+        // del separador final es lo mas probable que sea monologo trasero.
+        for (int i = matches.Count - 1; i >= 0; i--)
         {
-            var pattern = new Regex(
-                $@"(^|\n)\s*(?:\*\*|__)?\s*{Regex.Escape(label)}\s*:\s*(?:\*\*|__)?\s*(\r?\n|\s*)",
-                RegexOptions.IgnoreCase);
+            var m = matches[i];
+            int afterStart = m.Index + m.Length;
+            if (afterStart >= text.Length) continue;
 
-            var match = pattern.Match(text);
-            if (!match.Success) continue;
+            string after = text[afterStart..].TrimStart('\r', '\n', ' ', '\t');
+            if (string.IsNullOrWhiteSpace(after)) continue;
 
-            string before = text[..match.Index];
-            string after = text[(match.Index + match.Length)..];
-
-            if (ContainsReasoningLabel(before))
-                return (StripLeadingReasoningLabel(before), after);
-
-            // Aunque no haya label explicito, si hay contenido antes
-            // de "Response:", tratarlo como razonamiento.
-            if (!string.IsNullOrWhiteSpace(before))
-                return (before, after);
-
-            return (null, after);
+            if (LooksLikeTrailingReasoning(after))
+            {
+                string before = text[..m.Index].TrimEnd();
+                return (after, before);
+            }
         }
 
         return (null, text);
     }
 
-    private static bool ContainsReasoningLabel(string text)
+    private static bool LooksLikeTrailingReasoning(string after)
     {
-        foreach (var label in ReasoningLabels)
-        {
-            var pattern = new Regex(
-                $@"(^|\n)\s*(?:\*\*|__)?\s*{Regex.Escape(label)}\s*:",
-                RegexOptions.IgnoreCase);
-            if (pattern.IsMatch(text)) return true;
-        }
-        return false;
+        if (SelfReferenceParenStartPattern.IsMatch(after)) return true;
+        return TrailingReasoningMarkerPattern.IsMatch(after);
     }
+
+    private static (string? reasoning, string body) SplitReasoningAndResponse(string text)
+    {
+        // Busca el primer marcador de respuesta final. Todo lo anterior, si
+        // contiene un label de reasoning o tiene contenido sustancial, se
+        // considera monologo interno.
+        var match = ResponseTriggerPattern.Match(text);
+        if (!match.Success) return (null, text);
+
+        string before = text[..match.Index];
+        string after = text[(match.Index + match.Length)..];
+
+        if (ContainsReasoningLabel(before))
+            return (StripLeadingReasoningLabel(before), after);
+
+        if (!string.IsNullOrWhiteSpace(before))
+            return (before, after);
+
+        return (null, after);
+    }
+
+    private static bool ContainsReasoningLabel(string text)
+        => ReasoningTriggerPattern.IsMatch(text);
 
     private static string StripLeadingReasoningLabel(string text)
     {
-        foreach (var label in ReasoningLabels)
-        {
-            var pattern = new Regex(
-                $@"^\s*(?:\*\*|__)?\s*{Regex.Escape(label)}\s*:\s*(?:\*\*|__)?\s*",
-                RegexOptions.IgnoreCase);
-            var match = pattern.Match(text);
-            if (match.Success)
-                return text[match.Length..];
-        }
+        var match = ReasoningTriggerPattern.Match(text);
+        // Solo strip si el label aparece al principio (modulo whitespace).
+        if (match.Success && string.IsNullOrWhiteSpace(text[..match.Index]))
+            return text[(match.Index + match.Length)..];
         return text;
     }
 
