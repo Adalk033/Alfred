@@ -134,6 +134,9 @@ private:
     // Crear sampler chain
     llama_sampler* create_sampler();
 
+    // Detecta head_dim de la K-cache leyendo metadatos GGUF. 0 si no se sabe.
+    int detect_head_dim_k() const;
+
     void cleanup();
 };
 

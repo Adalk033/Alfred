@@ -41,7 +41,7 @@ struct AppConfig {
     // --- LLM: tuning avanzado ---
     int  n_ubatch         = 0;       // 0 = igual a n_batch
     int  n_threads_batch  = 0;       // 0 = igual a n_threads
-    int  flash_attn       = -1;      // -1 auto, 0 off, 1 on
+    int  flash_attn       = -1;      // -1 auto, 0 off, 1 on. Auto: el engine deshabilita FA si head_dim>256 (no soportado por kernel CUDA)
     bool offload_kqv      = true;
     bool use_mmap         = true;
     bool use_mlock        = false;

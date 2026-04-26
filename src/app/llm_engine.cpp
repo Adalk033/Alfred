@@ -33,6 +33,36 @@ static llama_flash_attn_type to_flash_attn(int v) {
     return LLAMA_FLASH_ATTN_TYPE_AUTO;
 }
 
+// Lee un metadato GGUF (string) del modelo cargado. Devuelve "" si no existe.
+static std::string read_meta_str(const llama_model* m, const std::string& key) {
+    if (!m) return "";
+    char buf[256];
+    int n = llama_model_meta_val_str(m, key.c_str(), buf, sizeof(buf));
+    if (n <= 0) return "";
+    return std::string(buf, static_cast<size_t>(n));
+}
+
+int LLMEngine::detect_head_dim_k() const {
+    if (!model_) return 0;
+
+    // Path preferido: metadato '<arch>.attention.key_length'. Soporta modelos
+    // donde head_dim != n_embd / n_head (Gemma 3/4, MQA con dimensiones custom).
+    std::string arch = read_meta_str(model_, "general.architecture");
+    if (!arch.empty()) {
+        std::string v = read_meta_str(model_, arch + ".attention.key_length");
+        if (!v.empty()) {
+            try { return std::stoi(v); } catch (...) {}
+        }
+    }
+
+    // Fallback: estimacion clasica n_embd / n_head. Vale para Llama, Mistral,
+    // Qwen, Phi y la mayoria de arquitecturas que no expongan key_length.
+    int n_embd = llama_model_n_embd(model_);
+    int n_head = llama_model_n_head(model_);
+    if (n_embd > 0 && n_head > 0) return n_embd / n_head;
+    return 0;
+}
+
 LLMEngine::LLMEngine() = default;
 
 LLMEngine::~LLMEngine() {
@@ -144,7 +174,23 @@ bool LLMEngine::load_model(const LLMConfig& config) {
     ctx_params.n_ubatch        = config.n_ubatch > 0
         ? static_cast<uint32_t>(config.n_ubatch)
         : static_cast<uint32_t>(config.n_batch);
-    ctx_params.flash_attn_type = to_flash_attn(config.flash_attn);
+
+    // FlashAttention en CUDA solo soporta head_dim hasta 256. Modelos con
+    // head_dim mayor (p.ej. Gemma 4 E4B usa 512) abortan dentro de
+    // llama_init_from_model si pedimos auto/on. Detectamos head_dim leyendo
+    // el metadato GGUF '<arch>.attention.key_length' y, si supera 256,
+    // forzamos OFF aunque el usuario haya pedido otra cosa.
+    int requested_fa = config.flash_attn;
+    int head_dim_k = detect_head_dim_k();
+    if (head_dim_k > 0) {
+        log_info("  Model head_dim (K): " + std::to_string(head_dim_k));
+    }
+    if (head_dim_k > 256 && requested_fa != 0) {
+        log_warn("FlashAttention deshabilitado: head_dim=" + std::to_string(head_dim_k) +
+                 " supera lo soportado por el kernel CUDA (256).");
+        requested_fa = 0;
+    }
+    ctx_params.flash_attn_type = to_flash_attn(requested_fa);
     ctx_params.offload_kqv     = config.offload_kqv;
     ctx_params.type_k          = parse_cache_type(config.cache_type_k);
     ctx_params.type_v          = parse_cache_type(config.cache_type_v);
