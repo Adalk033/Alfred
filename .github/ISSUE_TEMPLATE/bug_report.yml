@@ -1,0 +1,130 @@
+name: Reporte de bug
+description: Reportar un fallo, crash, error de inferencia o problema de rendimiento.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por tomarte el tiempo de reportar un bug. Para que el equipo
+        pueda reproducirlo, necesitamos detalles sobre tu hardware (GPU/CPU),
+        el modelo cargado y los logs relevantes.
+
+        Tip: en la app puedes copiar el reporte de GPU desde el endpoint
+        `GET http://127.0.0.1:8000/gpu/report` y el estado del modelo desde
+        `GET http://127.0.0.1:8000/models/status`.
+
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripcion del problema
+      description: Que esperabas que pasara y que paso en cambio.
+      placeholder: |
+        Al enviar un mensaje con un PDF adjunto, la app se queda colgada en
+        "Procesando archivos..." y nunca recibe el primer token.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduccion
+    attributes:
+      label: Pasos para reproducir
+      description: Lista numerada con los pasos minimos para reproducir el bug.
+      placeholder: |
+        1. Iniciar Alfred con un modelo Q4_K_M de 7B cargado.
+        2. Adjuntar un PDF de ~30 paginas.
+        3. Escribir "resume el documento" y pulsar Enviar.
+        4. Observar que LoadingHint sigue rotando indefinidamente.
+    validations:
+      required: true
+
+  - type: textarea
+    id: gpu
+    attributes:
+      label: GPU / Hardware
+      description: |
+        Pega la salida de `GET /gpu/report` o describe tu setup. Incluye
+        nombre del dispositivo, VRAM total/libre, drivers CUDA/cuDNN.
+      render: text
+      placeholder: |
+        device_name: NVIDIA GeForce RTX 4070 Ti
+        vram_total_mb: 12282
+        vram_used_mb: 8420
+        has_cuda: true
+        cuda_version: 12.4
+        cpu_cores: 16
+        OS: Windows 11 Pro 26200
+    validations:
+      required: true
+
+  - type: textarea
+    id: modelo
+    attributes:
+      label: Modelo y configuracion de inferencia
+      description: |
+        Pega la salida de `GET /models/status` y `GET /models/config`, o lista
+        los parametros relevantes (n_ctx, n_gpu_layers, n_batch, flash_attn,
+        cache_type_k/v, etc.).
+      render: text
+      placeholder: |
+        llm_model: Mistral-7B-Instruct-v0.3.Q4_K_M.gguf
+        n_ctx: 8192
+        n_gpu_layers: 33
+        n_batch: 512
+        n_ubatch: 256
+        flash_attn: 1
+        offload_kqv: true
+        cache_type_k: q8_0
+        cache_type_v: q8_0
+        temperature: 0.7
+        max_tokens: 2048
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs relevantes
+      description: |
+        Pega las ultimas ~50 lineas del log del backend (stdout/stderr o
+        `%USERPROFILE%/.alfred/logs/`). Si aplicaron, incluye logs del UI
+        (Output window de Visual Studio o Debug). Quita PII si la hay.
+      render: shell
+      placeholder: |
+        [INFO] Streaming query: resume el documento (conv: 4f...)
+        [WARN] llama_decode took 18452 ms
+        [ERROR] cuBLAS allocation failed: out of memory (12 GB requested)
+    validations:
+      required: false
+
+  - type: input
+    id: version_alfred
+    attributes:
+      label: Version de Alfred
+      description: Version o commit. Visible en el About o en la barra de titulo.
+      placeholder: "v0.4.2 (commit 30db0f2)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severidad
+    attributes:
+      label: Severidad
+      options:
+        - Crash / data loss
+        - Bloqueante (no se puede usar la feature)
+        - Alta (workaround dificil)
+        - Media (workaround facil)
+        - Baja (cosmetico / estetica)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: Busque issues abiertos y cerrados similares.
+          required: true
+        - label: Adjunte logs y configuracion sin secretos / PII.
+          required: true

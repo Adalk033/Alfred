@@ -1,0 +1,41 @@
+name: Solicitud de feature
+description: Proponer una nueva funcionalidad o mejora.
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Que problema quieres resolver
+      description: Describe el caso de uso, no la solucion.
+      placeholder: |
+        Cuando trabajo en conversaciones largas pierdo el hilo y no puedo
+        encontrar mensajes especificos sin scrollear manualmente.
+    validations:
+      required: true
+
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Solucion propuesta
+      placeholder: |
+        Anadir Ctrl+F para buscar dentro de la conversacion activa, con
+        navegacion entre matches y resaltado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+      description: Que otras opciones evaluaste y por que esta es mejor.
+
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto adicional
+      description: |
+        Si la feature depende de hardware (GPU), modelo o de un endpoint
+        especifico, pega los detalles relevantes (`/gpu/report`,
+        `/models/status`).
+      render: text
