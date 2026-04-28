@@ -137,12 +137,12 @@ public sealed class AgentLoop
             foreach (var call in pendingCalls)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var result = await _invoker
+                var toolResult = await _invoker
                     .InvokeAsync(call, ToolTimeout, cancellationToken)
                     .ConfigureAwait(false);
-                nextResults.Add(result);
-                allResults.Add(result);
-                onEvent?.Invoke(new AgentLoopEvent.ToolResultReady(iter, call, result));
+                nextResults.Add(toolResult);
+                allResults.Add(toolResult);
+                onEvent?.Invoke(new AgentLoopEvent.ToolResultReady(iter, call, toolResult));
             }
 
             toolResultsForNext = nextResults;
@@ -159,14 +159,14 @@ public sealed class AgentLoop
             }
         }
 
-        var result = new AgentLoopResult(
+        var loopResult = new AgentLoopResult(
             finalAnswer ?? "",
             finishReason,
             allCalls,
             allResults,
             lastRequestId);
-        onEvent?.Invoke(new AgentLoopEvent.LoopFinished(result));
-        return result;
+        onEvent?.Invoke(new AgentLoopEvent.LoopFinished(loopResult));
+        return loopResult;
     }
 }
 

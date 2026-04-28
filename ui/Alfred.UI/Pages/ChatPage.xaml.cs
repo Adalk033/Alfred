@@ -374,13 +374,17 @@ public sealed partial class ChatPage : Page
             AttachmentNames = variant.AttachmentNames,
             Attachments = variant.Attachments,
             Pending = true,
+            UseAgent = variant.UseAgent,
         };
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
 
         await ResyncBackendUpToTurnAsync(turn);
         RebuildAllBubbles();
-        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
+        if (newVariant.UseAgent)
+            await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
+        else
+            await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
     private async void OnRegenerateAssistant(ChatTurn turn, TurnVariant variant)
@@ -393,13 +397,17 @@ public sealed partial class ChatPage : Page
             AttachmentNames = variant.AttachmentNames,
             Attachments = variant.Attachments,
             Pending = true,
+            UseAgent = variant.UseAgent,
         };
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
 
         await ResyncBackendUpToTurnAsync(turn);
         RebuildAllBubbles();
-        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
+        if (newVariant.UseAgent)
+            await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
+        else
+            await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
     private async void OnSwitchVariant(ChatTurn turn, int delta)

@@ -363,11 +363,6 @@ void handle_query_agent_stream(const httplib::Request& req, httplib::Response& r
     if (!parse_body(req, res, body)) return;
 
     std::string question = body.value("question", "");
-    if (question.empty()) {
-        json_error(res, 400, "Campo 'question' requerido");
-        return;
-    }
-
     std::string conv_id = body.value("conversation_id", "");
 
     std::vector<ToolSpec> tools = body.contains("tools")
@@ -375,12 +370,21 @@ void handle_query_agent_stream(const httplib::Request& req, httplib::Response& r
     std::vector<ToolResult> tool_results = body.contains("tool_results")
         ? parse_tool_results(body["tool_results"]) : std::vector<ToolResult>{};
 
+    // En continuaciones del loop agentico permitimos question vacia si llegan
+    // tool_results. Primera iteracion: question sigue siendo obligatoria.
+    if (question.empty() && tool_results.empty()) {
+        json_error(res, 400, "Campo 'question' requerido salvo continuaciones con 'tool_results'");
+        return;
+    }
+
     // Inyectar archivos adjuntos como contexto adicional (mismo formato que /query).
     std::string attached_context = extract_attached_context(body);
     std::string full_question = question;
-    if (!attached_context.empty()) {
+    if (!question.empty() && !attached_context.empty()) {
         full_question = "Contexto de archivos adjuntos:\n" + attached_context +
                         "\n\nPregunta del usuario: " + question;
+    } else if (question.empty() && !attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context;
     }
 
     log_info("Agent query: " + truncate(question, 80) +

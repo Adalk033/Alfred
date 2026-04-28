@@ -211,10 +211,10 @@ public sealed partial class ChatPage
     {
         Brush dim = ThemedBrushes.Get("AlfredTextSecondary", Colors.LightGray);
         Brush badgeBg = ev.Result == null
-            ? new SolidColorBrush(Microsoft.UI.Color.FromArgb(80, 100, 149, 237))
+            ? new SolidColorBrush(Windows.UI.Color.FromArgb(80, 100, 149, 237))
             : (ev.Result.IsError
-                ? new SolidColorBrush(Microsoft.UI.Color.FromArgb(80, 220, 60, 60))
-                : new SolidColorBrush(Microsoft.UI.Color.FromArgb(80, 60, 180, 100)));
+                ? new SolidColorBrush(Windows.UI.Color.FromArgb(80, 220, 60, 60))
+                : new SolidColorBrush(Windows.UI.Color.FromArgb(80, 60, 180, 100)));
 
         // Header: glyph + nombre + estado
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };

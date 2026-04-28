@@ -274,7 +274,7 @@ public sealed class McpClientService : IAsyncDisposable
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
             var text = ContentToText(response);
-            return (text, response.IsError ?? false);
+            return (text, response.IsError);
         }
 
         public async ValueTask DisposeAsync()
