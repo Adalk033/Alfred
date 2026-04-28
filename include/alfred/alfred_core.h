@@ -16,6 +16,7 @@
 
 #include "alfred/llm_engine.h"
 #include "alfred/model_lifecycle.h"
+#include "alfred/tool_protocol.h"
 
 namespace alfred {
 
@@ -63,6 +64,35 @@ public:
     // Cancela un query streaming en curso. Si request_id == 0, cancela el
     // activo sin importar id. Devuelve true si habia algo que cancelar.
     bool cancel_query(uint64_t request_id = 0);
+
+    // ------------------------------------------------------------------
+    // Modo agente (Fase 0 del plan VSC+MCP)
+    // ------------------------------------------------------------------
+    using ToolCallStreamCallback = std::function<void(const ToolCall&)>;
+
+    struct AgentResult {
+        std::string answer;             // texto generado tras filtrar tool_calls
+        std::vector<ToolCall> tool_calls;
+        bool   cancelled    = false;
+        double total_time_ms = 0.0;
+    };
+
+    // Variante agentica de query_streaming. El system prompt se aumenta
+    // con la lista de `tools` y, si vienen, los `tool_results` previos
+    // (continuaciones del bucle agentico). Los tokens generados pasan por
+    // un parser que separa texto visible de `<tool_call>` estructuradas.
+    //
+    // No persiste nada en el conversation manager: el cliente decide cuando
+    // guardar el turno, porque puede haber multiples tool_calls antes de
+    // tener una respuesta final del modelo.
+    AgentResult query_agent_streaming(
+        const std::string&              question,
+        const std::vector<ToolSpec>&    tools,
+        const std::vector<ToolResult>&  tool_results,
+        StartedCallback                 on_started,
+        TokenStreamCallback             on_token,
+        ToolCallStreamCallback          on_tool_call,
+        const std::string&              conversation_id = "");
 
     // Cambiar modelo LLM
     ModelChangeResult change_model(const std::string& model_path);
