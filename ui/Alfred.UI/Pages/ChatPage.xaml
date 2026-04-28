@@ -190,14 +190,23 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Boton adjuntar archivo -->
-            <Button x:Name="AttachButton" Grid.Column="0"
-                    Click="OnAttachFile"
-                    ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)"
-                    Margin="0,0,4,0"
-                    VerticalAlignment="Bottom" Width="38" Height="38">
-                <FontIcon Glyph="&#xE723;" FontSize="16" />
-            </Button>
+            <!-- Boton adjuntar archivo + toggle de modo agente -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4"
+                        VerticalAlignment="Bottom" Margin="0,0,4,0">
+                <Button x:Name="AttachButton"
+                        Click="OnAttachFile"
+                        ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)"
+                        Width="38" Height="38">
+                    <FontIcon Glyph="&#xE723;" FontSize="16" />
+                </Button>
+                <ToggleButton x:Name="AgentToggle"
+                              Width="38" Height="38"
+                              ToolTipService.ToolTip="Modo agente (usa MCP tools)"
+                              Checked="OnAgentToggleChanged"
+                              Unchecked="OnAgentToggleChanged">
+                    <FontIcon Glyph="&#xE945;" FontSize="16" />
+                </ToggleButton>
+            </StackPanel>
 
             <TextBox x:Name="InputBox" Grid.Column="1"
                      PlaceholderText="Escribe tu pregunta..."

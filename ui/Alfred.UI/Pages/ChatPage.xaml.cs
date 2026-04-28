@@ -24,6 +24,7 @@ public sealed partial class ChatPage : Page
 
     private CancellationTokenSource? _streamCts;
     private long _activeRequestId;
+    private bool _agentMode;
 
     private const int MaxAttachedFiles = 5;
     private readonly List<AttachedFileInfo> _attachedFiles = [];
@@ -192,12 +193,16 @@ public sealed partial class ChatPage : Page
             AttachmentNames = attachmentNames,
             Attachments = attachments,
             Pending = true,
+            UseAgent = _agentMode,
         };
         AppendNewTurn(variant);
 
         await EnsureConversationCreated();
         RebuildAllBubbles();
-        await GenerateForActiveVariantAsync(variant, attachments);
+        if (variant.UseAgent)
+            await GenerateAgentForActiveVariantAsync(variant, attachments);
+        else
+            await GenerateForActiveVariantAsync(variant, attachments);
     }
 
     private async Task EnsureConversationCreated()
@@ -369,13 +374,17 @@ public sealed partial class ChatPage : Page
             AttachmentNames = variant.AttachmentNames,
             Attachments = variant.Attachments,
             Pending = true,
+            UseAgent = variant.UseAgent,
         };
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
 
         await ResyncBackendUpToTurnAsync(turn);
         RebuildAllBubbles();
-        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
+        if (newVariant.UseAgent)
+            await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
+        else
+            await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
     private async void OnRegenerateAssistant(ChatTurn turn, TurnVariant variant)
@@ -388,13 +397,17 @@ public sealed partial class ChatPage : Page
             AttachmentNames = variant.AttachmentNames,
             Attachments = variant.Attachments,
             Pending = true,
+            UseAgent = variant.UseAgent,
         };
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
 
         await ResyncBackendUpToTurnAsync(turn);
         RebuildAllBubbles();
-        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
+        if (newVariant.UseAgent)
+            await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
+        else
+            await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
     private async void OnSwitchVariant(ChatTurn turn, int delta)
@@ -605,6 +618,13 @@ public sealed partial class ChatPage : Page
                 foreach (var element in MarkdownRenderer.Render(mainText))
                     mdPanel.Children.Add(element);
                 stack.Children.Add(mdPanel);
+            }
+
+            // Bloques de tool_call / tool_result (modo agente)
+            if (variant.ToolEvents.Count > 0)
+            {
+                foreach (var ev in variant.ToolEvents)
+                    stack.Children.Add(BuildToolEventExpander(ev));
             }
 
             if (reasoningText != null)
@@ -1319,6 +1339,20 @@ public sealed partial class ChatPage : Page
         public bool Pending { get; set; }
         public bool IsError { get; set; }
         public ChatTurn? NextTurn { get; set; }
+
+        // ---- Modo agente (Fase 3 plan VSC+MCP) ----
+        public bool UseAgent { get; set; }
+        public List<AgentToolEvent> ToolEvents { get; } = new();
+    }
+
+    /// <summary>
+    /// Una invocacion de tool dentro de un turno agentico (par call+result).
+    /// </summary>
+    private sealed class AgentToolEvent
+    {
+        public Models.ToolCall   Call   { get; init; } = null!;
+        public Models.ToolResult? Result { get; set; }
+        public int Iteration { get; init; }
     }
 
     private sealed class LiveAssistantBubble

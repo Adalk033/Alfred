@@ -1,6 +1,7 @@
 using Alfred.UI.Models;
 using Alfred.UI.Pages;
 using Alfred.UI.Services;
+using Alfred.UI.Services.Mcp;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -72,6 +73,20 @@ public sealed partial class MainWindow : Window
             _healthTimer.Start();
             _tokenTimer.Start();
             await LoadModelInfo();
+            // MCP servers (Fase 3): conectar los habilitados en background. No
+            // bloquear el inicio del UI; los errores se reportan en McpServersPage.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var registry = McpServerRegistry.Instance.LoadOrSeed();
+                    await McpClientService.Instance.SyncWithRegistryAsync(registry);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MainWindow] MCP sync error: {ex.Message}");
+                }
+            });
         }
         else
         {
@@ -358,6 +373,7 @@ public sealed partial class MainWindow : Window
                 "chat" => typeof(ChatPage),
                 "conversations" => typeof(ConversationsPage),
                 "models" => typeof(ModelsPage),
+                "mcp" => typeof(McpServersPage),
                 "settings" => typeof(SettingsPage),
                 _ => typeof(ChatPage)
             };
@@ -375,6 +391,7 @@ public sealed partial class MainWindow : Window
             Type t when t == typeof(ChatPage) => "chat",
             Type t when t == typeof(ConversationsPage) => "conversations",
             Type t when t == typeof(ModelsPage) => "models",
+            Type t when t == typeof(McpServersPage) => "mcp",
             Type t when t == typeof(SettingsPage) => "settings",
             _ => null
         };
@@ -474,12 +491,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnWindowClosed(object sender, WindowEventArgs args)
+    private async void OnWindowClosed(object sender, WindowEventArgs args)
     {
         _healthTimer.Stop();
         _tokenTimer.Stop();
         _backend.StatusChanged -= OnBackendStatusChanged;
         NotificationService.Instance.NotificationRequested -= OnNotificationRequested;
+        try { await McpClientService.Instance.DisposeAsync(); } catch { /* ignore */ }
         _backend.Dispose();
         _api.Dispose();
     }

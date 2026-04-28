@@ -189,6 +189,7 @@ set(ALFRED_SOURCES
     src/app/db_manager.cpp
     src/app/llm_engine.cpp
     src/app/model_lifecycle.cpp
+    src/app/tool_protocol.cpp
     src/app/alfred_core.cpp
     src/app/conversation_manager.cpp
     src/app/token_accountant.cpp
@@ -249,6 +250,26 @@ install(FILES "${PDFIUM_RUNTIME}"
     DESTINATION bin
     COMPONENT Runtime
 )
+
+# ============================================================================
+# Tests unitarios ligeros (no requieren llama.cpp ni httplib)
+# ============================================================================
+option(ALFRED_BUILD_TESTS "Compilar tests unitarios ligeros" ON)
+
+if(ALFRED_BUILD_TESTS)
+    add_executable(test_tool_protocol
+        tests/test_tool_protocol.cpp
+        src/app/tool_protocol.cpp
+    )
+    target_include_directories(test_tool_protocol PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_tool_protocol PRIVATE
+        nlohmann_json::nlohmann_json
+    )
+    enable_testing()
+    add_test(NAME tool_protocol COMMAND test_tool_protocol)
+endif()
 
 # ============================================================================
 # Modulos de aprendizaje (opcionales, para estudio de C++)

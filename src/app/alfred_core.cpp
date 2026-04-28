@@ -472,6 +472,124 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     return result;
 }
 
+// ============================================================================
+// Query agentico con tool-calling (Fase 0 del plan VSC+MCP)
+// ============================================================================
+AlfredCore::AgentResult AlfredCore::query_agent_streaming(
+    const std::string&              question,
+    const std::vector<ToolSpec>&    tools,
+    const std::vector<ToolResult>&  tool_results,
+    StartedCallback                 on_started,
+    TokenStreamCallback             on_token,
+    ToolCallStreamCallback          on_tool_call,
+    const std::string&              conversation_id) {
+    ensure_model_loaded();
+    ModelLifecycle::Scope scope(lifecycle_);
+
+    uint64_t my_id = next_request_id_.fetch_add(1);
+    active_request_id_.store(my_id);
+    cancel_flag_.store(false);
+
+    if (on_started) on_started(my_id);
+
+    auto cleanup_active = [this, my_id]() {
+        uint64_t expected = my_id;
+        active_request_id_.compare_exchange_strong(expected, 0);
+    };
+
+    auto start = std::chrono::steady_clock::now();
+    AgentResult result;
+
+    if (!llm_->is_loaded()) {
+        result.answer = "Error: Modelo LLM no cargado. "
+                        "Coloca un modelo GGUF en la carpeta de modelos.";
+        if (on_token) on_token(result.answer);
+        auto end = std::chrono::steady_clock::now();
+        result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
+        cleanup_active();
+        return result;
+    }
+
+    // 1. Contexto agentico: tools + historial de conversacion + tool_results.
+    //    Todo se mete en el placeholder {context} de la plantilla actual.
+    std::string conversation_context;
+    if (!conversation_id.empty()) {
+        const int context_max = llm_->context_length();
+        const int reserved    = get_config().max_tokens;
+        const int safety      = 256;   // mas margen porque inyectamos tools
+
+        int system_toks   = llm_->count_tokens(resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS));
+        int question_toks = llm_->count_tokens(question);
+        if (system_toks   < 0) system_toks   = 512;
+        if (question_toks < 0) question_toks = static_cast<int>(question.size()) / 4;
+
+        const int history_budget = context_max - reserved - system_toks - question_toks - safety;
+        if (history_budget > 0) {
+            auto msgs = ConversationManager::instance()
+                .select_history_within_budget(conversation_id, *llm_, history_budget);
+            conversation_context = ConversationManager::format_messages_as_context(msgs);
+        }
+    }
+
+    std::string agent_context = format_tools_section(tools);
+    if (!conversation_context.empty()) {
+        agent_context += "\n";
+        agent_context += conversation_context;
+    }
+    agent_context += format_tool_results_section(tool_results);
+
+    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, question);
+
+    // 2. Parser de tool_calls envolviendo el callback de tokens.
+    ToolCallParser parser;
+
+    auto wrapped_cb = [this, &parser, &on_token, &on_tool_call, &result]
+                      (const std::string& tok) -> bool {
+        if (cancel_flag_.load()) return false;
+        parser.feed(tok,
+            [&](const std::string& clean) {
+                if (clean.empty()) return;
+                result.answer += clean;
+                if (on_token) on_token(clean);
+            },
+            [&](const ToolCall& tc) {
+                result.tool_calls.push_back(tc);
+                if (on_tool_call) on_tool_call(tc);
+            });
+        return true;
+    };
+
+    auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
+
+    // Vaciar buffers retenidos (sufijos parciales / tool_calls sin cerrar).
+    parser.flush(
+        [&](const std::string& clean) {
+            if (clean.empty()) return;
+            result.answer += clean;
+            if (on_token) on_token(clean);
+        },
+        [&](const ToolCall& tc) {
+            result.tool_calls.push_back(tc);
+            if (on_tool_call) on_tool_call(tc);
+        });
+
+    result.cancelled = cancel_flag_.load();
+    if (!llm_result.success && llm_result.text.empty() && !result.cancelled) {
+        std::string err = "\n[Error generando respuesta: " + llm_result.error + "]";
+        result.answer += err;
+        if (on_token) on_token(err);
+    }
+
+    // Recortar espacios extremos, igual que query_streaming.
+    result.answer = trim(result.answer);
+
+    auto end = std::chrono::steady_clock::now();
+    result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+    cleanup_active();
+    return result;
+}
+
 bool AlfredCore::cancel_query(uint64_t request_id) {
     uint64_t active = active_request_id_.load();
     if (active == 0) return false;

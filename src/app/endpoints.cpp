@@ -15,6 +15,7 @@
 #include "alfred/string_utils.h"
 #include "alfred/token_accountant.h"
 #include "alfred/pdf_extractor.h"
+#include "alfred/tool_protocol.h"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -310,6 +311,148 @@ void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
     data["cancelled"] = cancelled;
     data["request_id"] = request_id;
     json_ok(res, data);
+}
+
+// ============================================================================
+// Query agentico (tool-calling)
+// ============================================================================
+
+// Helper: parsea un array de ToolSpec desde JSON. Tolera campos faltantes.
+static std::vector<ToolSpec> parse_tools(const json& arr) {
+    std::vector<ToolSpec> out;
+    if (!arr.is_array()) return out;
+    for (const auto& item : arr) {
+        if (!item.is_object()) continue;
+        ToolSpec t;
+        t.name        = item.value("name", std::string{});
+        if (t.name.empty()) continue;
+        t.description = item.value("description", std::string{});
+        if (item.contains("input_schema")) {
+            t.input_schema = item["input_schema"];
+        } else {
+            t.input_schema = json::object();
+        }
+        out.push_back(std::move(t));
+    }
+    return out;
+}
+
+// Helper: parsea un array de ToolResult desde JSON.
+static std::vector<ToolResult> parse_tool_results(const json& arr) {
+    std::vector<ToolResult> out;
+    if (!arr.is_array()) return out;
+    for (const auto& item : arr) {
+        if (!item.is_object()) continue;
+        ToolResult r;
+        r.id      = item.value("id", std::string{});
+        // content puede venir como string directo o como objeto que serializamos
+        if (item.contains("content")) {
+            const auto& c = item["content"];
+            r.content = c.is_string() ? c.get<std::string>() : c.dump();
+        }
+        r.is_error = item.value("is_error", false);
+        if (r.id.empty() && r.content.empty()) continue;
+        out.push_back(std::move(r));
+    }
+    return out;
+}
+
+void handle_query_agent_stream(const httplib::Request& req, httplib::Response& res,
+                                AlfredCore& core) {
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    std::string question = body.value("question", "");
+    std::string conv_id = body.value("conversation_id", "");
+
+    std::vector<ToolSpec> tools = body.contains("tools")
+        ? parse_tools(body["tools"]) : std::vector<ToolSpec>{};
+    std::vector<ToolResult> tool_results = body.contains("tool_results")
+        ? parse_tool_results(body["tool_results"]) : std::vector<ToolResult>{};
+
+    // En continuaciones del loop agentico permitimos question vacia si llegan
+    // tool_results. Primera iteracion: question sigue siendo obligatoria.
+    if (question.empty() && tool_results.empty()) {
+        json_error(res, 400, "Campo 'question' requerido salvo continuaciones con 'tool_results'");
+        return;
+    }
+
+    // Inyectar archivos adjuntos como contexto adicional (mismo formato que /query).
+    std::string attached_context = extract_attached_context(body);
+    std::string full_question = question;
+    if (!question.empty() && !attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context +
+                        "\n\nPregunta del usuario: " + question;
+    } else if (question.empty() && !attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context;
+    }
+
+    log_info("Agent query: " + truncate(question, 80) +
+             " | tools=" + std::to_string(tools.size()) +
+             " | tool_results=" + std::to_string(tool_results.size()) +
+             (conv_id.empty() ? "" : " | conv=" + conv_id));
+
+    res.set_header("Cache-Control", "no-cache");
+    res.set_header("Connection", "keep-alive");
+    res.set_header("X-Accel-Buffering", "no");
+
+    // Capturar por valor: el provider chunked sobrevive al stack de este handler.
+    std::string captured_question = full_question;
+    std::string captured_conv_id  = conv_id;
+    auto        captured_tools    = std::move(tools);
+    auto        captured_results  = std::move(tool_results);
+
+    res.set_chunked_content_provider(
+        "text/event-stream",
+        [&core, captured_question, captured_conv_id, captured_tools, captured_results]
+        (size_t /*offset*/, httplib::DataSink& sink) -> bool {
+            auto write_event = [&sink](const std::string& evt, const json& data) -> bool {
+                std::string out = sse_event(evt, data);
+                return sink.write(out.data(), out.size());
+            };
+
+            auto on_started = [&](uint64_t request_id) {
+                write_event("start", json{{"request_id", request_id}});
+            };
+
+            auto on_token = [&](const std::string& tok) -> bool {
+                if (sink.is_writable && !sink.is_writable()) return false;
+                return write_event("token", json{{"text", tok}});
+            };
+
+            auto on_tool_call = [&](const ToolCall& tc) {
+                json data;
+                data["id"]        = tc.id;
+                data["name"]      = tc.name;
+                data["arguments"] = tc.arguments;
+                write_event("tool_call", data);
+            };
+
+            AlfredCore::AgentResult result = core.query_agent_streaming(
+                captured_question, captured_tools, captured_results,
+                on_started, on_token, on_tool_call, captured_conv_id);
+
+            json done_payload;
+            done_payload["answer"]     = result.answer;
+            done_payload["cancelled"]  = result.cancelled;
+            done_payload["time_ms"]    = result.total_time_ms;
+            done_payload["tool_calls"] = json::array();
+            for (const auto& tc : result.tool_calls) {
+                done_payload["tool_calls"].push_back({
+                    {"id",        tc.id},
+                    {"name",      tc.name},
+                    {"arguments", tc.arguments},
+                });
+            }
+            done_payload["finish_reason"] = result.cancelled ? "cancelled"
+                : (result.tool_calls.empty() ? "stop" : "tool_calls");
+            if (!captured_conv_id.empty())
+                done_payload["conversation_id"] = captured_conv_id;
+
+            write_event("done", done_payload);
+            sink.done();
+            return true;
+        });
 }
 
 
@@ -1147,6 +1290,9 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Post("/query/cancel", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_query_cancel(req, res, core);
+    });
+    server.Post("/query/agent/stream", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_query_agent_stream(req, res, core);
     });
 
     // Conversaciones
