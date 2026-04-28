@@ -1,17 +1,25 @@
 // Provider de la vista lateral de chat. Inicializa el webview, sirve el HTML y
-// hace de puente entre el webview y el AlfredClient.
+// hace de puente entre el webview y AlfredClient.
 
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
+import { AgentSession } from "../agent/AgentSession";
+import { ApprovalGate } from "../agent/Approval";
+import type { ProposedContentProvider } from "../agent/proposedContentProvider";
+import { WorkspaceFs } from "../agent/WorkspaceFs";
+import type { AgentLoopEvent } from "../agent/types";
 import { AlfredClient, AlfredApiError } from "../api/AlfredClient";
 import { HealthMonitor } from "../api/health";
 import { ConversationStore } from "../conversations/ConversationStore";
 import type {
   ChatMessage,
+  ChatMode,
   FromWebviewMessage,
   ModelInfo,
   ToWebviewMessage,
 } from "./messages";
+
+const MODE_KEY = "alfred.chatMode";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = "alfred.chatView";
@@ -27,15 +35,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private conversationId: string | null = null;
   private webviewReady = false;
 
+  private mode: ChatMode;
+  private readonly workspaceFs: WorkspaceFs | null;
+  private readonly agentSession: AgentSession | null;
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly client: AlfredClient,
     private readonly health: HealthMonitor,
     private readonly store: ConversationStore,
+    proposedProvider: ProposedContentProvider,
   ) {
     this.conversationId = store.getActiveId();
     if (this.conversationId) {
       this.messages = store.getMessages(this.conversationId);
+    }
+
+    this.mode = context.globalState.get<ChatMode>(MODE_KEY, "chat");
+
+    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri ?? null;
+    if (wsRoot) {
+      this.workspaceFs = new WorkspaceFs(wsRoot);
+      const approval = new ApprovalGate(this.workspaceFs, proposedProvider);
+      this.agentSession = new AgentSession(client, this.workspaceFs, approval);
+    } else {
+      this.workspaceFs = null;
+      this.agentSession = null;
+      if (this.mode === "agent") {
+        this.mode = "chat";
+        void this.context.globalState.update(MODE_KEY, "chat");
+      }
     }
 
     health.onChange((ok, reason) => {
@@ -71,11 +100,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     await vscode.commands.executeCommand("alfred.chatView.focus");
   }
 
-  async sendUserPrompt(text: string): Promise<void> {
+  async sendUserPrompt(text: string, opts?: { forceMode?: ChatMode }): Promise<void> {
     if (!text.trim()) return;
+    if (opts?.forceMode) {
+      await this.setMode(opts.forceMode);
+    }
     if (!this.view) {
       await this.focus();
-      // Esperar al ready
       await this.waitForReady(2000);
     }
     await this.handleSend(text);
@@ -108,6 +139,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     this.currentStream = null;
     this.currentRequestId = null;
+  }
+
+  getMode(): ChatMode {
+    return this.mode;
+  }
+
+  async toggleMode(): Promise<void> {
+    await this.setMode(this.mode === "chat" ? "agent" : "chat");
+  }
+
+  async setMode(mode: ChatMode): Promise<void> {
+    let nextMode = mode;
+    if (nextMode === "agent" && !this.agentSession) {
+      nextMode = "chat";
+      void vscode.window.showWarningMessage(
+        "Modo agent requiere un workspace abierto. Se mantiene modo chat.",
+      );
+    }
+
+    this.mode = nextMode;
+    await this.context.globalState.update(MODE_KEY, this.mode);
+    this.post({ type: "set-mode", mode: this.mode });
   }
 
   // ----------------------------------------------------- Init data
@@ -149,6 +202,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       models,
       activeModel: active,
       backendOk: ok,
+      mode: this.mode,
     });
   }
 
@@ -170,6 +224,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case "ready":
         this.webviewReady = true;
         await this.sendInit();
+        break;
+      case "set-mode":
+        await this.setMode(msg.mode);
         break;
       case "send":
         await this.handleSend(msg.text);
@@ -213,17 +270,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Asegurar conversacion
-    if (!this.conversationId) {
-      try {
-        const created = await this.client.createConversation();
-        this.conversationId = created.id;
-        await this.store.setActiveId(created.id);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        void vscode.window.showErrorMessage(`No se pudo crear la conversacion: ${msg}`);
-        return;
-      }
+    if (this.mode === "agent") {
+      await this.handleSendAgent(text);
+      return;
+    }
+
+    await this.handleSendChat(text);
+  }
+
+  private async handleSendChat(text: string): Promise<void> {
+    if (!(await this.ensureConversation())) {
+      return;
     }
 
     const userMsg: ChatMessage = {
@@ -294,6 +351,168 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private async handleSendAgent(text: string): Promise<void> {
+    if (!this.agentSession || !this.workspaceFs) {
+      void vscode.window.showWarningMessage(
+        "Modo agent no disponible sin workspace. Se mantiene modo chat.",
+      );
+      await this.setMode("chat");
+      await this.handleSendChat(text);
+      return;
+    }
+
+    if (!(await this.ensureConversation())) {
+      return;
+    }
+
+    const userMsg: ChatMessage = {
+      id: randomUUID(),
+      role: "user",
+      content: text,
+      timestamp: Date.now(),
+    };
+    const assistantMsg: ChatMessage = {
+      id: randomUUID(),
+      role: "assistant",
+      content: "",
+      timestamp: Date.now(),
+      pending: true,
+    };
+    this.messages.push(userMsg, assistantMsg);
+    await this.persistMessages();
+
+    this.post({ type: "message-append", message: userMsg });
+    this.post({ type: "message-append", message: assistantMsg });
+    this.post({ type: "stream-start", messageId: assistantMsg.id });
+
+    const ac = new AbortController();
+    this.currentStream = ac;
+    this.currentAssistantMsgId = assistantMsg.id;
+
+    let streamed = "";
+
+    try {
+      const result = await this.agentSession.run({
+        question: text,
+        conversationId: this.conversationId,
+        signal: ac.signal,
+        onEvent: (evt) => {
+          this.handleAgentLoopEvent(evt, assistantMsg.id, (token) => {
+            streamed += token;
+          });
+        },
+      });
+
+      if (result.conversationId) {
+        this.conversationId = result.conversationId;
+        await this.store.setActiveId(result.conversationId);
+      }
+
+      const finalText = result.answer || streamed;
+      if (finalText) {
+        assistantMsg.content = finalText;
+      } else if (result.finishReason === "max_iterations") {
+        assistantMsg.content = "*Se alcanzo el limite de iteraciones sin respuesta final.*";
+      } else if (result.finishReason === "cancelled") {
+        assistantMsg.content = assistantMsg.content || "*Generacion cancelada.*";
+      }
+
+      assistantMsg.pending = false;
+      await this.persistMessages();
+
+      if (result.finishReason === "cancelled") {
+        this.post({ type: "stream-error", messageId: assistantMsg.id, message: "Generacion cancelada." });
+      } else {
+        this.post({ type: "stream-done", messageId: assistantMsg.id });
+      }
+    } catch (err) {
+      const aborted =
+        ac.signal.aborted ||
+        (err instanceof Error && (err.name === "AbortError" || /aborted|cancel/i.test(err.message)));
+      const message = aborted
+        ? "Generacion cancelada."
+        : err instanceof AlfredApiError
+        ? err.message
+        : err instanceof Error
+        ? err.message
+        : String(err);
+      assistantMsg.content = assistantMsg.content || `*${message}*`;
+      assistantMsg.pending = false;
+      await this.persistMessages();
+      this.post({ type: "stream-error", messageId: assistantMsg.id, message });
+    } finally {
+      if (this.currentStream === ac) {
+        this.currentStream = null;
+        this.currentRequestId = null;
+        this.currentAssistantMsgId = null;
+      }
+    }
+  }
+
+  private handleAgentLoopEvent(
+    evt: AgentLoopEvent,
+    assistantMessageId: string,
+    onToken: (token: string) => void,
+  ): void {
+    switch (evt.type) {
+      case "iteration-start":
+        this.post({ type: "agent-iteration", iteration: evt.iteration, phase: "start" });
+        break;
+      case "request-started":
+        this.currentRequestId = evt.requestId;
+        break;
+      case "token":
+        onToken(evt.text);
+        this.post({ type: "stream-token", messageId: assistantMessageId, text: evt.text });
+        break;
+      case "tool-call":
+        this.post({ type: "agent-tool-call", iteration: evt.iteration, call: evt.call });
+        break;
+      case "tool-result":
+        this.post({
+          type: "agent-tool-result",
+          iteration: evt.iteration,
+          call: evt.call,
+          result: evt.result,
+        });
+        break;
+      case "iteration-end":
+        this.post({
+          type: "agent-iteration",
+          iteration: evt.iteration,
+          phase: "end",
+          finishReason: evt.finishReason,
+        });
+        break;
+      case "max-iterations":
+        this.post({
+          type: "agent-iteration",
+          iteration: evt.iteration,
+          phase: "end",
+          finishReason: "max_iterations",
+        });
+        break;
+      case "error":
+      case "cancelled":
+      case "finished":
+        break;
+    }
+  }
+
+  private async ensureConversation(): Promise<boolean> {
+    if (this.conversationId) return true;
+    try {
+      const created = await this.client.createConversation();
+      this.conversationId = created.id;
+      await this.store.setActiveId(created.id);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`No se pudo crear la conversacion: ${msg}`);
+      return false;
+    }
+  }
+
   private async persistMessages(): Promise<void> {
     if (!this.conversationId) return;
     await this.store.setMessages(this.conversationId, this.messages);
@@ -336,6 +555,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       <span id="status-text">Comprobando backend...</span>
     </div>
     <div class="controls">
+      <div class="mode-toggle" role="group" aria-label="Modo de chat">
+        <button id="mode-chat-btn" class="mode-btn" type="button" data-mode="chat">Chat</button>
+        <button id="mode-agent-btn" class="mode-btn" type="button" data-mode="agent">Agent</button>
+      </div>
       <select id="model-select" title="Modelo activo"></select>
       <button id="new-btn" title="Nueva conversacion">+</button>
     </div>

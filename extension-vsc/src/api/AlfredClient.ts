@@ -2,6 +2,7 @@
 // Usa el fetch nativo de Node 18+/20+ que VSCode embebe.
 
 import type { ModelInfo } from "../chat/messages";
+import type { AgentDonePayload, ToolCall, ToolResult, ToolSpec } from "../agent/types";
 
 export interface AlfredClientOptions {
   baseUrl: string;
@@ -36,6 +37,21 @@ export type StreamEvent =
   | { type: "start"; request_id: number }
   | { type: "token"; text: string }
   | { type: "done"; payload: Record<string, unknown> }
+  | { type: "error"; message: string }
+  | { type: "raw"; event: string; data: string };
+
+export interface AgentQueryBody {
+  question: string;
+  conversation_id?: string | null;
+  tools?: ToolSpec[];
+  tool_results?: ToolResult[];
+}
+
+export type AgentStreamEvent =
+  | { type: "start"; request_id: number }
+  | { type: "token"; text: string }
+  | { type: "tool_call"; call: ToolCall }
+  | { type: "done"; payload: AgentDonePayload }
   | { type: "error"; message: string }
   | { type: "raw"; event: string; data: string };
 
@@ -107,6 +123,13 @@ export class AlfredClient {
       ? `/conversations/${encodeURIComponent(conversationId)}/query/stream`
       : "/query/stream";
     yield* this.openSseStream(path, { question }, signal);
+  }
+
+  async *streamAgentQuery(
+    body: AgentQueryBody,
+    signal: AbortSignal,
+  ): AsyncGenerator<AgentStreamEvent, void, void> {
+    yield* this.openAgentSseStream("/query/agent/stream", body, signal);
   }
 
   // ---------------------------------------------------------------- HTTP
@@ -205,6 +228,61 @@ export class AlfredClient {
       }
     }
   }
+
+  async *openAgentSseStream(
+    path: string,
+    body: unknown,
+    signal: AbortSignal,
+  ): AsyncGenerator<AgentStreamEvent, void, void> {
+    const url = `${this.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "text/event-stream",
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new AlfredApiError(res.status, text, text);
+    }
+    if (!res.body) {
+      throw new Error("Respuesta SSE sin body");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let sepIdx: number;
+        while ((sepIdx = findEventBoundary(buffer)) !== -1) {
+          const rawEvent = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx).replace(/^(?:\r?\n)+/, "");
+          const parsed = parseSseFrame(rawEvent);
+          if (!parsed) continue;
+          yield mapAgentEvent(parsed.event, parsed.data);
+        }
+      }
+      if (buffer.trim().length > 0) {
+        const parsed = parseSseFrame(buffer);
+        if (parsed) yield mapAgentEvent(parsed.event, parsed.data);
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }
 
 function findEventBoundary(buf: string): number {
@@ -258,4 +336,63 @@ function mapEvent(event: string, data: string): StreamEvent {
     return { type: "error", message: data };
   }
   return { type: "raw", event, data };
+}
+
+function mapAgentEvent(event: string, data: string): AgentStreamEvent {
+  if (event === "token") {
+    try {
+      const parsed = JSON.parse(data) as { text?: string };
+      return { type: "token", text: parsed.text ?? "" };
+    } catch {
+      return { type: "raw", event, data };
+    }
+  }
+  if (event === "start") {
+    try {
+      const parsed = JSON.parse(data) as { request_id?: number };
+      return { type: "start", request_id: Number(parsed.request_id ?? 0) };
+    } catch {
+      return { type: "raw", event, data };
+    }
+  }
+  if (event === "tool_call") {
+    try {
+      const parsed = JSON.parse(data) as Record<string, unknown>;
+      const call = normalizeToolCall(parsed);
+      return { type: "tool_call", call };
+    } catch {
+      return { type: "raw", event, data };
+    }
+  }
+  if (event === "done") {
+    try {
+      const payload = JSON.parse(data) as AgentDonePayload;
+      return { type: "done", payload };
+    } catch {
+      return { type: "raw", event, data };
+    }
+  }
+  if (event === "error") {
+    return { type: "error", message: data };
+  }
+  return { type: "raw", event, data };
+}
+
+function normalizeToolCall(raw: Record<string, unknown>): ToolCall {
+  const id = typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : "call_unknown";
+  const name =
+    typeof raw.name === "string" && raw.name.trim().length > 0 ? raw.name : "unknown_tool";
+  const args = asRecord(raw.arguments);
+  return {
+    id,
+    name,
+    arguments: args,
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
 }

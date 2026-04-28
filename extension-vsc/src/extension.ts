@@ -2,6 +2,7 @@
 // el monitor de salud del backend.
 
 import * as vscode from "vscode";
+import { ProposedContentProvider } from "./agent/proposedContentProvider";
 import { AlfredClient } from "./api/AlfredClient";
 import { HealthMonitor } from "./api/health";
 import { ChatViewProvider } from "./chat/ChatViewProvider";
@@ -19,16 +20,23 @@ export function activate(context: vscode.ExtensionContext): void {
   const client = new AlfredClient({ baseUrl, timeoutMs: requestTimeoutMs });
   const health = new HealthMonitor(client, healthInterval);
   const store = new ConversationStore(context.globalState);
-  const chat = new ChatViewProvider(context, client, health, store);
+  const proposedProvider = new ProposedContentProvider();
+  const chat = new ChatViewProvider(context, client, health, store, proposedProvider);
 
   context.subscriptions.push(
     health,
+    proposedProvider,
+    vscode.workspace.registerTextDocumentContentProvider(
+      ProposedContentProvider.scheme,
+      proposedProvider,
+    ),
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chat, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.commands.registerCommand("alfred.focusChat", () => chat.focus()),
     vscode.commands.registerCommand("alfred.newConversation", () => chat.newConversation()),
     vscode.commands.registerCommand("alfred.cancel", () => chat.cancelCurrent()),
+    vscode.commands.registerCommand("alfred.toggleAgentMode", () => chat.toggleMode()),
     vscode.commands.registerCommand("alfred.checkBackend", async () => {
       const ok = await health.checkOnce();
       if (ok) {

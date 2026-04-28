@@ -70,6 +70,16 @@
         "category": "Alfred"
       },
       {
+        "command": "alfred.editWithAlfred",
+        "title": "Alfred: Edit selection with Agent",
+        "category": "Alfred"
+      },
+      {
+        "command": "alfred.toggleAgentMode",
+        "title": "Alfred: Toggle Agent mode",
+        "category": "Alfred"
+      },
+      {
         "command": "alfred.checkBackend",
         "title": "Alfred: Check backend status",
         "category": "Alfred"
@@ -91,9 +101,21 @@
           "when": "editorHasSelection",
           "command": "alfred.generateTests",
           "group": "alfred@3"
+        },
+        {
+          "when": "editorHasSelection",
+          "command": "alfred.editWithAlfred",
+          "group": "alfred@4"
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "alfred.editWithAlfred",
+        "key": "ctrl+i",
+        "when": "editorTextFocus && editorHasSelection"
+      }
+    ],
     "configuration": {
       "title": "Alfred",
       "properties": {
@@ -111,6 +133,31 @@
           "type": "number",
           "default": 15000,
           "description": "Intervalo (ms) entre comprobaciones automaticas de /health. 0 desactiva."
+        },
+        "alfred.agent.autoApprove": {
+          "type": "array",
+          "default": [
+            "read_file",
+            "list_dir",
+            "find_files",
+            "search_text"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Lista de tools del modo agent que se aprueban automaticamente sin pedir confirmacion."
+        },
+        "alfred.agent.maxIterations": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "Maximo de iteraciones del loop agentico por mensaje."
+        },
+        "alfred.agent.toolTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "Timeout en ms para ejecutar cada tool del agente."
         }
       }
     }

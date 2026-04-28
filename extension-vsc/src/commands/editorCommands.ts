@@ -40,11 +40,16 @@ export function registerEditorCommands(
   context: vscode.ExtensionContext,
   chat: ChatViewProvider,
 ): void {
-  const send = async (instruction: string) => {
+  const send = async (
+    instruction: string,
+    opts?: {
+      forceMode?: "chat" | "agent";
+    },
+  ) => {
     const ctx = getSelection();
     if (!ctx) return;
     await chat.focus();
-    await chat.sendUserPrompt(buildPrompt(ctx, instruction));
+    await chat.sendUserPrompt(buildPrompt(ctx, instruction), opts);
   };
 
   context.subscriptions.push(
@@ -61,5 +66,17 @@ export function registerEditorCommands(
         "Genera tests unitarios para este codigo. Indica el framework recomendado segun el lenguaje y cubre los casos limite.",
       ),
     ),
+    vscode.commands.registerCommand("alfred.editWithAlfred", async () => {
+      const instruction = await vscode.window.showInputBox({
+        title: "Alfred Agent Edit",
+        prompt: "Indica el cambio a aplicar sobre la seleccion.",
+        placeHolder: "Ej: Refactoriza para mejorar legibilidad sin cambiar comportamiento.",
+        ignoreFocusOut: true,
+      });
+      if (!instruction || !instruction.trim()) {
+        return;
+      }
+      await send(instruction.trim(), { forceMode: "agent" });
+    }),
   );
 }
