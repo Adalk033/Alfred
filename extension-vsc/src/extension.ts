@@ -24,6 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const chat = new ChatViewProvider(context, client, health, store, proposedProvider);
 
   context.subscriptions.push(
+    chat,
     health,
     proposedProvider,
     vscode.workspace.registerTextDocumentContentProvider(

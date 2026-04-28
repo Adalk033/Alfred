@@ -1,97 +1,93 @@
-# Alfred — Extensión VSCode (Fase 2)
+# Alfred - Extension VSCode (Fase 2 + Fase 4)
 
-Chat lateral conectado al backend local de Alfred (`REST :8000` + SSE).
-Sin modo agente todavía: ese es el alcance de la Fase 4.
+Chat lateral conectado al backend local de Alfred (`REST :8000` + SSE), con
+modo `Agent` para bucle de tools y aprobacion humana.
 
-## Qué incluye
+## Que incluye
 
 - Vista lateral en la activity bar (icono Alfred) con chat en streaming.
-- Selector de modelo (consume `/models` y `/models/status`, cambia con `/models/change`).
-- Botón "+" para nueva conversación, botón "Cancelar" (`POST /query/cancel`).
-- Status bar con estado del backend y poll automático de `/health`.
-- Comandos en command palette y context menu del editor:
+- Toggle `Chat / Agent` en el panel.
+- Modo `Agent` con loop sobre `/query/agent/stream`.
+- Tools locales de workspace (`read_file`, `list_dir`, `find_files`, `search_text`, `write_file`, `edit_file`).
+- Integracion MCP por stdio en modo agente para tools externas (por ejemplo `alfred-mcp`, `mcp-server-git`).
+- Aprobacion obligatoria para escrituras locales y tools MCP remotas, con diff para `write_file`/`edit_file`.
+- Selector de modelo (`/models`, `/models/status`, `/models/change`).
+- Boton `+` para nueva conversacion y `Cancelar` (`POST /query/cancel`).
+- Status bar con health check periodico (`/health`).
+- Comandos de editor:
   - `Alfred: Explain selection`
   - `Alfred: Refactor selection`
   - `Alfred: Generate tests for selection`
-- Persistencia del `conversation_id` activo y de los mensajes en `globalState`.
+  - `Alfred: Edit selection with Agent` (`Ctrl+I`)
+- Persistencia de conversacion activa y mensajes en `globalState`.
 
 ## Estructura
 
 ```
 extension-vsc/
-├── package.json                 contributes (view, commands, settings)
+├── package.json
 ├── tsconfig.json
 ├── src/
-│   ├── extension.ts             activate() / deactivate()
+│   ├── extension.ts
 │   ├── api/
-│   │   ├── AlfredClient.ts      fetch + SSE contra :8000
-│   │   └── health.ts            poll de /health + status bar
+│   │   ├── AlfredClient.ts
+│   │   └── health.ts
+│   ├── agent/
+│   │   ├── AgentSession.ts
+│   │   ├── WorkspaceFs.ts
+│   │   ├── Approval.ts
+│   │   ├── McpToolHub.ts
+│   │   └── proposedContentProvider.ts
 │   ├── chat/
-│   │   ├── ChatViewProvider.ts  WebviewViewProvider, puente webview <-> backend
-│   │   └── messages.ts          tipos compartidos webview <-> host
+│   │   ├── ChatViewProvider.ts
+│   │   └── messages.ts
 │   ├── conversations/
-│   │   └── ConversationStore.ts persistencia ligera (globalState)
+│   │   └── ConversationStore.ts
 │   └── commands/
-│       └── editorCommands.ts    explain / refactor / generate-tests
+│       └── editorCommands.ts
 └── media/
-    ├── alfred.svg               icono activity bar
+    ├── alfred.svg
     └── webview/
-        ├── styles.css           estilos del chat
-        └── main.js              UI del webview (sin frameworks)
+        ├── styles.css
+        └── main.js
 ```
 
 ## Requisitos
 
-- VSCode `>= 1.90`.
-- Node `>= 18` para compilar.
-- App de Alfred corriendo (la extensión NO arranca el backend; solo se conecta).
-  Verifica con `curl http://127.0.0.1:8000/health`.
+- VSCode `>= 1.90`
+- Node `>= 18`
+- Backend Alfred activo en `http://127.0.0.1:8000`
 
-## Cómo correrla en desarrollo
+Opcional para modo agente completo con MCP:
 
-> El usuario compilará manualmente. Pasos para depurar localmente:
+- `npx -y alfred-mcp`
+- `uvx mcp-server-git`
+
+## Desarrollo
 
 ```bash
 cd extension-vsc
 npm install
-npm run build       # tsc -> dist/
+npm run build
 ```
 
-Después abre la carpeta `extension-vsc/` en VSCode y pulsa `F5` (lanza
-"Run Extension" definido en `.vscode/launch.json`). Se abre una segunda ventana
-con la extensión cargada.
+Luego abre `extension-vsc/` en VSCode y ejecuta `F5`.
 
-Para empaquetar `.vsix` (cuando interese):
+## Configuracion
 
-```bash
-npx @vscode/vsce package
-```
-
-## Configuración
-
-| Setting | Default | Para qué |
+| Setting | Default | Uso |
 |---|---|---|
 | `alfred.backendUrl` | `http://127.0.0.1:8000` | URL base del backend. |
-| `alfred.requestTimeoutMs` | `120000` | Timeout de llamadas no-streaming. |
-| `alfred.healthCheckIntervalMs` | `15000` | Intervalo del poll de salud. `0` desactiva. |
+| `alfred.requestTimeoutMs` | `120000` | Timeout para llamadas no streaming. |
+| `alfred.healthCheckIntervalMs` | `15000` | Poll automatico de salud (`0` desactiva). |
+| `alfred.agent.maxIterations` | `10` | Iteraciones maximas del loop agente. |
+| `alfred.agent.toolTimeoutMs` | `30000` | Timeout por tool del agente. |
+| `alfred.agent.autoApprove` | `read_file,list_dir,find_files,search_text` | Tools autoaprobadas sin modal. |
+| `alfred.agent.mcpServers` | `alfred + git` | Servidores MCP stdio usados en modo agente. |
 
-## Notas técnicas
+## Notas tecnicas
 
-- El webview usa **postMessage** con tipos compartidos en
-  [`src/chat/messages.ts`](src/chat/messages.ts). No hay framework: HTML + JS
-  plano + un renderer markdown mínimo (subset seguro con HTML escapado).
-- El SSE se parsea sobre el `ReadableStream` del `fetch` nativo de Node 20 que
-  embebe VSCode — sin dependencias adicionales.
-- El `retainContextWhenHidden: true` evita perder el chat al cambiar de tab.
-- Si el backend no responde, el status bar pasa a rojo y muestra
-  *"Alfred no responde — abre la app de Alfred"*. El chat sigue siendo usable
-  (mostrará error en la respuesta del modelo si se intenta enviar).
-- El cliente solicita la cancelación llamando a `/query/cancel` con el
-  `request_id` recibido en el evento SSE `start`.
-
-## Pendiente para fases siguientes
-
-- Fase 4: modo agente que consume `mcp-server` + tools de filesystem para editar
-  archivos del workspace, con aprobación humana por write/edit/delete.
-- Listado/cambio de conversaciones (hoy solo se persiste la activa).
-- Comando `Edit with Alfred` (Ctrl+I, estilo Cursor).
+- El webview usa `postMessage` y renderer markdown seguro sin framework.
+- El estado del backend se refleja en la status bar (`alfred.checkBackend`).
+- En modo `Agent`, las tools MCP se exponen con prefijo `server__tool` para evitar colisiones.
+- Las tools remotas y las escrituras locales requieren confirmacion explicita, salvo si estan en `autoApprove`.

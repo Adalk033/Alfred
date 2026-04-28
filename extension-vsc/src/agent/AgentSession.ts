@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { AlfredApiError, AlfredClient } from "../api/AlfredClient";
+import { AlfredApiError, AlfredClient, type AgentQueryBody } from "../api/AlfredClient";
 import { ApprovalGate } from "./Approval";
+import { McpToolHub } from "./McpToolHub";
 import { WorkspaceFs } from "./WorkspaceFs";
 import type { AgentDonePayload, AgentLoopEvent, ToolCall, ToolResult } from "./types";
 
@@ -29,6 +30,7 @@ export class AgentSession {
     private readonly client: AlfredClient,
     private readonly fs: WorkspaceFs,
     private readonly approval: ApprovalGate,
+    private readonly mcp: McpToolHub | null,
   ) {}
 
   async run(opts: AgentSessionRunOptions): Promise<AgentSessionResult> {
@@ -37,7 +39,10 @@ export class AgentSession {
 
     const allCalls: ToolCall[] = [];
     const allResults: ToolResult[] = [];
-    const tools = this.fs.getTools();
+    const tools = [
+      ...this.fs.getTools(),
+      ...(this.mcp ? await this.mcp.listTools(opts.signal) : []),
+    ];
 
     let nextQuestion = opts.question;
     let toolResultsForNext: ToolResult[] | undefined;
@@ -56,7 +61,7 @@ export class AgentSession {
         let donePayload: AgentDonePayload | null = null;
         const pendingCalls: ToolCall[] = [];
 
-        const body: Record<string, unknown> = {
+        const body: AgentQueryBody = {
           question: nextQuestion,
           conversation_id: conversationId,
           tools,
@@ -241,7 +246,7 @@ export class AgentSession {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const result = await Promise.race<ToolResult>([
-        this.fs.execute(call),
+        this.executeTool(call, signal),
         new Promise<ToolResult>((resolve) => {
           timer = setTimeout(() => {
             resolve({
@@ -259,6 +264,22 @@ export class AgentSession {
         clearTimeout(timer);
       }
     }
+  }
+
+  private async executeTool(call: ToolCall, signal: AbortSignal): Promise<ToolResult> {
+    if (this.fs.hasTool(call.name)) {
+      return this.fs.execute(call);
+    }
+
+    if (this.mcp?.canHandle(call.name)) {
+      return this.mcp.callTool(call, signal);
+    }
+
+    return {
+      id: call.id,
+      content: `Tool no registrada: ${call.name}`,
+      is_error: true,
+    };
   }
 }
 

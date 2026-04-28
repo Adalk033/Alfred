@@ -18,14 +18,21 @@ export class ApprovalGate {
   ) {}
 
   async check(call: ToolCall, signal?: AbortSignal): Promise<ApprovalDecision> {
-    if (!WorkspaceFs.isWriteTool(call.name)) {
-      return { approved: true };
-    }
     if (this.isAutoApproved(call.name)) {
       return { approved: true };
     }
+
+    const isLocalTool = this.fs.hasTool(call.name);
+    if (isLocalTool && !WorkspaceFs.isWriteTool(call.name)) {
+      return { approved: true };
+    }
+
     if (signal?.aborted) {
       return { approved: false, reason: "Cancelado por el usuario." };
+    }
+
+    if (!isLocalTool) {
+      return this.confirmRemoteTool(call, signal);
     }
 
     const relPath = this.extractPath(call);
@@ -76,6 +83,30 @@ export class ApprovalGate {
     return { approved: false, reason: "Tool denegada por el usuario." };
   }
 
+  private async confirmRemoteTool(
+    call: ToolCall,
+    signal?: AbortSignal,
+  ): Promise<ApprovalDecision> {
+    const args = safeJson(call.arguments ?? {});
+    const picked = await vscode.window.showWarningMessage(
+      `Aprobar tool MCP ${call.name}?`,
+      {
+        modal: true,
+        detail: `Se ejecutara una tool remota. Argumentos:\n${args}`,
+      },
+      "Aprobar",
+      "Denegar",
+    );
+
+    if (signal?.aborted) {
+      return { approved: false, reason: "Cancelado por el usuario." };
+    }
+    if (picked === "Aprobar") {
+      return { approved: true };
+    }
+    return { approved: false, reason: "Tool remota denegada por el usuario." };
+  }
+
   private isAutoApproved(toolName: string): boolean {
     const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
     const tools = cfg.get<string[]>("agent.autoApprove", DEFAULT_AUTO_APPROVE);
@@ -104,6 +135,14 @@ export class ApprovalGate {
       return this.fs.previewEditFile(relPath, oldString, newString);
     }
     throw new Error(`Tool no soportada para preview: ${call.name}`);
+  }
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value ?? "");
   }
 }
 

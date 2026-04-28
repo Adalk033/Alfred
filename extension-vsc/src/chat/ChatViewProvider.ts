@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
 import { AgentSession } from "../agent/AgentSession";
 import { ApprovalGate } from "../agent/Approval";
+import { McpToolHub } from "../agent/McpToolHub";
 import type { ProposedContentProvider } from "../agent/proposedContentProvider";
 import { WorkspaceFs } from "../agent/WorkspaceFs";
 import type { AgentLoopEvent } from "../agent/types";
@@ -21,7 +22,7 @@ import type {
 
 const MODE_KEY = "alfred.chatMode";
 
-export class ChatViewProvider implements vscode.WebviewViewProvider {
+export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = "alfred.chatView";
 
   private view: vscode.WebviewView | null = null;
@@ -37,6 +38,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private mode: ChatMode;
   private readonly workspaceFs: WorkspaceFs | null;
+  private readonly mcpHub: McpToolHub | null;
   private readonly agentSession: AgentSession | null;
 
   constructor(
@@ -56,10 +58,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri ?? null;
     if (wsRoot) {
       this.workspaceFs = new WorkspaceFs(wsRoot);
+      this.mcpHub = new McpToolHub(wsRoot);
       const approval = new ApprovalGate(this.workspaceFs, proposedProvider);
-      this.agentSession = new AgentSession(client, this.workspaceFs, approval);
+      this.agentSession = new AgentSession(client, this.workspaceFs, approval, this.mcpHub);
     } else {
       this.workspaceFs = null;
+      this.mcpHub = null;
       this.agentSession = null;
       if (this.mode === "agent") {
         this.mode = "chat";
@@ -93,6 +97,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.view = null;
       this.webviewReady = false;
     });
+  }
+
+  dispose(): void {
+    void this.cancelCurrent();
+    this.mcpHub?.dispose();
   }
 
   // ----------------------------------------------------- API publica

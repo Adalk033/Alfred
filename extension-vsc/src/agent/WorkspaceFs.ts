@@ -17,6 +17,15 @@ const WRITE_TOOLS = new Set<string>([
   "create_file",
 ]);
 
+const LOCAL_TOOLS = new Set<string>([
+  "read_file",
+  "list_dir",
+  "find_files",
+  "search_text",
+  "write_file",
+  "edit_file",
+]);
+
 export interface WorkspaceFsOptions {
   /** Tamanio maximo en bytes que se devuelve al modelo en read_file. */
   maxReadBytes?: number;
@@ -31,6 +40,10 @@ export class WorkspaceFs {
 
   static isWriteTool(name: string): boolean {
     return WRITE_TOOLS.has(name);
+  }
+
+  hasTool(name: string): boolean {
+    return LOCAL_TOOLS.has(name);
   }
 
   rootUri(): vscode.Uri {
@@ -236,9 +249,10 @@ export class WorkspaceFs {
       const text = decoder.decode(buf);
       const lines = text.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
-        if (re.test(lines[i])) {
+        const line = lines[i] ?? "";
+        if (re.test(line)) {
           const rel = this.toRel(uri) ?? uri.fsPath;
-          hits.push(`${rel}:${i + 1}: ${lines[i].slice(0, 240)}`);
+          hits.push(`${rel}:${i + 1}: ${line.slice(0, 240)}`);
           if (hits.length >= MAX_SEARCH_RESULTS) break;
         }
       }
