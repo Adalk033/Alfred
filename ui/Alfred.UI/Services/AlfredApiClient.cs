@@ -8,7 +8,7 @@ namespace Alfred.UI.Services;
 /// <summary>
 /// Cliente HTTP para comunicarse con el backend REST de Alfred (localhost:8000).
 /// </summary>
-public sealed class AlfredApiClient : IDisposable
+public sealed partial class AlfredApiClient : IDisposable
 {
     private readonly HttpClient _http;
     private readonly string _baseUrl;
