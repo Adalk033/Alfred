@@ -1,0 +1,35 @@
+{
+  "name": "alfred-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that exposes Alfred (local LLM) as a provider for MCP-compatible clients (Claude Code, Cursor, etc.)",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "alfred-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "undici": "^6.19.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "rimraf": "^5.0.7",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
