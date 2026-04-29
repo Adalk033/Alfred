@@ -560,7 +560,9 @@ AlfredCore::AgentResult AlfredCore::query_agent_streaming(
     const std::string effective_question = (!question.empty())
         ? question
         : (!tool_results.empty()
-              ? "Tienes los resultados anteriores. Ejecuta el siguiente paso: invoca la herramienta necesaria con un bloque <tool_call> de JSON valido, o responde al usuario si la tarea ya esta completa."
+              ? "Tool results are above. Analyze them and decide the next step: "
+                "if another tool is needed output a <tool_call> block with valid JSON; "
+                "if the task is complete respond to the user directly in plain text."
             : question);
 
     std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, effective_question);
