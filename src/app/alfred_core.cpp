@@ -97,6 +97,7 @@ bool AlfredCore::initialize() {
         get_float("min_p",            cfg.min_p);
         get_float("repeat_penalty",   cfg.repeat_penalty);
         get_int  ("repeat_last_n",    cfg.repeat_last_n);
+        get_bool ("thinking_enabled", cfg.thinking_enabled);
         get_bool ("model_warmup",     cfg.model_warmup);
 
         // Esperar deteccion de GPU antes de cargar modelo
@@ -310,6 +311,7 @@ std::string AlfredCore::apply_user_profile(const std::string& prompt) {
     replace_all(result, "{TONE_DIRECTIVE}", tone.directive);
     replace_all(result, "{CUSTOM_INSTRUCTIONS}",
                 cfg.custom_instructions.empty() ? "(ninguna)" : cfg.custom_instructions);
+    replace_all(result, "{THINKING_TOKEN}", cfg.thinking_enabled ? "<|think|>\n" : "");
 
     return result;
 }
@@ -342,7 +344,7 @@ QueryResult AlfredCore::generate_response(
     auto llm_result = llm_->generate(prompt);
 
     if (llm_result.success) {
-        result.answer = trim(llm_result.text);
+        result.answer = extract_final_response_text(llm_result.text);
     } else {
         result.answer = "Error generando respuesta: " + llm_result.error;
     }
@@ -449,17 +451,32 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
 
     std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, conversation_context, question);
 
-    auto wrapped_cb = [this, &on_token](const std::string& tok) -> bool {
+    std::string raw_output;
+    size_t emitted_chars = 0;
+
+    auto wrapped_cb = [this, &on_token, &raw_output, &emitted_chars](const std::string& tok) -> bool {
         if (cancel_flag_.load()) return false;
+
+        raw_output += tok;
+        std::string visible = extract_final_response_text(raw_output);
+        if (visible.size() <= emitted_chars) {
+            return true;
+        }
+
+        std::string delta = visible.substr(emitted_chars);
+        emitted_chars = visible.size();
         if (!on_token) return true;
-        return on_token(tok);
+        return on_token(delta);
     };
 
     auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
     const bool was_cancelled = cancel_flag_.load();
 
     if (llm_result.success || !llm_result.text.empty()) {
-        result.answer = trim(llm_result.text);
+        if (raw_output.empty()) {
+            raw_output = llm_result.text;
+        }
+        result.answer = extract_final_response_text(raw_output);
     } else {
         result.answer = "Error generando respuesta: " + llm_result.error;
     }
@@ -538,25 +555,53 @@ AlfredCore::AgentResult AlfredCore::query_agent_streaming(
     }
     agent_context += format_tool_results_section(tool_results);
 
-    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, question);
+    // En turnos de continuacion (question vacia con tool_results) inyectar
+    // un prompt interno para que el modelo no reciba {input} en blanco.
+    const std::string effective_question = (!question.empty())
+        ? question
+        : (!tool_results.empty()
+              ? "Tool results are above. Analyze them and decide the next step: "
+                "if another tool is needed output a <tool_call> block with valid JSON; "
+                "if the task is complete respond to the user directly in plain text."
+            : question);
+
+    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, effective_question);
 
     // 2. Parser de tool_calls envolviendo el callback de tokens.
     ToolCallParser parser;
 
-    auto wrapped_cb = [this, &parser, &on_token, &on_tool_call, &result]
+    bool stream_ok = true;
+
+    std::string raw_visible_output;
+    size_t emitted_chars = 0;
+
+    auto wrapped_cb = [this, &parser, &on_token, &on_tool_call, &result, &stream_ok,
+                       &raw_visible_output, &emitted_chars]
                       (const std::string& tok) -> bool {
-        if (cancel_flag_.load()) return false;
+        if (cancel_flag_.load() || !stream_ok) return false;
         parser.feed(tok,
             [&](const std::string& clean) {
                 if (clean.empty()) return;
-                result.answer += clean;
-                if (on_token) on_token(clean);
+                raw_visible_output += clean;
+                std::string filtered = extract_final_response_text(raw_visible_output);
+                if (filtered.size() <= emitted_chars) return;
+
+                std::string delta = filtered.substr(emitted_chars);
+                emitted_chars = filtered.size();
+                result.answer += delta;
+                if (on_token && !on_token(delta)) {
+                    stream_ok = false;
+                    cancel_flag_.store(true);
+                }
             },
             [&](const ToolCall& tc) {
                 result.tool_calls.push_back(tc);
-                if (on_tool_call) on_tool_call(tc);
+                if (on_tool_call && !on_tool_call(tc)) {
+                    stream_ok = false;
+                    cancel_flag_.store(true);
+                }
             });
-        return true;
+        return stream_ok && !cancel_flag_.load();
     };
 
     auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
@@ -564,13 +609,26 @@ AlfredCore::AgentResult AlfredCore::query_agent_streaming(
     // Vaciar buffers retenidos (sufijos parciales / tool_calls sin cerrar).
     parser.flush(
         [&](const std::string& clean) {
-            if (clean.empty()) return;
-            result.answer += clean;
-            if (on_token) on_token(clean);
+            if (!stream_ok || clean.empty()) return;
+            raw_visible_output += clean;
+            std::string filtered = extract_final_response_text(raw_visible_output);
+            if (filtered.size() <= emitted_chars) return;
+
+            std::string delta = filtered.substr(emitted_chars);
+            emitted_chars = filtered.size();
+            result.answer += delta;
+            if (on_token && !on_token(delta)) {
+                stream_ok = false;
+                cancel_flag_.store(true);
+            }
         },
         [&](const ToolCall& tc) {
+            if (!stream_ok) return;
             result.tool_calls.push_back(tc);
-            if (on_tool_call) on_tool_call(tc);
+            if (on_tool_call && !on_tool_call(tc)) {
+                stream_ok = false;
+                cancel_flag_.store(true);
+            }
         });
 
     result.cancelled = cancel_flag_.load();
@@ -581,7 +639,7 @@ AlfredCore::AgentResult AlfredCore::query_agent_streaming(
     }
 
     // Recortar espacios extremos, igual que query_streaming.
-    result.answer = trim(result.answer);
+    result.answer = extract_final_response_text(result.answer);
 
     auto end = std::chrono::steady_clock::now();
     result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
@@ -704,10 +762,21 @@ ModelChangeResult AlfredCore::change_model(const std::string& model_path) {
 json AlfredCore::get_stats() {
     json stats;
     stats["initialized"]            = initialized_;
-    stats["model_loaded"]           = llm_->is_loaded();
+
+    bool loaded = false;
+    std::string model_name;
+    if (llm_->try_get_status(loaded, model_name)) {
+        stats["model_loaded"] = loaded;
+        stats["llm_model"]    = model_name;
+    } else {
+        // Evitar bloqueo del endpoint /health durante inferencia.
+        stats["model_loaded"] = (lifecycle_.state() != ModelState::IDLE) || (lifecycle_.in_flight() > 0);
+        stats["llm_model"]    = "";
+        stats["llm_status_busy"] = true;
+    }
+
     stats["model_idle_timeout_sec"] = get_config().model_idle_timeout_sec;
     stats["model_lazy_load"]        = get_config().model_lazy_load;
-    stats["llm_model"]              = llm_->model_name();
     switch (lifecycle_.state()) {
         case ModelState::IDLE:       stats["model_state"] = "idle"; break;
         case ModelState::LOADING:    stats["model_state"] = "loading"; break;

@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     private string? _currentModelPath;
     private string _modelState = "idle";   // idle|loading|processing
     private DateTime _lastTokenFetch = DateTime.MinValue;
+    private int _healthFailuresConsecutive = 0;
 
     public UiPreferences Prefs => UiPreferences.Instance;
 
@@ -142,12 +143,26 @@ public sealed partial class MainWindow : Window
     {
         ModelFlyout.Items.Clear();
 
+        // Cargar primero los modelos locales reales para filtrar recientes obsoletos.
+        var localModels = ModelListHelpers.Deduplicate(await _api.ListModelsAsync());
+        var localPaths = new HashSet<string>(
+            localModels.Select(m => ModelListHelpers.NormalizePath(m.Path, m.Name)),
+            StringComparer.Ordinal);
+
         // Paths ya renderizados (normalizados) para evitar duplicados entre
         // "Recientes" y "Locales" o dentro de una misma seccion.
         var seenPaths = new HashSet<string>(StringComparer.Ordinal);
 
         // Recientes (persistidos en user_settings)
-        var recents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync());
+        var recents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync())
+            .Where(r => localPaths.Contains(ModelListHelpers.NormalizePath(r.Path, r.Name)))
+            .ToList();
+
+        // Si habia recientes que ya no existen en disco, depurarlos de settings.
+        var persistedRecents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync());
+        if (recents.Count != persistedRecents.Count)
+            await SaveRecentModelsAsync(recents);
+
         var recentsToShow = recents
             .Where(r => seenPaths.Add(ModelListHelpers.NormalizePath(r.Path, r.Name)))
             .Take(RECENT_MODELS_MAX)
@@ -170,7 +185,7 @@ public sealed partial class MainWindow : Window
         }
 
         // Modelos locales (dedup por path y excluyendo los ya mostrados en recientes)
-        var models = ModelListHelpers.Deduplicate(await _api.ListModelsAsync())
+        var models = localModels
             .Where(m => seenPaths.Add(ModelListHelpers.NormalizePath(m.Path, m.Name)))
             .ToList();
 
@@ -262,6 +277,11 @@ public sealed partial class MainWindow : Window
         list.RemoveAll(m => ModelListHelpers.NormalizePath(m.Path, m.Name) == key);
         list.Insert(0, new ModelInfo { Name = name, Path = path });
         if (list.Count > RECENT_MODELS_MAX) list = list.Take(RECENT_MODELS_MAX).ToList();
+        await SaveRecentModelsAsync(list);
+    }
+
+    private async Task SaveRecentModelsAsync(List<ModelInfo> list)
+    {
         try
         {
             var serialized = JsonSerializer.Serialize(list);
@@ -308,9 +328,17 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() =>
         {
             if (healthy)
+            {
+                _healthFailuresConsecutive = 0;
                 UpdateStatus("Conectado", Colors.LimeGreen);
+            }
             else
-                UpdateStatus("Desconectado", Colors.Red);
+            {
+                _healthFailuresConsecutive++;
+                // Debounce: un timeout aislado no debe marcar desconexion visual.
+                if (_healthFailuresConsecutive >= 2)
+                    UpdateStatus("Desconectado", Colors.Red);
+            }
         });
 
         if (healthy)
@@ -426,18 +454,24 @@ public sealed partial class MainWindow : Window
         UnloadModelButton.IsEnabled = false;
         try
         {
-            bool success = await _api.UnloadModelAsync();
-            if (success)
+            var result = await _api.UnloadModelAsync();
+            if (result.Success)
             {
                 await LoadModelInfo();
                 NotificationService.Instance.ShowSuccess(
-                    "Modelo descargado. GPU/RAM liberados.",
+                    result.Message,
                     "Modelo detenido");
+            }
+            else if (result.Busy)
+            {
+                NotificationService.Instance.ShowWarning(
+                    result.Message,
+                    "Modelo en uso");
             }
             else
             {
                 NotificationService.Instance.ShowError(
-                    "No se pudo detener el modelo.");
+                    result.Message);
             }
         }
         finally

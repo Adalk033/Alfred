@@ -301,10 +301,46 @@ public sealed partial class AlfredApiClient : IDisposable
     /// <summary>
     /// Descargar el modelo actual para liberar GPU/RAM.
     /// </summary>
-    public async Task<bool> UnloadModelAsync()
+    public async Task<(bool Success, bool Busy, string Message)> UnloadModelAsync()
     {
         var response = await PostRawAsync("/models/unload", new { }, 30);
-        return response?.IsSuccessStatusCode ?? false;
+        if (response == null)
+            return (false, false, "No se pudo conectar con el backend");
+
+        string body = "";
+        try { body = await response.Content.ReadAsStringAsync(); } catch { }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("error", out var err))
+                    return (false, false, err.GetString() ?? "No se pudo detener el modelo");
+            }
+            catch { }
+            return (false, false, $"Error del servidor (HTTP {(int)response.StatusCode})");
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            string status = doc.RootElement.TryGetProperty("status", out var st)
+                ? (st.GetString() ?? "")
+                : "";
+
+            return status switch
+            {
+                "unloaded" => (true, false, "Modelo descargado. GPU/RAM liberados."),
+                "already_unloaded" => (true, false, "El modelo ya estaba descargado."),
+                "busy" => (false, true, "El modelo esta ocupado. Espera a que termine la respuesta y reintenta."),
+                _ => (true, false, "Solicitud completada."),
+            };
+        }
+        catch
+        {
+            return (true, false, "Modelo descargado.");
+        }
     }
 
     /// <summary>
@@ -400,6 +436,33 @@ public sealed partial class AlfredApiClient : IDisposable
     public async Task<bool> DeleteConversationAsync(string id)
     {
         return await DeleteAsync($"/conversations/{id}");
+    }
+
+    public async Task<(int Requested, int Deleted)> DeleteConversationsBulkAsync(List<string> ids)
+    {
+        if (ids == null || ids.Count == 0)
+            return (0, 0);
+
+        var response = await PostRawAsync("/conversations/delete-bulk", new { ids }, 120);
+        if (response == null || !response.IsSuccessStatusCode)
+            return (ids.Count, 0);
+
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(body);
+            int requested = doc.RootElement.TryGetProperty("requested", out var reqEl) && reqEl.TryGetInt32(out var req)
+                ? req
+                : ids.Count;
+            int deleted = doc.RootElement.TryGetProperty("deleted", out var delEl) && delEl.TryGetInt32(out var del)
+                ? del
+                : 0;
+            return (requested, deleted);
+        }
+        catch
+        {
+            return (ids.Count, 0);
+        }
     }
 
     public async Task<bool> ClearConversationAsync(string id)

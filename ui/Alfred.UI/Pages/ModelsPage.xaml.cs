@@ -385,6 +385,7 @@ public sealed partial class ModelsPage : Page
             MinPBox.Value = config.MinP;
             RepeatPenaltyBox.Value = config.RepeatPenalty;
             RepeatLastNBox.Value = config.RepeatLastN;
+            ThinkingEnabledToggle.IsOn = config.ThinkingEnabled;
 
             OffloadKqvToggle.IsOn = config.OffloadKqv;
             UseMmapToggle.IsOn = config.UseMmap;
@@ -477,7 +478,8 @@ public sealed partial class ModelsPage : Page
             TopK = (int)TopKBox.Value,
             MinP = (float)MinPBox.Value,
             RepeatPenalty = (float)RepeatPenaltyBox.Value,
-            RepeatLastN = (int)RepeatLastNBox.Value
+            RepeatLastN = (int)RepeatLastNBox.Value,
+            ThinkingEnabled = ThinkingEnabledToggle.IsOn
         };
 
         var (success, needsReload) = await _api.SetModelConfigAsync(config);
@@ -525,6 +527,7 @@ public sealed partial class ModelsPage : Page
         MinPBox.Value = 0.05;
         RepeatPenaltyBox.Value = 1.10;
         RepeatLastNBox.Value = 64;
+        ThinkingEnabledToggle.IsOn = true;
         OffloadKqvToggle.IsOn = true;
         UseMmapToggle.IsOn = true;
         UseMlockToggle.IsOn = false;
@@ -599,7 +602,8 @@ public sealed partial class ModelsPage : Page
             TopK = (int)TopKBox.Value,
             MinP = (float)MinPBox.Value,
             RepeatPenalty = (float)RepeatPenaltyBox.Value,
-            RepeatLastN = (int)RepeatLastNBox.Value
+            RepeatLastN = (int)RepeatLastNBox.Value,
+            ThinkingEnabled = ThinkingEnabledToggle.IsOn
         };
 
         var (success, needsReload) = await _api.SetModelConfigAsync(config);

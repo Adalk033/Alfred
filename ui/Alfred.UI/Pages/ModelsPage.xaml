@@ -303,6 +303,14 @@
                                    SmallChange="1" LargeChange="100" />
                     </Grid>
 
+                          <ToggleSwitch x:Name="ThinkingEnabledToggle"
+                                  Header="Modo thinking del modelo"
+                                  OffContent="Desactivado" OnContent="Activado"
+                                  Toggled="OnAdvancedToggled" />
+                        <TextBlock Text="Cuando esta activado se inyecta el token &lt;|think|&gt; al inicio del system prompt. La UI y el historial solo muestran la respuesta final."
+                               FontSize="11" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
                     <!-- Tuning avanzado -->
                     <Expander Header="Tuning avanzado"
                               HorizontalAlignment="Stretch"

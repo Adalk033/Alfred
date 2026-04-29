@@ -53,6 +53,9 @@ public sealed partial class ChatPage : Page
     private DateTime _loadingStarted;
     private int _loadingTipIndex;
 
+    private DispatcherTimer? _variantResyncTimer;
+    private ChatTurn? _pendingVariantResyncTurn;
+
     // Estado de busqueda local (Ctrl+F)
     private readonly List<SearchHit> _searchHits = [];
     private int _searchHitIndex = -1;
@@ -167,6 +170,8 @@ public sealed partial class ChatPage : Page
     private async Task SendNewMessage()
     {
         if (_api == null || _isSending) return;
+
+        await FlushPendingVariantResyncAsync();
 
         string question = InputBox.Text.Trim();
         if (string.IsNullOrEmpty(question) && _attachedFiles.Count == 0) return;
@@ -343,6 +348,8 @@ public sealed partial class ChatPage : Page
     {
         if (_isSending || _api == null) return;
 
+        await FlushPendingVariantResyncAsync();
+
         // Inline edit: dialog con TextBox prellenado
         var textBox = new TextBox
         {
@@ -379,8 +386,13 @@ public sealed partial class ChatPage : Page
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
 
-        await ResyncBackendUpToTurnAsync(turn);
         RebuildAllBubbles();
+        bool ok = await TryResyncBackendUpToTurnAsync(turn);
+        if (!ok)
+        {
+            ShowNotification(InfoBarSeverity.Warning,
+                "No se pudo resincronizar todo el contexto. Se intentara regenerar igualmente.");
+        }
         if (newVariant.UseAgent)
             await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
         else
@@ -390,6 +402,8 @@ public sealed partial class ChatPage : Page
     private async void OnRegenerateAssistant(ChatTurn turn, TurnVariant variant)
     {
         if (_isSending || _api == null) return;
+
+        await FlushPendingVariantResyncAsync();
 
         var newVariant = new TurnVariant
         {
@@ -402,15 +416,20 @@ public sealed partial class ChatPage : Page
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
 
-        await ResyncBackendUpToTurnAsync(turn);
         RebuildAllBubbles();
+        bool ok = await TryResyncBackendUpToTurnAsync(turn);
+        if (!ok)
+        {
+            ShowNotification(InfoBarSeverity.Warning,
+                "No se pudo resincronizar todo el contexto. Se intentara regenerar igualmente.");
+        }
         if (newVariant.UseAgent)
             await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
         else
             await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
-    private async void OnSwitchVariant(ChatTurn turn, int delta)
+    private void OnSwitchVariant(ChatTurn turn, int delta)
     {
         if (_isSending) return;
         int newIdx = turn.ActiveIndex + delta;
@@ -427,48 +446,186 @@ public sealed partial class ChatPage : Page
             return;
         }
 
-        await ResyncBackendIncludingTurnAsync(turn);
         RebuildAllBubbles();
+        QueueVariantResync(turn);
+    }
+
+    private void QueueVariantResync(ChatTurn turn)
+    {
+        _pendingVariantResyncTurn = turn;
+
+        if (_variantResyncTimer == null)
+        {
+            _variantResyncTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(220)
+            };
+            _variantResyncTimer.Tick += async (_, _) =>
+            {
+                _variantResyncTimer?.Stop();
+                var target = _pendingVariantResyncTurn;
+                _pendingVariantResyncTurn = null;
+                if (target == null || _isSending) return;
+
+                bool ok = await ResyncBackendIncludingTurnAsync(target);
+                if (!ok)
+                {
+                    ShowNotification(InfoBarSeverity.Warning,
+                        "No se pudo resincronizar el contexto de la variante seleccionada.");
+                }
+            };
+        }
+
+        _variantResyncTimer.Stop();
+        _variantResyncTimer.Start();
+    }
+
+    private async Task FlushPendingVariantResyncAsync()
+    {
+        if (_pendingVariantResyncTurn == null) return;
+
+        _variantResyncTimer?.Stop();
+        var target = _pendingVariantResyncTurn;
+        _pendingVariantResyncTurn = null;
+        if (target == null) return;
+
+        bool ok = await TryResyncBackendIncludingTurnAsync(target);
+        if (!ok)
+        {
+            ShowNotification(InfoBarSeverity.Warning,
+                "No se pudo sincronizar el contexto previo antes de generar.");
+        }
+    }
+
+    private async Task<bool> TryResyncBackendUpToTurnAsync(ChatTurn target)
+    {
+        if (await ResyncBackendUpToTurnAsync(target))
+            return true;
+
+        await EnsureConversationCreated();
+        if (await ResyncBackendUpToTurnAsync(target))
+            return true;
+
+        return false;
+    }
+
+    private async Task<bool> TryResyncBackendIncludingTurnAsync(ChatTurn target)
+    {
+        if (await ResyncBackendIncludingTurnAsync(target))
+            return true;
+
+        await EnsureConversationCreated();
+        if (await ResyncBackendIncludingTurnAsync(target))
+            return true;
+
+        return false;
     }
 
     // Limpia el backend y reinyecta los mensajes del path activo HASTA (sin
     // incluir) el turno indicado. Tras esto, el backend esta listo para que el
     // streaming endpoint agregue el user+assistant del turno objetivo.
-    private async Task ResyncBackendUpToTurnAsync(ChatTurn target)
+    private async Task<bool> ResyncBackendUpToTurnAsync(ChatTurn target)
     {
-        if (_api == null || string.IsNullOrEmpty(_conversationId)) return;
+        if (_api == null) return false;
+        if (string.IsNullOrEmpty(_conversationId)) return true;
 
         var path = GetActivePath();
-        await _api.ClearConversationAsync(_conversationId);
+        if (!await _api.ClearConversationAsync(_conversationId))
+            return false;
 
         foreach (var turn in path)
         {
             if (turn == target) break;
             var v = turn.Active;
-            if (string.IsNullOrEmpty(v.UserText) && v.Attachments == null) continue;
-            await _api.AddMessageAsync(_conversationId, "user", v.UserText);
+            string userMessage = BuildUserMessageForResync(v);
+            if (string.IsNullOrEmpty(userMessage)) continue;
+
+            if (!await _api.AddMessageAsync(_conversationId, "user", userMessage))
+                return false;
+
             if (!string.IsNullOrEmpty(v.AssistantText) && !v.IsError)
-                await _api.AddMessageAsync(_conversationId, "assistant", v.AssistantText);
+            {
+                if (!await _api.AddMessageAsync(_conversationId, "assistant", v.AssistantText))
+                    return false;
+            }
         }
+
+        return true;
     }
 
     // Reinyecta TODOS los mensajes del path activo (incluyendo el turno dado).
     // Usado al cambiar de variante sin regenerar.
-    private async Task ResyncBackendIncludingTurnAsync(ChatTurn _)
+    private async Task<bool> ResyncBackendIncludingTurnAsync(ChatTurn _)
     {
-        if (_api == null || string.IsNullOrEmpty(_conversationId)) return;
+        if (_api == null) return false;
+        if (string.IsNullOrEmpty(_conversationId)) return true;
 
         var path = GetActivePath();
-        await _api.ClearConversationAsync(_conversationId);
+        if (!await _api.ClearConversationAsync(_conversationId))
+            return false;
 
         foreach (var turn in path)
         {
             var v = turn.Active;
-            if (string.IsNullOrEmpty(v.UserText)) continue;
-            await _api.AddMessageAsync(_conversationId, "user", v.UserText);
+            string userMessage = BuildUserMessageForResync(v);
+            if (string.IsNullOrEmpty(userMessage)) continue;
+
+            if (!await _api.AddMessageAsync(_conversationId, "user", userMessage))
+                return false;
+
             if (!string.IsNullOrEmpty(v.AssistantText) && !v.IsError && !v.Pending)
-                await _api.AddMessageAsync(_conversationId, "assistant", v.AssistantText);
+            {
+                if (!await _api.AddMessageAsync(_conversationId, "assistant", v.AssistantText))
+                    return false;
+            }
         }
+
+        return true;
+    }
+
+    private static string BuildUserMessageForResync(TurnVariant variant)
+    {
+        bool hasText = !string.IsNullOrWhiteSpace(variant.UserText);
+        bool hasAttachments = variant.Attachments is { Count: > 0 };
+
+        if (!hasText && !hasAttachments)
+            return "";
+
+        string question = hasText ? variant.UserText.Trim() : "[Mensaje con adjuntos sin texto]";
+        if (!hasAttachments)
+            return question;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Contexto de archivos adjuntos:");
+
+        foreach (var file in variant.Attachments!)
+        {
+            string name = file.Name ?? "archivo";
+            string content = file.Content ?? "";
+            if (content.Length == 0)
+                continue;
+
+            bool isBase64 = content.StartsWith("data:", StringComparison.Ordinal)
+                && content.Contains(";base64,", StringComparison.Ordinal);
+            if (isBase64)
+            {
+                sb.AppendLine($"[Archivo adjunto: {name} (formato binario, contenido no procesable directamente)]");
+                continue;
+            }
+
+            string trimmed = content.Length > 50000
+                ? content.Substring(0, 50000) + "\n... (contenido truncado)"
+                : content;
+
+            sb.AppendLine($"--- Contenido de {name} ---");
+            sb.AppendLine(trimmed);
+            sb.AppendLine($"--- Fin de {name} ---");
+        }
+
+        sb.AppendLine();
+        sb.Append("Pregunta del usuario: ");
+        sb.Append(question);
+        return sb.ToString();
     }
 
     // ========================================================================
@@ -578,7 +735,7 @@ public sealed partial class ChatPage : Page
             // Burbuja viva: TextBlock plano que se va llenando con tokens
             var live = new TextBlock
             {
-                Text = "",
+                Text = "Generando respuesta...",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = baseSize,
                 Foreground = textBrush,

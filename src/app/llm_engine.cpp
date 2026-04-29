@@ -18,6 +18,31 @@
 
 namespace alfred {
 
+static size_t find_role_leak_pos(const std::string& text) {
+    static const char* kMarkers[] = {
+        "User question:",
+        "User:",
+        "Usuario:",
+        "System:",
+        "Assistant:",
+        "Alfred:",
+        "<|channel>",
+        "<|channel|>",
+        "<channel|>",
+        "<|im_start|>",
+        "<|start_header_id|>",
+    };
+
+    size_t best = std::string::npos;
+    for (const char* marker : kMarkers) {
+        size_t pos = text.find(marker);
+        if (pos != std::string::npos && (best == std::string::npos || pos < best)) {
+            best = pos;
+        }
+    }
+    return best;
+}
+
 static ggml_type parse_cache_type(const std::string& s) {
     if (s == "q8_0") return GGML_TYPE_Q8_0;
     if (s == "q4_0") return GGML_TYPE_Q4_0;
@@ -91,6 +116,7 @@ LLMEngine& LLMEngine::operator=(LLMEngine&& other) noexcept {
 }
 
 void LLMEngine::cleanup() {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     if (ctx_) {
         llama_free(ctx_);
         ctx_ = nullptr;
@@ -103,6 +129,7 @@ void LLMEngine::cleanup() {
 }
 
 bool LLMEngine::load_model(const LLMConfig& config) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     cleanup();
     config_ = config;
     last_error_.clear();
@@ -236,19 +263,25 @@ bool LLMEngine::load_model(const LLMConfig& config) {
     return true;
 }
 
-std::string LLMEngine::last_error() const { return last_error_; }
+std::string LLMEngine::last_error() const {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    return last_error_;
+}
 
 void LLMEngine::unload_model() {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     cleanup();
     model_name_.clear();
     log_info("Modelo LLM descargado");
 }
 
 bool LLMEngine::is_loaded() const {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     return model_ != nullptr && ctx_ != nullptr;
 }
 
 std::vector<int32_t> LLMEngine::tokenize(const std::string& text, bool add_bos) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     if (!model_) return {};
 
     int max_tokens = static_cast<int>(text.size()) + 128;
@@ -274,6 +307,7 @@ std::vector<int32_t> LLMEngine::tokenize(const std::string& text, bool add_bos) 
 }
 
 std::string LLMEngine::token_to_string(int32_t token) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     if (!model_) return "";
 
     const llama_vocab* vocab = llama_model_get_vocab(model_);
@@ -286,6 +320,7 @@ std::string LLMEngine::token_to_string(int32_t token) {
 }
 
 llama_sampler* LLMEngine::create_sampler() {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     auto sparams = llama_sampler_chain_default_params();
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
 
@@ -323,10 +358,12 @@ llama_sampler* LLMEngine::create_sampler() {
 }
 
 LLMResult LLMEngine::generate(const std::string& prompt) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     return generate_streaming(prompt, nullptr);
 }
 
 LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback callback) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     LLMResult result;
 
     if (!is_loaded()) {
@@ -368,41 +405,61 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
     if (common_prefix > 0 && common_prefix == tokens.size())
         common_prefix = tokens.size() - 1;
     // Solo vale la pena si el ahorro es significativo
-    if (common_prefix == 0 || common_prefix < tokens.size() / 4) {
-        llama_memory_clear(llama_get_memory(ctx_), true);
+    if (common_prefix < tokens.size() / 4) {
         common_prefix = 0;
-    } else {
-        llama_memory_seq_rm(llama_get_memory(ctx_), 0,
-                            static_cast<int32_t>(common_prefix), -1);
     }
 
-    // Crear batch y procesar tokens del prompt (solo los nuevos tras el prefijo comun)
+    // Crear batch y procesar tokens del prompt.
     llama_batch batch = llama_batch_init(config_.n_batch, 0, 1);
-
     int total_tokens = static_cast<int>(tokens.size());
-    for (int i = static_cast<int>(common_prefix); i < total_tokens; ++i) {
-        batch.token[batch.n_tokens] = tokens[static_cast<size_t>(i)];
-        batch.pos[batch.n_tokens] = i;
-        batch.n_seq_id[batch.n_tokens] = 1;
-        batch.seq_id[batch.n_tokens][0] = 0;
-        batch.logits[batch.n_tokens] = (i == total_tokens - 1) ? 1 : 0;
-        batch.n_tokens++;
 
-        // Si el batch esta lleno, decodificar
-        if (batch.n_tokens >= config_.n_batch) {
+    auto decode_prompt_from = [&](size_t prefix_to_reuse) -> bool {
+        if (prefix_to_reuse == 0) {
+            llama_memory_clear(llama_get_memory(ctx_), true);
+        } else {
+            llama_memory_seq_rm(llama_get_memory(ctx_), 0,
+                                static_cast<int32_t>(prefix_to_reuse), -1);
+        }
+
+        batch.n_tokens = 0;
+        for (int i = static_cast<int>(prefix_to_reuse); i < total_tokens; ++i) {
+            batch.token[batch.n_tokens] = tokens[static_cast<size_t>(i)];
+            batch.pos[batch.n_tokens] = i;
+            batch.n_seq_id[batch.n_tokens] = 1;
+            batch.seq_id[batch.n_tokens][0] = 0;
+            batch.logits[batch.n_tokens] = (i == total_tokens - 1) ? 1 : 0;
+            batch.n_tokens++;
+
+            if (batch.n_tokens >= config_.n_batch) {
+                if (llama_decode(ctx_, batch) != 0) {
+                    return false;
+                }
+                batch.n_tokens = 0;
+            }
+        }
+
+        if (batch.n_tokens > 0) {
             if (llama_decode(ctx_, batch) != 0) {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    // Algunos modelos (p.ej. ciertas variantes Qwen) pueden fallar al reutilizar
+    // KV cache entre turnos. Si falla con prefijo, reintentar una vez con KV limpio.
+    if (!decode_prompt_from(common_prefix)) {
+        if (common_prefix > 0) {
+            log_warn("Fallo decodificando prompt con prefix cache; reintentando con KV limpio");
+            if (!decode_prompt_from(0)) {
                 result.success = false;
                 result.error = "Error decodificando prompt";
                 llama_batch_free(batch);
                 return result;
             }
-            batch.n_tokens = 0;
-        }
-    }
-
-    // Decodificar tokens restantes del prompt
-    if (batch.n_tokens > 0) {
-        if (llama_decode(ctx_, batch) != 0) {
+            common_prefix = 0;
+        } else {
             result.success = false;
             result.error = "Error decodificando prompt";
             llama_batch_free(batch);
@@ -433,6 +490,13 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
         // Convertir token a texto
         std::string piece = token_to_string(new_token);
         result.text += piece;
+
+        size_t leak_pos = find_role_leak_pos(result.text);
+        if (leak_pos != std::string::npos && leak_pos > 0) {
+            result.text.resize(leak_pos);
+            break;
+        }
+
         ++n_generated;
 
         // Callback de streaming
@@ -483,14 +547,30 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
     return result;
 }
 
-std::string LLMEngine::model_name() const { return model_name_; }
+std::string LLMEngine::model_name() const {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    return model_name_;
+}
 
 int LLMEngine::context_length() const {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     if (ctx_) return llama_n_ctx(ctx_);
     return config_.n_ctx;
 }
 
+bool LLMEngine::try_get_status(bool& loaded, std::string& model_name) const {
+    if (!state_mutex_.try_lock()) {
+        return false;
+    }
+
+    loaded = (model_ != nullptr && ctx_ != nullptr);
+    model_name = model_name_;
+    state_mutex_.unlock();
+    return true;
+}
+
 int LLMEngine::count_tokens(const std::string& text) const {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     if (!model_) return -1;
     if (text.empty()) return 0;
     const llama_vocab* vocab = llama_model_get_vocab(model_);
@@ -500,12 +580,33 @@ int LLMEngine::count_tokens(const std::string& text) const {
     return n < 0 ? -n : n;
 }
 
-void LLMEngine::set_temperature(float temp) { config_.temperature = temp; }
-void LLMEngine::set_top_p(float top_p) { config_.top_p = top_p; }
-void LLMEngine::set_max_tokens(int max_tokens) { config_.max_tokens = max_tokens; }
-void LLMEngine::set_top_k(int v) { config_.top_k = v; }
-void LLMEngine::set_min_p(float v) { config_.min_p = v; }
-void LLMEngine::set_repeat_penalty(float v) { config_.repeat_penalty = v; }
-void LLMEngine::set_repeat_last_n(int v) { config_.repeat_last_n = v; }
+void LLMEngine::set_temperature(float temp) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    config_.temperature = temp;
+}
+void LLMEngine::set_top_p(float top_p) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    config_.top_p = top_p;
+}
+void LLMEngine::set_max_tokens(int max_tokens) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    config_.max_tokens = max_tokens;
+}
+void LLMEngine::set_top_k(int v) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    config_.top_k = v;
+}
+void LLMEngine::set_min_p(float v) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    config_.min_p = v;
+}
+void LLMEngine::set_repeat_penalty(float v) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    config_.repeat_penalty = v;
+}
+void LLMEngine::set_repeat_last_n(int v) {
+    std::lock_guard<std::recursive_mutex> lock(state_mutex_);
+    config_.repeat_last_n = v;
+}
 
 } // namespace alfred

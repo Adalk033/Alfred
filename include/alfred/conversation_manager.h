@@ -47,6 +47,7 @@ public:
 
     // Eliminar conversacion completa
     void delete_conversation(const std::string& id);
+    int delete_conversations(const std::vector<std::string>& ids);
 
     // Buscar conversaciones
     std::vector<ConversationThread> search(const std::string& query);

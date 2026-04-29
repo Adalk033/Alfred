@@ -243,10 +243,10 @@ public sealed partial class SettingsPage : Page
 
         try
         {
-            await SaveSettingIfNotEmpty("user_name", UserNameBox.Text);
-            await SaveSettingIfNotEmpty("user_age", UserAgeBox.Text);
-            await SaveSettingIfNotEmpty("user_occupation", UserOccupationBox.Text);
-            await SaveSettingIfNotEmpty("about_user", AboutUserBox.Text);
+            await SaveSettingAllowEmpty("user_name", UserNameBox.Text);
+            await SaveSettingAllowEmpty("user_age", UserAgeBox.Text);
+            await SaveSettingAllowEmpty("user_occupation", UserOccupationBox.Text);
+            await SaveSettingAllowEmpty("about_user", AboutUserBox.Text);
 
             await ShowDialog("Perfil guardado", "Los cambios se aplicaron correctamente.");
         }
@@ -442,13 +442,15 @@ public sealed partial class SettingsPage : Page
     // Helpers
     // ========================================================================
 
-    private async Task SaveSettingIfNotEmpty(string key, string value)
+    private async Task SaveSettingAllowEmpty(string key, string value)
     {
         if (_api == null) return;
 
         string trimmed = value.Trim();
         if (!string.IsNullOrEmpty(trimmed))
             await _api.SetUserSettingAsync(key, trimmed);
+        else
+            await _api.DeleteUserSettingAsync(key);
     }
 
     private async Task ShowDialog(string title, string content)

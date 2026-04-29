@@ -55,6 +55,7 @@ void DBManager::initialize(const std::string& db_path) {
         // WAL mode para mejor rendimiento concurrente
         g_db->exec("PRAGMA journal_mode=WAL");
         g_db->exec("PRAGMA foreign_keys=ON");
+        g_db->exec("PRAGMA busy_timeout=5000");
 
         create_tables();
         run_migrations();
@@ -323,6 +324,24 @@ void DBManager::delete_conversation(const std::string& id) {
     SQLite::Statement query(*g_db, "DELETE FROM conversation_threads WHERE id = ?");
     query.bind(1, id);
     query.exec();
+}
+
+int DBManager::delete_conversations(const std::vector<std::string>& ids) {
+    if (ids.empty()) return 0;
+
+    SQLite::Transaction tx(*g_db);
+    SQLite::Statement query(*g_db, "DELETE FROM conversation_threads WHERE id = ?");
+
+    int deleted = 0;
+    for (const auto& id : ids) {
+        query.reset();
+        query.clearBindings();
+        query.bind(1, id);
+        deleted += query.exec();
+    }
+
+    tx.commit();
+    return deleted;
 }
 
 void DBManager::add_message(const std::string& conversation_id, const std::string& role,

@@ -51,6 +51,10 @@ void ConversationManager::delete_conversation(const std::string& id) {
     DBManager::instance().delete_conversation(id);
 }
 
+int ConversationManager::delete_conversations(const std::vector<std::string>& ids) {
+    return DBManager::instance().delete_conversations(ids);
+}
+
 std::vector<ConversationThread> ConversationManager::search(const std::string& query) {
     return DBManager::instance().search_conversations(query);
 }
@@ -77,9 +81,10 @@ std::string ConversationManager::format_messages_as_context(
     oss << "Historial de conversacion reciente:\n";
     for (const auto& msg : messages) {
         if (msg.role == "user") {
-            oss << "Usuario: " << msg.content << "\n";
+            oss << "user: " << msg.content << "\n";
         } else {
-            oss << "Alfred: " << truncate(msg.content, 500) << "\n";
+            std::string assistant_text = extract_final_response_text(msg.content);
+            oss << "assistant: " << truncate(assistant_text, 500) << "\n";
         }
     }
     return oss.str();
@@ -99,8 +104,9 @@ std::vector<ConversationMessage> ConversationManager::select_history_within_budg
     int used = 0;
     for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
         const auto& m = *it;
-        const std::string prefix = (m.role == "user") ? "Usuario: " : "Alfred: ";
-        const std::string& body  = (m.role == "user") ? m.content : truncate(m.content, 500);
+        const std::string prefix = (m.role == "user") ? "user: " : "assistant: ";
+        const std::string assistant_text = extract_final_response_text(m.content);
+        const std::string& body  = (m.role == "user") ? m.content : truncate(assistant_text, 500);
         std::string line = prefix + body + "\n";
 
         int cost = llm.count_tokens(line);

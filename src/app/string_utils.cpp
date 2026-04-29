@@ -221,4 +221,105 @@ std::string truncate(const std::string& text, size_t max_length, const std::stri
     return text.substr(0, max_length - suffix.size()) + suffix;
 }
 
+std::string extract_final_response_text(const std::string& text) {
+    if (text.empty()) return "";
+
+    static const std::vector<std::string> kThoughtStartMarkers = {
+        "<|channel|>thought",
+        "<|channel>thought",
+        "<|thought|>",
+        "<thought>",
+    };
+    static const std::vector<std::string> kThoughtEndMarkers = {
+        "<|channel|>",
+        "<channel|>",
+        "</thought>",
+        "<|/thought|>",
+        "</think>",
+        "<|end_thought|>",
+    };
+
+    auto find_earliest = [](const std::string& s,
+                            size_t from,
+                            const std::vector<std::string>& markers,
+                            size_t* marker_len) -> size_t {
+        size_t best_pos = std::string::npos;
+        size_t best_len = 0;
+        for (const auto& marker : markers) {
+            size_t p = s.find(marker, from);
+            if (p != std::string::npos && (best_pos == std::string::npos || p < best_pos)) {
+                best_pos = p;
+                best_len = marker.size();
+            }
+        }
+        if (marker_len) *marker_len = best_len;
+        return best_pos;
+    };
+
+    std::string out;
+    out.reserve(text.size());
+
+    bool found_block = false;
+    size_t pos = 0;
+    while (pos < text.size()) {
+        size_t start_len = 0;
+        size_t start = find_earliest(text, pos, kThoughtStartMarkers, &start_len);
+        if (start == std::string::npos) {
+            out.append(text, pos, std::string::npos);
+            break;
+        }
+
+        found_block = true;
+        out.append(text, pos, start - pos);
+
+        size_t end_len = 0;
+        size_t end = find_earliest(text, start + start_len, kThoughtEndMarkers, &end_len);
+        if (end == std::string::npos) {
+            break;
+        }
+        pos = end + end_len;
+    }
+
+    auto extract_after_last_marker = [](const std::string& s) -> std::string {
+        static const std::vector<std::string> kChannelMarkers = {
+            "<channel|>",
+            "<|channel|>",
+            "<|channel>",
+        };
+
+        size_t best_pos = std::string::npos;
+        size_t best_len = 0;
+        for (const auto& marker : kChannelMarkers) {
+            size_t p = s.rfind(marker);
+            if (p != std::string::npos && (best_pos == std::string::npos || p > best_pos)) {
+                best_pos = p;
+                best_len = marker.size();
+            }
+        }
+
+        if (best_pos == std::string::npos) return "";
+        return trim(s.substr(best_pos + best_len));
+    };
+
+    std::string cleaned;
+
+    if (!found_block) {
+        cleaned = trim(text);
+        // Caso observado en produccion: el modelo puede emitir razonamiento
+        // en claro y luego delimitar la respuesta final con <channel|>.
+        std::string after_channel = extract_after_last_marker(cleaned);
+        if (!after_channel.empty()) {
+            cleaned = std::move(after_channel);
+        }
+    } else {
+        cleaned = trim(out);
+    }
+
+    // Limpieza defensiva de tags huerfanos de canal.
+    replace_all(cleaned, "<|channel|>", "");
+    replace_all(cleaned, "<channel|>", "");
+    replace_all(cleaned, "<|channel>", "");
+    return trim(cleaned);
+}
+
 } // namespace alfred

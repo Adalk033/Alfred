@@ -32,8 +32,9 @@ std::string get_current_datetime() {
 // ============================================================================
 // Plantilla SIN documentos (conocimiento general)
 // ============================================================================
-const std::string PROMPT_TEMPLATE_NO_DOCUMENTS = R"(System: You are {ASSISTANT_NAME}, a helpful personal AI assistant.
-You must ALWAYS respond in Spanish.
+const std::string PROMPT_TEMPLATE_NO_DOCUMENTS = R"({THINKING_TOKEN}System: You are {ASSISTANT_NAME}, a helpful personal AI assistant.
+You must always respond in the same language used by the user's first message in this conversation.
+If the language is ambiguous, default to Spanish.
 You are running 100% locally - no data is sent externally.
 
 User Profile:
@@ -53,13 +54,16 @@ Additional instructions from the user:
 Guidelines:
 - Rely on your general knowledge to answer.
 - Maintain conversation continuity using the context below.
-- Always respond in Spanish and follow the tone and instructions above.
+- Follow the language of the user's first message and the tone/instructions above.
+- Do not output role tags or prompt fragments like "User:", "Usuario:", "User question:", "System:", or "Assistant:".
+- Reply only with the final assistant message for the user.
 
 Conversation context:
 {context}
 
-User question: {input}
+Current user message:
+{input}
 
-{ASSISTANT_NAME}:)";
+Assistant:)";
 
 } // namespace alfred

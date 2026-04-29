@@ -64,6 +64,7 @@ public:
     std::vector<ConversationThread> list_conversations(int limit = 50, int offset = 0);
     void update_conversation_title(const std::string& id, const std::string& title);
     void delete_conversation(const std::string& id);
+    int delete_conversations(const std::vector<std::string>& ids);
     void add_message(const std::string& conversation_id, const std::string& role,
                      const std::string& content, const std::string& metadata = "");
     std::vector<ConversationMessage> get_messages(const std::string& conversation_id,
