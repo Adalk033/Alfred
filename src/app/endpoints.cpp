@@ -784,12 +784,34 @@ void handle_delete_model(const httplib::Request& req, httplib::Response& res,
 // ============================================================================
 void handle_unload_model(const httplib::Request& /*req*/, httplib::Response& res,
                           AlfredCore& core) {
-    bool was_loaded = core.llm().is_loaded();
-    core.unload_current_model();
+    try {
+        if (core.model_state() == ModelState::PROCESSING) {
+            json_error(res, 409,
+                "No se puede descargar el modelo mientras se genera una respuesta.");
+            return;
+        }
 
-    json data;
-    data["status"] = was_loaded ? "unloaded" : "already_unloaded";
-    json_ok(res, data);
+        bool was_loaded = core.llm().is_loaded();
+        core.unload_current_model();
+        bool still_loaded = core.llm().is_loaded();
+
+        json data;
+        if (!was_loaded) {
+            data["status"] = "already_unloaded";
+        } else if (still_loaded) {
+            data["status"] = "busy";
+            data["message"] = "El modelo sigue cargado; reintenta en unos segundos.";
+        } else {
+            data["status"] = "unloaded";
+        }
+        json_ok(res, data);
+    } catch (const std::exception& e) {
+        log_error(std::string("Error en /models/unload: ") + e.what());
+        json_error(res, 500, "Error interno al descargar modelo");
+    } catch (...) {
+        log_error("Error desconocido en /models/unload");
+        json_error(res, 500, "Error interno al descargar modelo");
+    }
 }
 
 // ============================================================================

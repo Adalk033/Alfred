@@ -301,10 +301,46 @@ public sealed partial class AlfredApiClient : IDisposable
     /// <summary>
     /// Descargar el modelo actual para liberar GPU/RAM.
     /// </summary>
-    public async Task<bool> UnloadModelAsync()
+    public async Task<(bool Success, bool Busy, string Message)> UnloadModelAsync()
     {
         var response = await PostRawAsync("/models/unload", new { }, 30);
-        return response?.IsSuccessStatusCode ?? false;
+        if (response == null)
+            return (false, false, "No se pudo conectar con el backend");
+
+        string body = "";
+        try { body = await response.Content.ReadAsStringAsync(); } catch { }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("error", out var err))
+                    return (false, false, err.GetString() ?? "No se pudo detener el modelo");
+            }
+            catch { }
+            return (false, false, $"Error del servidor (HTTP {(int)response.StatusCode})");
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            string status = doc.RootElement.TryGetProperty("status", out var st)
+                ? (st.GetString() ?? "")
+                : "";
+
+            return status switch
+            {
+                "unloaded" => (true, false, "Modelo descargado. GPU/RAM liberados."),
+                "already_unloaded" => (true, false, "El modelo ya estaba descargado."),
+                "busy" => (false, true, "El modelo esta ocupado. Espera a que termine la respuesta y reintenta."),
+                _ => (true, false, "Solicitud completada."),
+            };
+        }
+        catch
+        {
+            return (true, false, "Modelo descargado.");
+        }
     }
 
     /// <summary>

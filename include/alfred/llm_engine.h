@@ -16,6 +16,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <mutex>
 
 // Forward declarations de llama.cpp
 struct llama_model;
@@ -121,6 +122,7 @@ private:
     LLMConfig config_;
     std::string model_name_;
     std::string last_error_;
+    mutable std::recursive_mutex state_mutex_;
 
     // Prefix caching: tokens de la ultima generacion para detectar prefijo comun
     std::vector<int32_t> last_tokens_;

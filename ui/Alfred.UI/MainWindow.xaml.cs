@@ -426,18 +426,24 @@ public sealed partial class MainWindow : Window
         UnloadModelButton.IsEnabled = false;
         try
         {
-            bool success = await _api.UnloadModelAsync();
-            if (success)
+            var result = await _api.UnloadModelAsync();
+            if (result.Success)
             {
                 await LoadModelInfo();
                 NotificationService.Instance.ShowSuccess(
-                    "Modelo descargado. GPU/RAM liberados.",
+                    result.Message,
                     "Modelo detenido");
+            }
+            else if (result.Busy)
+            {
+                NotificationService.Instance.ShowWarning(
+                    result.Message,
+                    "Modelo en uso");
             }
             else
             {
                 NotificationService.Instance.ShowError(
-                    "No se pudo detener el modelo.");
+                    result.Message);
             }
         }
         finally
