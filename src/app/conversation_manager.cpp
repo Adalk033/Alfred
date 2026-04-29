@@ -51,6 +51,10 @@ void ConversationManager::delete_conversation(const std::string& id) {
     DBManager::instance().delete_conversation(id);
 }
 
+int ConversationManager::delete_conversations(const std::vector<std::string>& ids) {
+    return DBManager::instance().delete_conversations(ids);
+}
+
 std::vector<ConversationThread> ConversationManager::search(const std::string& query) {
     return DBManager::instance().search_conversations(query);
 }

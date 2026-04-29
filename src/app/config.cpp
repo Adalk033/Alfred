@@ -55,11 +55,14 @@ Guidelines:
 - Rely on your general knowledge to answer.
 - Maintain conversation continuity using the context below.
 - Follow the language of the user's first message and the tone/instructions above.
+- Do not output role tags or prompt fragments like "User:", "Usuario:", "User question:", "System:", or "Assistant:".
+- Reply only with the final assistant message for the user.
 
 Conversation context:
 {context}
 
-User question: {input}
+Current user message:
+{input}
 
 {ASSISTANT_NAME}:)";
 

@@ -49,6 +49,7 @@ void handle_list_conversations(const httplib::Request& req, httplib::Response& r
 void handle_get_conversation(const httplib::Request& req, httplib::Response& res);
 void handle_update_conversation_title(const httplib::Request& req, httplib::Response& res);
 void handle_delete_conversation(const httplib::Request& req, httplib::Response& res);
+void handle_delete_conversations_bulk(const httplib::Request& req, httplib::Response& res);
 void handle_add_message(const httplib::Request& req, httplib::Response& res);
 void handle_clear_messages(const httplib::Request& req, httplib::Response& res);
 void handle_conversation_query(const httplib::Request& req, httplib::Response& res,

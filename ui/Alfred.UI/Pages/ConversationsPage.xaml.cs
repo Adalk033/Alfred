@@ -220,11 +220,10 @@ public sealed partial class ConversationsPage : Page
 
         DeleteSelectedButton.IsEnabled = false;
 
-        // Borrado en paralelo; contamos exitos/fallos para reportar con precision.
-        var tasks   = selected.Select(c => _api.DeleteConversationAsync(c.Id)).ToArray();
-        var results = await Task.WhenAll(tasks);
-        int ok   = results.Count(r => r);
-        int fail = results.Length - ok;
+        var ids = selected.Select(c => c.Id).ToList();
+        var bulkResult = await _api.DeleteConversationsBulkAsync(ids);
+        int ok = bulkResult.Deleted;
+        int fail = Math.Max(0, bulkResult.Requested - ok);
 
         SelectModeToggle.IsChecked = false;   // dispara OnExitSelectMode -> limpia estado
         await LoadConversations();

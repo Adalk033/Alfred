@@ -1245,8 +1245,52 @@ void handle_delete_conversation(const httplib::Request& req, httplib::Response& 
     std::string id = path_param(req, "id");
     if (id.empty()) { json_error(res, 400, "ID requerido"); return; }
 
-    ConversationManager::instance().delete_conversation(id);
-    json_ok(res, {{"status", "deleted"}});
+    try {
+        ConversationManager::instance().delete_conversation(id);
+        json_ok(res, {{"status", "deleted"}});
+    } catch (const std::exception& e) {
+        log_error("Error eliminando conversacion: " + std::string(e.what()));
+        json_error(res, 500, "No se pudo eliminar la conversacion");
+    }
+}
+
+void handle_delete_conversations_bulk(const httplib::Request& req, httplib::Response& res) {
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    if (!body.contains("ids") || !body["ids"].is_array()) {
+        json_error(res, 400, "Campo 'ids' requerido (array)");
+        return;
+    }
+
+    std::vector<std::string> ids;
+    ids.reserve(body["ids"].size());
+
+    for (const auto& it : body["ids"]) {
+        if (!it.is_string()) {
+            json_error(res, 400, "Todos los IDs deben ser string");
+            return;
+        }
+        std::string id = it.get<std::string>();
+        if (!id.empty()) ids.push_back(id);
+    }
+
+    if (ids.empty()) {
+        json_error(res, 400, "No hay IDs validos para eliminar");
+        return;
+    }
+
+    try {
+        int deleted = ConversationManager::instance().delete_conversations(ids);
+        json_ok(res, {
+            {"status", "deleted"},
+            {"requested", ids.size()},
+            {"deleted", deleted}
+        });
+    } catch (const std::exception& e) {
+        log_error("Error en borrado masivo de conversaciones: " + std::string(e.what()));
+        json_error(res, 500, "No se pudo completar el borrado masivo");
+    }
 }
 
 void handle_add_message(const httplib::Request& req, httplib::Response& res) {
@@ -1352,6 +1396,9 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Delete("/conversations/:id", [](const httplib::Request& req, httplib::Response& res) {
         handle_delete_conversation(req, res);
+    });
+    server.Post("/conversations/delete-bulk", [](const httplib::Request& req, httplib::Response& res) {
+        handle_delete_conversations_bulk(req, res);
     });
     server.Post("/conversations/:id/messages", [](const httplib::Request& req, httplib::Response& res) {
         handle_add_message(req, res);

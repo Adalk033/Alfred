@@ -402,6 +402,33 @@ public sealed partial class AlfredApiClient : IDisposable
         return await DeleteAsync($"/conversations/{id}");
     }
 
+    public async Task<(int Requested, int Deleted)> DeleteConversationsBulkAsync(List<string> ids)
+    {
+        if (ids == null || ids.Count == 0)
+            return (0, 0);
+
+        var response = await PostRawAsync("/conversations/delete-bulk", new { ids }, 120);
+        if (response == null || !response.IsSuccessStatusCode)
+            return (ids.Count, 0);
+
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(body);
+            int requested = doc.RootElement.TryGetProperty("requested", out var reqEl) && reqEl.TryGetInt32(out var req)
+                ? req
+                : ids.Count;
+            int deleted = doc.RootElement.TryGetProperty("deleted", out var delEl) && delEl.TryGetInt32(out var del)
+                ? del
+                : 0;
+            return (requested, deleted);
+        }
+        catch
+        {
+            return (ids.Count, 0);
+        }
+    }
+
     public async Task<bool> ClearConversationAsync(string id)
     {
         return await DeleteAsync($"/conversations/{id}/messages");

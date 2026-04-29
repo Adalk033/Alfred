@@ -18,6 +18,28 @@
 
 namespace alfred {
 
+static size_t find_role_leak_pos(const std::string& text) {
+    static const char* kMarkers[] = {
+        "User question:",
+        "User:",
+        "Usuario:",
+        "System:",
+        "Assistant:",
+        "Alfred:",
+        "<|im_start|>",
+        "<|start_header_id|>",
+    };
+
+    size_t best = std::string::npos;
+    for (const char* marker : kMarkers) {
+        size_t pos = text.find(marker);
+        if (pos != std::string::npos && (best == std::string::npos || pos < best)) {
+            best = pos;
+        }
+    }
+    return best;
+}
+
 static ggml_type parse_cache_type(const std::string& s) {
     if (s == "q8_0") return GGML_TYPE_Q8_0;
     if (s == "q4_0") return GGML_TYPE_Q4_0;
@@ -368,41 +390,61 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
     if (common_prefix > 0 && common_prefix == tokens.size())
         common_prefix = tokens.size() - 1;
     // Solo vale la pena si el ahorro es significativo
-    if (common_prefix == 0 || common_prefix < tokens.size() / 4) {
-        llama_memory_clear(llama_get_memory(ctx_), true);
+    if (common_prefix < tokens.size() / 4) {
         common_prefix = 0;
-    } else {
-        llama_memory_seq_rm(llama_get_memory(ctx_), 0,
-                            static_cast<int32_t>(common_prefix), -1);
     }
 
-    // Crear batch y procesar tokens del prompt (solo los nuevos tras el prefijo comun)
+    // Crear batch y procesar tokens del prompt.
     llama_batch batch = llama_batch_init(config_.n_batch, 0, 1);
-
     int total_tokens = static_cast<int>(tokens.size());
-    for (int i = static_cast<int>(common_prefix); i < total_tokens; ++i) {
-        batch.token[batch.n_tokens] = tokens[static_cast<size_t>(i)];
-        batch.pos[batch.n_tokens] = i;
-        batch.n_seq_id[batch.n_tokens] = 1;
-        batch.seq_id[batch.n_tokens][0] = 0;
-        batch.logits[batch.n_tokens] = (i == total_tokens - 1) ? 1 : 0;
-        batch.n_tokens++;
 
-        // Si el batch esta lleno, decodificar
-        if (batch.n_tokens >= config_.n_batch) {
+    auto decode_prompt_from = [&](size_t prefix_to_reuse) -> bool {
+        if (prefix_to_reuse == 0) {
+            llama_memory_clear(llama_get_memory(ctx_), true);
+        } else {
+            llama_memory_seq_rm(llama_get_memory(ctx_), 0,
+                                static_cast<int32_t>(prefix_to_reuse), -1);
+        }
+
+        batch.n_tokens = 0;
+        for (int i = static_cast<int>(prefix_to_reuse); i < total_tokens; ++i) {
+            batch.token[batch.n_tokens] = tokens[static_cast<size_t>(i)];
+            batch.pos[batch.n_tokens] = i;
+            batch.n_seq_id[batch.n_tokens] = 1;
+            batch.seq_id[batch.n_tokens][0] = 0;
+            batch.logits[batch.n_tokens] = (i == total_tokens - 1) ? 1 : 0;
+            batch.n_tokens++;
+
+            if (batch.n_tokens >= config_.n_batch) {
+                if (llama_decode(ctx_, batch) != 0) {
+                    return false;
+                }
+                batch.n_tokens = 0;
+            }
+        }
+
+        if (batch.n_tokens > 0) {
             if (llama_decode(ctx_, batch) != 0) {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    // Algunos modelos (p.ej. ciertas variantes Qwen) pueden fallar al reutilizar
+    // KV cache entre turnos. Si falla con prefijo, reintentar una vez con KV limpio.
+    if (!decode_prompt_from(common_prefix)) {
+        if (common_prefix > 0) {
+            log_warn("Fallo decodificando prompt con prefix cache; reintentando con KV limpio");
+            if (!decode_prompt_from(0)) {
                 result.success = false;
                 result.error = "Error decodificando prompt";
                 llama_batch_free(batch);
                 return result;
             }
-            batch.n_tokens = 0;
-        }
-    }
-
-    // Decodificar tokens restantes del prompt
-    if (batch.n_tokens > 0) {
-        if (llama_decode(ctx_, batch) != 0) {
+            common_prefix = 0;
+        } else {
             result.success = false;
             result.error = "Error decodificando prompt";
             llama_batch_free(batch);
@@ -433,6 +475,13 @@ LLMResult LLMEngine::generate_streaming(const std::string& prompt, TokenCallback
         // Convertir token a texto
         std::string piece = token_to_string(new_token);
         result.text += piece;
+
+        size_t leak_pos = find_role_leak_pos(result.text);
+        if (leak_pos != std::string::npos && leak_pos > 0) {
+            result.text.resize(leak_pos);
+            break;
+        }
+
         ++n_generated;
 
         // Callback de streaming
