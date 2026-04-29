@@ -68,7 +68,7 @@ public:
     // ------------------------------------------------------------------
     // Modo agente (Fase 0 del plan VSC+MCP)
     // ------------------------------------------------------------------
-    using ToolCallStreamCallback = std::function<void(const ToolCall&)>;
+    using ToolCallStreamCallback = std::function<bool(const ToolCall&)>;
 
     struct AgentResult {
         std::string answer;             // texto generado tras filtrar tool_calls

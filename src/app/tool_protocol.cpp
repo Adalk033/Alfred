@@ -175,7 +175,7 @@ std::string format_tools_section(const std::vector<ToolSpec>& tools) {
     if (tools.empty()) return "";
 
     std::string out;
-    out += "\n\nTienes acceso a las siguientes herramientas para responder al usuario:\n\n";
+    out += "\n\nYou have access to the following tools to help answer the user:\n\n";
     out += "<tools>\n";
     for (const auto& t : tools) {
         json j;
@@ -186,17 +186,22 @@ std::string format_tools_section(const std::vector<ToolSpec>& tools) {
         out += "\n";
     }
     out += "</tools>\n\n";
-    out += "Cuando necesites invocar una herramienta responde EXACTAMENTE con un bloque:\n";
-    out += "<tool_call>{\"id\":\"call_<n>\",\"name\":\"<tool>\",\"arguments\":{...}}</tool_call>\n";
-    out += "Despues de cada bloque <tool_call> espera el resultado antes de continuar.\n";
-    out += "Si no necesitas herramientas responde directamente al usuario en texto plano.\n";
+    out += "MANDATORY rules for tool usage:\n";
+    out += "1. Write your reasoning in plain text BEFORE the <tool_call> block.\n";
+    out += "2. The <tool_call> block must contain ONLY valid JSON, with no extra text.\n";
+    out += "3. Exact format (single line, no newlines inside JSON):\n";
+    out += "   <tool_call>{\"id\":\"call_1\",\"name\":\"tool_name\",\"arguments\":{\"param\":\"value\"}}</tool_call>\n";
+    out += "4. NEVER put text, explanations, or reasoning inside <tool_call>...</tool_call>.\n";
+    out += "5. After a <tool_call> block, do not write anything else; wait for the tool result.\n";
+    out += "6. If tools are not needed, answer the user directly in plain text without <tool_call>.\n";
+    out += "7. Prefer edit_file for localized exact-text changes, replace_lines for concrete line-range edits, and append_file to add content at the end. Use write_file only when you intentionally need to replace the entire file.\n";
     return out;
 }
 
 std::string format_tool_results_section(const std::vector<ToolResult>& results) {
     if (results.empty()) return "";
 
-    std::string out = "\n\nResultados de tus herramientas previas:\n";
+    std::string out = "\n\nResults from your previous tools:\n";
     for (const auto& r : results) {
         json j;
         j["id"]      = r.id;
@@ -206,7 +211,9 @@ std::string format_tool_results_section(const std::vector<ToolResult>& results) 
         out += j.dump();
         out += "</tool_result>\n";
     }
-    out += "\nContinua tu razonamiento usando estos resultados.\n";
+    out += "\nContinue your reasoning using these results.\n";
+    out += "If you need another tool call, use the <tool_call> format with valid JSON.\n";
+    out += "If the task is complete, answer the user directly in plain text.\n";
     return out;
 }
 

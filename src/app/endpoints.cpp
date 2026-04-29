@@ -359,8 +359,10 @@ static std::vector<ToolResult> parse_tool_results(const json& arr) {
 
 void handle_query_agent_stream(const httplib::Request& req, httplib::Response& res,
                                 AlfredCore& core) {
+    log_info("agent_stream: parse_body(begin)");
     json body;
     if (!parse_body(req, res, body)) return;
+    log_info("agent_stream: parse_body(done)");
 
     std::string question = body.value("question", "");
     std::string conv_id = body.value("conversation_id", "");
@@ -387,10 +389,16 @@ void handle_query_agent_stream(const httplib::Request& req, httplib::Response& r
         full_question = "Contexto de archivos adjuntos:\n" + attached_context;
     }
 
+    // Guardar pregunta del usuario al inicio de un turno nuevo (no continuaciones de tool_results)
+    if (!conv_id.empty() && !question.empty() && tool_results.empty()) {
+        ConversationManager::instance().add_message(conv_id, "user", question);
+    }
+
     log_info("Agent query: " + truncate(question, 80) +
              " | tools=" + std::to_string(tools.size()) +
              " | tool_results=" + std::to_string(tool_results.size()) +
              (conv_id.empty() ? "" : " | conv=" + conv_id));
+    log_info("agent_stream: validate+prepare(done)");
 
     res.set_header("Cache-Control", "no-cache");
     res.set_header("Connection", "keep-alive");
@@ -406,31 +414,56 @@ void handle_query_agent_stream(const httplib::Request& req, httplib::Response& r
         "text/event-stream",
         [&core, captured_question, captured_conv_id, captured_tools, captured_results]
         (size_t /*offset*/, httplib::DataSink& sink) -> bool {
+            log_info("agent_stream: provider(start)");
+            bool stream_alive = true;
+
             auto write_event = [&sink](const std::string& evt, const json& data) -> bool {
+                if (sink.is_writable && !sink.is_writable()) return false;
                 std::string out = sse_event(evt, data);
                 return sink.write(out.data(), out.size());
             };
 
-            auto on_started = [&](uint64_t request_id) {
-                write_event("start", json{{"request_id", request_id}});
+            uint64_t current_request_id = 0;
+
+            auto on_started = [&](uint64_t rid) {
+                log_info("agent_stream: on_started");
+                current_request_id = rid;
+                if (!write_event("start", json{{"request_id", rid}})) {
+                    stream_alive = false;
+                }
             };
 
             auto on_token = [&](const std::string& tok) -> bool {
-                if (sink.is_writable && !sink.is_writable()) return false;
-                return write_event("token", json{{"text", tok}});
+                if (!stream_alive) return false;
+                stream_alive = write_event("token", json{{"text", tok}});
+                return stream_alive;
             };
 
-            auto on_tool_call = [&](const ToolCall& tc) {
+            auto on_tool_call = [&](const ToolCall& tc) -> bool {
+                if (!stream_alive) return false;
                 json data;
                 data["id"]        = tc.id;
                 data["name"]      = tc.name;
                 data["arguments"] = tc.arguments;
-                write_event("tool_call", data);
+                stream_alive = write_event("tool_call", data);
+                return stream_alive;
             };
 
+            log_info("agent_stream: query_agent_streaming(begin)");
             AlfredCore::AgentResult result = core.query_agent_streaming(
                 captured_question, captured_tools, captured_results,
                 on_started, on_token, on_tool_call, captured_conv_id);
+            log_info("agent_stream: query_agent_streaming(done) cancelled=" +
+                     std::string(result.cancelled ? "true" : "false") +
+                     " tool_calls=" + std::to_string(result.tool_calls.size()) +
+                     " request_id=" + std::to_string(current_request_id));
+
+            // Guardar respuesta final del asistente cuando no hay tool_calls pendientes
+            if (!captured_conv_id.empty() && !result.cancelled &&
+                !result.answer.empty() && result.tool_calls.empty()) {
+                ConversationManager::instance().add_message(
+                    captured_conv_id, "assistant", result.answer);
+            }
 
             json done_payload;
             done_payload["answer"]     = result.answer;
@@ -449,8 +482,17 @@ void handle_query_agent_stream(const httplib::Request& req, httplib::Response& r
             if (!captured_conv_id.empty())
                 done_payload["conversation_id"] = captured_conv_id;
 
-            write_event("done", done_payload);
+            if (stream_alive) {
+                log_info("agent_stream: write_done(begin)");
+                stream_alive = write_event("done", done_payload);
+                log_info("agent_stream: write_done(done) ok=" + std::string(stream_alive ? "true" : "false"));
+            } else {
+                log_warn("agent_stream: skipping done event because stream is not writable");
+            }
+
+            log_info("agent_stream: sink.done(begin)");
             sink.done();
+            log_info("agent_stream: sink.done(done)");
             return true;
         });
 }

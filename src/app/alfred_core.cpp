@@ -538,25 +538,41 @@ AlfredCore::AgentResult AlfredCore::query_agent_streaming(
     }
     agent_context += format_tool_results_section(tool_results);
 
-    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, question);
+    // En turnos de continuacion (question vacia con tool_results) inyectar
+    // un prompt interno para que el modelo no reciba {input} en blanco.
+    const std::string effective_question = (!question.empty())
+        ? question
+        : (!tool_results.empty()
+              ? "Tienes los resultados anteriores. Ejecuta el siguiente paso: invoca la herramienta necesaria con un bloque <tool_call> de JSON valido, o responde al usuario si la tarea ya esta completa."
+            : question);
+
+    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, effective_question);
 
     // 2. Parser de tool_calls envolviendo el callback de tokens.
     ToolCallParser parser;
 
-    auto wrapped_cb = [this, &parser, &on_token, &on_tool_call, &result]
+    bool stream_ok = true;
+
+    auto wrapped_cb = [this, &parser, &on_token, &on_tool_call, &result, &stream_ok]
                       (const std::string& tok) -> bool {
-        if (cancel_flag_.load()) return false;
+        if (cancel_flag_.load() || !stream_ok) return false;
         parser.feed(tok,
             [&](const std::string& clean) {
                 if (clean.empty()) return;
                 result.answer += clean;
-                if (on_token) on_token(clean);
+                if (on_token && !on_token(clean)) {
+                    stream_ok = false;
+                    cancel_flag_.store(true);
+                }
             },
             [&](const ToolCall& tc) {
                 result.tool_calls.push_back(tc);
-                if (on_tool_call) on_tool_call(tc);
+                if (on_tool_call && !on_tool_call(tc)) {
+                    stream_ok = false;
+                    cancel_flag_.store(true);
+                }
             });
-        return true;
+        return stream_ok && !cancel_flag_.load();
     };
 
     auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
@@ -564,13 +580,20 @@ AlfredCore::AgentResult AlfredCore::query_agent_streaming(
     // Vaciar buffers retenidos (sufijos parciales / tool_calls sin cerrar).
     parser.flush(
         [&](const std::string& clean) {
-            if (clean.empty()) return;
+            if (!stream_ok || clean.empty()) return;
             result.answer += clean;
-            if (on_token) on_token(clean);
+            if (on_token && !on_token(clean)) {
+                stream_ok = false;
+                cancel_flag_.store(true);
+            }
         },
         [&](const ToolCall& tc) {
+            if (!stream_ok) return;
             result.tool_calls.push_back(tc);
-            if (on_tool_call) on_tool_call(tc);
+            if (on_tool_call && !on_tool_call(tc)) {
+                stream_ok = false;
+                cancel_flag_.store(true);
+            }
         });
 
     result.cancelled = cancel_flag_.load();
