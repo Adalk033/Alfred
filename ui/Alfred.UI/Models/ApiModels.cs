@@ -254,6 +254,9 @@ public sealed class ModelConfig
 
     [JsonPropertyName("repeat_last_n")]
     public int RepeatLastN { get; set; } = 64;
+
+    [JsonPropertyName("thinking_enabled")]
+    public bool ThinkingEnabled { get; set; } = true;
 }
 
 public sealed class ModelConfigSaveResponse

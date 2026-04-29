@@ -32,7 +32,7 @@ std::string get_current_datetime() {
 // ============================================================================
 // Plantilla SIN documentos (conocimiento general)
 // ============================================================================
-const std::string PROMPT_TEMPLATE_NO_DOCUMENTS = R"(System: You are {ASSISTANT_NAME}, a helpful personal AI assistant.
+const std::string PROMPT_TEMPLATE_NO_DOCUMENTS = R"({THINKING_TOKEN}System: You are {ASSISTANT_NAME}, a helpful personal AI assistant.
 You must always respond in the same language used by the user's first message in this conversation.
 If the language is ambiguous, default to Spanish.
 You are running 100% locally - no data is sent externally.
@@ -64,6 +64,6 @@ Conversation context:
 Current user message:
 {input}
 
-{ASSISTANT_NAME}:)";
+Assistant:)";
 
 } // namespace alfred

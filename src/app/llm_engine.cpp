@@ -26,6 +26,9 @@ static size_t find_role_leak_pos(const std::string& text) {
         "System:",
         "Assistant:",
         "Alfred:",
+        "<|channel>",
+        "<|channel|>",
+        "<channel|>",
         "<|im_start|>",
         "<|start_header_id|>",
     };
@@ -553,6 +556,17 @@ int LLMEngine::context_length() const {
     std::lock_guard<std::recursive_mutex> lock(state_mutex_);
     if (ctx_) return llama_n_ctx(ctx_);
     return config_.n_ctx;
+}
+
+bool LLMEngine::try_get_status(bool& loaded, std::string& model_name) const {
+    if (!state_mutex_.try_lock()) {
+        return false;
+    }
+
+    loaded = (model_ != nullptr && ctx_ != nullptr);
+    model_name = model_name_;
+    state_mutex_.unlock();
+    return true;
 }
 
 int LLMEngine::count_tokens(const std::string& text) const {

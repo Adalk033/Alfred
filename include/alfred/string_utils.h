@@ -58,4 +58,8 @@ PersonalData extract_personal_data(const std::string& text);
 // Truncar texto a max_length caracteres
 std::string truncate(const std::string& text, size_t max_length, const std::string& suffix = "...");
 
+// Extrae la respuesta final visible eliminando bloques internos de pensamiento.
+// Soporta variantes de tags como <|channel|>thought ... <|channel|>.
+std::string extract_final_response_text(const std::string& text);
+
 } // namespace alfred

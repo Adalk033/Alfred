@@ -54,6 +54,10 @@ struct AppConfig {
     float repeat_penalty = 1.10f;
     int   repeat_last_n  = 64;
 
+    // --- Modo thinking del modelo ---
+    // Si true, inyecta <|think|> al inicio del system prompt.
+    bool thinking_enabled = true;
+
     // --- Warm-up tras carga del modelo ---
     bool model_warmup    = true;
 

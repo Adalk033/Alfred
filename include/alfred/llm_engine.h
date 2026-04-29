@@ -99,6 +99,10 @@ public:
     std::string model_name() const;
     int context_length() const;
 
+    // Intentar leer estado rapido sin bloquear. Devuelve false si el engine
+    // esta ocupado (p.ej. inferencia en curso) y no pudo tomar el lock.
+    bool try_get_status(bool& loaded, std::string& model_name) const;
+
     // Cuenta tokens reales usando el tokenizer del modelo cargado.
     // Devuelve -1 si no hay modelo. No agrega BOS ni tokens especiales salvo
     // que el texto los contenga literalmente.

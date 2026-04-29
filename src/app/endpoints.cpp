@@ -125,22 +125,59 @@ static std::string extract_attached_context(const json& body) {
         return "";
 
     std::string context;
+    std::string image_audio_context;
+    std::string other_binary_context;
+    std::string text_context;
+
+    auto classify_attachment = [](const std::string& content) -> int {
+        // Prioridad multimodal: imagen/audio antes que texto.
+        // 0 = image/audio, 1 = binario no image/audio, 2 = texto.
+        if (!(content.rfind("data:", 0) == 0 && content.find(";base64,") != std::string::npos)) {
+            return 2;
+        }
+
+        size_t mime_start = 5; // despues de "data:"
+        size_t mime_end = content.find(';', mime_start);
+        if (mime_end == std::string::npos || mime_end <= mime_start) {
+            return 1;
+        }
+
+        std::string mime = to_lower(content.substr(mime_start, mime_end - mime_start));
+        if (mime.rfind("image/", 0) == 0 || mime.rfind("audio/", 0) == 0) {
+            return 0;
+        }
+        return 1;
+    };
+
     for (const auto& file : body["attached_files"]) {
         std::string name = file.value("name", "");
         std::string content = file.value("content", "");
         if (name.empty() || content.empty()) continue;
 
+        int kind = classify_attachment(content);
+
         // Si el contenido es base64 (data:...;base64,...) solo incluir el nombre como referencia
         // El backend no puede decodificar binarios como PDF sin librerias externas
         if (content.rfind("data:", 0) == 0 && content.find(";base64,") != std::string::npos) {
-            context += "\n[Archivo adjunto: " + name + " (formato binario, contenido no procesable directamente)]\n";
+            std::string line = "\n[Archivo adjunto: " + name + " (formato binario, contenido no procesable directamente)]\n";
+            if (kind == 0) {
+                image_audio_context += line;
+            } else {
+                other_binary_context += line;
+            }
         } else {
             // Archivo de texto plano: incluir contenido completo
             // Limitar a 50000 caracteres por archivo para evitar desbordar el contexto
             std::string trimmed = content.length() > 50000 ? content.substr(0, 50000) + "\n... (contenido truncado)" : content;
-            context += "\n--- Contenido de " + name + " ---\n" + trimmed + "\n--- Fin de " + name + " ---\n";
+            text_context += "\n--- Contenido de " + name + " ---\n" + trimmed + "\n--- Fin de " + name + " ---\n";
         }
     }
+
+    context.reserve(image_audio_context.size() + other_binary_context.size() + text_context.size());
+    context += image_audio_context;
+    context += other_binary_context;
+    context += text_context;
+
     return context;
 }
 
@@ -260,7 +297,7 @@ static void run_query_stream(const httplib::Request& req,
                 !result.answer.empty() &&
                 result.answer.find("Error") == std::string::npos) {
                 ConversationManager::instance().add_message(
-                    captured_conv_id, "assistant", result.answer);
+                    captured_conv_id, "assistant", extract_final_response_text(result.answer));
             }
 
             json done_payload;
@@ -462,7 +499,7 @@ void handle_query_agent_stream(const httplib::Request& req, httplib::Response& r
             if (!captured_conv_id.empty() && !result.cancelled &&
                 !result.answer.empty() && result.tool_calls.empty()) {
                 ConversationManager::instance().add_message(
-                    captured_conv_id, "assistant", result.answer);
+                    captured_conv_id, "assistant", extract_final_response_text(result.answer));
             }
 
             json done_payload;
@@ -842,6 +879,7 @@ void handle_get_model_config(const httplib::Request& /*req*/, httplib::Response&
     data["min_p"]           = cfg.min_p;
     data["repeat_penalty"]  = cfg.repeat_penalty;
     data["repeat_last_n"]   = cfg.repeat_last_n;
+    data["thinking_enabled"] = cfg.thinking_enabled;
 
     json_ok(res, data);
 }
@@ -976,6 +1014,11 @@ void handle_set_model_config(const httplib::Request& req, httplib::Response& res
         cfg.repeat_last_n = v;
         db.set_app_setting("repeat_last_n", std::to_string(v));
         if (core.llm().is_loaded()) core.llm().set_repeat_last_n(v);
+    }
+    if (body.contains("thinking_enabled") && body["thinking_enabled"].is_boolean()) {
+        bool v = body["thinking_enabled"].get<bool>();
+        cfg.thinking_enabled = v;
+        db.set_app_setting("thinking_enabled", v ? "true" : "false");
     }
 
     json data;
@@ -1238,10 +1281,13 @@ void handle_get_conversation(const httplib::Request& req, httplib::Response& res
 
     json msgs = json::array();
     for (const auto& m : messages) {
+        std::string content = (m.role == "assistant")
+            ? extract_final_response_text(m.content)
+            : m.content;
         msgs.push_back({
             {"id", m.id},
             {"role", m.role},
-            {"content", m.content},
+            {"content", content},
             {"timestamp", m.timestamp}
         });
     }
@@ -1330,6 +1376,9 @@ void handle_add_message(const httplib::Request& req, httplib::Response& res) {
         return;
     }
 
+    if (role == "assistant") {
+        content = extract_final_response_text(content);
+    }
     ConversationManager::instance().add_message(id, role, content);
     res.status = 201;
     res.set_content(R"({"status":"created"})", "application/json");
@@ -1365,7 +1414,8 @@ void handle_conversation_query(const httplib::Request& req, httplib::Response& r
 
     auto result = core.query(full_question, conv_id);
 
-    ConversationManager::instance().add_message(conv_id, "assistant", result.answer);
+    ConversationManager::instance().add_message(
+        conv_id, "assistant", extract_final_response_text(result.answer));
 
     json data;
     data["answer"] = result.answer;
