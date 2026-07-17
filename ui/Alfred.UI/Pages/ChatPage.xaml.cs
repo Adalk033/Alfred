@@ -1060,6 +1060,35 @@ public sealed partial class ChatPage : Page
         }
     }
 
+    // Construye y muestra el flyout de prompts rapidos desde las preferencias.
+    private void OnQuickPromptsOpening(object sender, RoutedEventArgs e)
+    {
+        var flyout = new MenuFlyout();
+        foreach (var prompt in Prefs.QuickPrompts)
+        {
+            var item = new MenuFlyoutItem { Text = prompt };
+            string captured = prompt;
+            item.Click += (_, _) =>
+            {
+                InputBox.Text = captured;
+                InputBox.Focus(FocusState.Programmatic);
+                InputBox.SelectionStart = InputBox.Text.Length;
+            };
+            flyout.Items.Add(item);
+        }
+
+        if (flyout.Items.Count == 0)
+        {
+            flyout.Items.Add(new MenuFlyoutItem
+            {
+                Text = "Sin prompts (configuralos en Ajustes)",
+                IsEnabled = false,
+            });
+        }
+
+        flyout.ShowAt(QuickPromptButton);
+    }
+
     private void OnFocusInputAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;

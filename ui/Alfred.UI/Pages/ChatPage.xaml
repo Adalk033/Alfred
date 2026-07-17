@@ -209,7 +209,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Boton adjuntar archivo -->
+            <!-- Boton adjuntar archivo + prompts rapidos -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4"
                         VerticalAlignment="Bottom" Margin="0,0,4,0">
                 <Button x:Name="AttachButton"
@@ -217,6 +217,13 @@
                         ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)" AutomationProperties.Name="Adjuntar archivo"
                         Width="38" Height="38">
                     <FontIcon Glyph="&#xE723;" FontSize="16" />
+                </Button>
+                <Button x:Name="QuickPromptButton"
+                        ToolTipService.ToolTip="Prompts rapidos"
+                        AutomationProperties.Name="Prompts rapidos"
+                        Click="OnQuickPromptsOpening"
+                        Width="38" Height="38">
+                    <FontIcon Glyph="&#xE762;" FontSize="16" />
                 </Button>
             </StackPanel>
 

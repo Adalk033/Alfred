@@ -42,6 +42,18 @@ public sealed class UiPreferences : INotifyPropertyChanged
     public double   FontSize    { get; private set; } = 14.0;
     public bool     Animations  { get; private set; } = true;
 
+    /// <summary>Prompts rapidos reutilizables (editables por el usuario).</summary>
+    public List<string> QuickPrompts { get; private set; } = new()
+    {
+        "Resume este texto en 3 puntos clave",
+        "Explicalo como si tuviera 5 anos",
+        "Revisa este codigo y sugiere mejoras",
+        "Traduce al ingles manteniendo el tono",
+    };
+
+    /// <summary>IDs de conversaciones fijadas (aparecen primero).</summary>
+    public List<string> PinnedConversations { get; private set; } = new();
+
     // ====================================================================
     // Propiedades derivadas para data binding (x:Bind ... Mode=OneWay)
     // ====================================================================
@@ -100,6 +112,8 @@ public sealed class UiPreferences : INotifyPropertyChanged
             if (Enum.TryParse<UiDensity>(data.Density, out var den)) Density = den;
             FontSize = Math.Clamp(data.FontSize > 0 ? data.FontSize : 14.0, 11, 22);
             Animations = data.Animations;
+            if (data.QuickPrompts is { Count: > 0 }) QuickPrompts = data.QuickPrompts;
+            if (data.PinnedConversations != null) PinnedConversations = data.PinnedConversations;
         }
         catch { /* preferencias corruptas: usar defaults */ }
     }
@@ -116,6 +130,8 @@ public sealed class UiPreferences : INotifyPropertyChanged
                 Density   = Density.ToString(),
                 FontSize  = FontSize,
                 Animations = Animations,
+                QuickPrompts = QuickPrompts,
+                PinnedConversations = PinnedConversations,
             };
             File.WriteAllText(_filePath, JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
         }
@@ -161,6 +177,23 @@ public sealed class UiPreferences : INotifyPropertyChanged
     {
         if (Animations == on) return;
         Animations = on;
+        Save();
+        RaiseAll();
+    }
+
+    public void SetQuickPrompts(IEnumerable<string> prompts)
+    {
+        QuickPrompts = prompts.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        Save();
+        RaiseAll();
+    }
+
+    public bool IsPinned(string conversationId) => PinnedConversations.Contains(conversationId);
+
+    public void TogglePinned(string conversationId)
+    {
+        if (!PinnedConversations.Remove(conversationId))
+            PinnedConversations.Add(conversationId);
         Save();
         RaiseAll();
     }
@@ -218,5 +251,7 @@ public sealed class UiPreferences : INotifyPropertyChanged
         [JsonPropertyName("density")]   public string Density   { get; set; } = "Comfortable";
         [JsonPropertyName("fontSize")]  public double FontSize  { get; set; } = 14.0;
         [JsonPropertyName("animations")]public bool   Animations { get; set; } = true;
+        [JsonPropertyName("quickPrompts")]        public List<string>? QuickPrompts { get; set; }
+        [JsonPropertyName("pinnedConversations")] public List<string>? PinnedConversations { get; set; }
     }
 }
