@@ -62,15 +62,15 @@
                            FontSize="11"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <Button Grid.Column="3" Click="OnSearchPrev" Padding="6,4"
-                        ToolTipService.ToolTip="Anterior (Shift+Enter)">
+                        ToolTipService.ToolTip="Anterior (Shift+Enter)" AutomationProperties.Name="Coincidencia anterior">
                     <FontIcon Glyph="&#xE70E;" FontSize="11" />
                 </Button>
                 <Button Grid.Column="4" Click="OnSearchNext" Padding="6,4" Margin="4,0,0,0"
-                        ToolTipService.ToolTip="Siguiente (Enter)">
+                        ToolTipService.ToolTip="Siguiente (Enter)" AutomationProperties.Name="Coincidencia siguiente">
                     <FontIcon Glyph="&#xE70D;" FontSize="11" />
                 </Button>
                 <Button Grid.Column="5" Click="OnSearchClose" Padding="6,4" Margin="4,0,0,0"
-                        ToolTipService.ToolTip="Cerrar (Esc)">
+                        ToolTipService.ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar busqueda">
                     <FontIcon Glyph="&#xE711;" FontSize="11" />
                 </Button>
             </Grid>
@@ -192,7 +192,7 @@
                         </ItemsRepeater.Layout>
                     </ItemsRepeater>
                     <Button Grid.Column="2" Click="OnRemoveAllAttachments" Padding="6,4"
-                            ToolTipService.ToolTip="Quitar todos los archivos">
+                            ToolTipService.ToolTip="Quitar todos los archivos" AutomationProperties.Name="Quitar todos los archivos">
                         <FontIcon Glyph="&#xE711;" FontSize="12" />
                     </Button>
                 </Grid>
@@ -212,7 +212,7 @@
                         VerticalAlignment="Bottom" Margin="0,0,4,0">
                 <Button x:Name="AttachButton"
                         Click="OnAttachFile"
-                        ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)"
+                        ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)" AutomationProperties.Name="Adjuntar archivo"
                         Width="38" Height="38">
                     <FontIcon Glyph="&#xE723;" FontSize="16" />
                 </Button>
@@ -236,7 +236,7 @@
                     Click="OnSendClick" Margin="8,0,0,0"
                     VerticalAlignment="Bottom" Width="38" Height="38"
                     IsEnabled="False"
-                    ToolTipService.ToolTip="Enviar">
+                    ToolTipService.ToolTip="Enviar" AutomationProperties.Name="Enviar mensaje">
                 <FontIcon Glyph="&#xE724;" FontSize="16" />
             </Button>
 
@@ -245,7 +245,7 @@
                     VerticalAlignment="Bottom" Width="38" Height="38"
                     Visibility="Collapsed"
                     Background="{ThemeResource SystemFillColorCriticalBrush}"
-                    ToolTipService.ToolTip="Detener generación">
+                    ToolTipService.ToolTip="Detener generación" AutomationProperties.Name="Detener generacion">
                 <FontIcon Glyph="&#xE73B;" FontSize="14" Foreground="White" />
             </Button>
         </Grid>

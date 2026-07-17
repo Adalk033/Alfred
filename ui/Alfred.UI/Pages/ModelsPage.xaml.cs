@@ -737,7 +737,7 @@ public sealed partial class ModelsPage : Page
     private void SetConfigMode(bool isAutoTuned)
     {
         _isAutoTuned = isAutoTuned;
-        ConfigModeText.Text = isAutoTuned ? "Recommended" : "Custom";
+        ConfigModeText.Text = isAutoTuned ? "Recomendado" : "Personalizado";
         ConfigModeBadge.Background = isAutoTuned
             ? new SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 180, 80))
             : new SolidColorBrush(Windows.UI.Color.FromArgb(30, 128, 128, 128));

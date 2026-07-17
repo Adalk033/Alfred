@@ -103,6 +103,11 @@ public sealed partial class MainWindow : Window
                     TokenMeterPanel.Visibility  = loaded ? Visibility.Visible : Visibility.Collapsed;
                     _modelState = state;
                     UpdateModelStateDot(loaded, state);
+
+                    // Backoff: el medidor de tokens solo tiene sentido con un
+                    // modelo cargado. Pausar su timer (600ms) cuando no lo hay.
+                    if (loaded && !_tokenTimer.IsEnabled) _tokenTimer.Start();
+                    else if (!loaded && _tokenTimer.IsEnabled) _tokenTimer.Stop();
                 });
             }
         }
