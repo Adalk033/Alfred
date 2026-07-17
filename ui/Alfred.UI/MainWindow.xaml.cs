@@ -384,6 +384,21 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    // Ctrl+, abre Configuracion (Key=Number188 es la tecla de la coma).
+    private void OnSettingsAccelerator(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        foreach (var item in NavView.FooterMenuItems.OfType<NavigationViewItem>())
+        {
+            if ((item.Tag?.ToString() ?? "") == "settings")
+            {
+                NavView.SelectedItem = item;
+                break;
+            }
+        }
+    }
+
     private void OnNavigationChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         if (_suppressNavigation) return;

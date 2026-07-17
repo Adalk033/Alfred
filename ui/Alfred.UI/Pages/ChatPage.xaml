@@ -13,6 +13,8 @@
     <Page.KeyboardAccelerators>
         <KeyboardAccelerator Modifiers="Control" Key="F" Invoked="OnFindAccelerator" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeAccelerator" />
+        <KeyboardAccelerator Modifiers="Control" Key="L" Invoked="OnFocusInputAccelerator" />
+        <KeyboardAccelerator Modifiers="Control" Key="N" Invoked="OnNewConversationAccelerator" />
     </Page.KeyboardAccelerators>
 
     <Grid Padding="0">

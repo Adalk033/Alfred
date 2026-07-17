@@ -972,6 +972,7 @@ public sealed partial class ChatPage : Page
             Content = new FontIcon { Glyph = glyph, FontSize = 12 },
         };
         ToolTipService.SetToolTip(btn, tooltip);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, tooltip);
         btn.Click += (_, _) => onClick();
         return btn;
     }
@@ -1051,6 +1052,39 @@ public sealed partial class ChatPage : Page
             args.Handled = true;
             CloseSearchBar();
         }
+        else if (_isSending)
+        {
+            // Esc tambien cancela una generacion en curso.
+            args.Handled = true;
+            OnStopClick(this, new RoutedEventArgs());
+        }
+    }
+
+    private void OnFocusInputAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        InputBox.Focus(FocusState.Programmatic);
+        InputBox.SelectAll();
+    }
+
+    private void OnNewConversationAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        StartNewConversation();
+    }
+
+    // Reinicia el estado a una conversacion nueva (sin persistir todavia:
+    // la conversacion se crea al enviar el primer mensaje).
+    private void StartNewConversation()
+    {
+        if (_isSending) return;
+        _conversationId = null;
+        ChatContext.ConversationId = null;
+        _root = null;
+        MessagesPanel.Children.Clear();
+        WelcomePanel.Visibility = Visibility.Visible;
+        InputBox.Text = "";
+        InputBox.Focus(FocusState.Programmatic);
     }
 
     private void OpenSearchBar()
