@@ -84,10 +84,6 @@ void handle_set_model_config(const httplib::Request& req, httplib::Response& res
 void handle_autotune(const httplib::Request& req, httplib::Response& res,
                       AlfredCore& core);
 
-// Optimizaciones
-void handle_optimization_stats(const httplib::Request& req, httplib::Response& res,
-                                AlfredCore& core);
-
 // Tokens
 void handle_token_count(const httplib::Request& req, httplib::Response& res,
                         AlfredCore& core);

@@ -3,19 +3,6 @@ using System.Net.Http.Headers;
 namespace Alfred.UI.Services;
 
 /// <summary>
-/// Catalogo de modelos GGUF recomendados con URLs de descarga de HuggingFace.
-/// </summary>
-public sealed class RecommendedModel
-{
-    public required string Name { get; init; }
-    public required string FileName { get; init; }
-    public required string Url { get; init; }
-    public required string Type { get; init; }     // "llm"
-    public required string SizeLabel { get; init; } // ej. "~6.5 GB"
-    public required string Description { get; init; }
-}
-
-/// <summary>
 /// Progreso de descarga de un modelo.
 /// </summary>
 public sealed class DownloadProgress
@@ -38,8 +25,6 @@ public sealed class ModelDownloadService : IDisposable
     private readonly string _modelsDir;
     private CancellationTokenSource? _cts;
     private bool _disposed;
-
-    public static readonly List<RecommendedModel> Catalog = [];
 
     public bool IsDownloading { get; private set; }
 
@@ -93,7 +78,6 @@ public sealed class ModelDownloadService : IDisposable
             if (File.Exists(targetPath))
             {
                 progress.IsCompleted = true;
-                progress.Percentage.GetHashCode(); // trigger
                 onProgress(progress);
                 return true;
             }

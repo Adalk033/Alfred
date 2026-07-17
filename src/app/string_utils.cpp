@@ -5,16 +5,9 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
-#include <fstream>
-#include <regex>
 #include <random>
 #include <iomanip>
 #include <functional>
-
-// SHA-256 (implementacion simplificada sin OpenSSL para hashing basico)
-// Para archivos grandes, se usa la implementacion estandar
-#include <array>
-#include <cstring>
 
 namespace alfred {
 
@@ -74,67 +67,6 @@ std::string join(const std::vector<std::string>& parts, const std::string& separ
     return oss.str();
 }
 
-const std::unordered_set<std::string>& get_spanish_stopwords() {
-    static const std::unordered_set<std::string> stopwords = {
-        "a", "al", "algo", "algunas", "algunos", "ante", "antes", "aquel",
-        "aquellas", "aquellos", "aqui", "asi", "aunque", "bien", "bueno",
-        "cada", "casi", "como", "con", "contra", "cosas", "creo", "cual",
-        "cuando", "da", "dar", "de", "del", "demasiado", "dentro", "desde",
-        "donde", "dos", "el", "en", "encima", "entonces", "entre", "era",
-        "esa", "esas", "ese", "eso", "esos", "esta", "estaba", "estado",
-        "estar", "estas", "este", "esto", "estos", "fue", "ha", "hace",
-        "hacer", "hacia", "hasta", "hay", "hecho", "ir", "la", "las", "le",
-        "les", "lo", "los", "mas", "me", "mejor", "menos", "mi", "mientras",
-        "misma", "mismo", "mucho", "muy", "nada", "ni", "ninguno", "no",
-        "nos", "nosotros", "nuestro", "nuevo", "o", "otra", "otro", "otros",
-        "para", "parte", "pero", "poco", "por", "porque", "primera",
-        "puede", "puedo", "pues", "que", "quien", "quiero", "se", "sea",
-        "segun", "ser", "si", "sido", "siempre", "sin", "sino", "sobre",
-        "somos", "son", "soy", "su", "sus", "tal", "tambien", "tan",
-        "tanto", "te", "tengo", "tiempo", "tiene", "toda", "todavia",
-        "todo", "todos", "tres", "tu", "tus", "un", "una", "unas", "uno",
-        "unos", "usted", "ustedes", "va", "vamos", "ver", "vez", "y", "ya",
-        "yo"
-    };
-    return stopwords;
-}
-
-std::vector<std::string> extract_keywords(const std::string& text, int min_length) {
-    std::vector<std::string> keywords;
-    const auto& stopwords = get_spanish_stopwords();
-
-    // Extraer palabras con regex
-    std::regex word_regex("[a-zA-Z0-9\xC0-\xFF]+");
-    auto words_begin = std::sregex_iterator(text.begin(), text.end(), word_regex);
-    auto words_end = std::sregex_iterator();
-
-    for (auto it = words_begin; it != words_end; ++it) {
-        std::string word = to_lower(it->str());
-        if (static_cast<int>(word.size()) >= min_length &&
-            stopwords.find(word) == stopwords.end()) {
-            keywords.push_back(word);
-        }
-    }
-    return keywords;
-}
-
-float jaccard_similarity(const std::vector<std::string>& a, const std::vector<std::string>& b) {
-    if (a.empty() && b.empty()) return 0.0f;
-
-    std::unordered_set<std::string> set_a(a.begin(), a.end());
-    std::unordered_set<std::string> set_b(b.begin(), b.end());
-
-    int intersection = 0;
-    for (const auto& word : set_a) {
-        if (set_b.count(word)) ++intersection;
-    }
-
-    int union_size = static_cast<int>(set_a.size() + set_b.size()) - intersection;
-    if (union_size == 0) return 0.0f;
-
-    return static_cast<float>(intersection) / static_cast<float>(union_size);
-}
-
 // Implementacion basica de SHA-256 (DJB2 hash como fallback rapido)
 // Para produccion se recomienda usar OpenSSL SHA256
 static std::string simple_hash(const std::string& input) {
@@ -148,15 +80,6 @@ static std::string simple_hash(const std::string& input) {
 std::string sha256_string(const std::string& input) {
     // Usa funcion hash estandar (reemplazar con OpenSSL para criptografia real)
     return simple_hash(input);
-}
-
-std::string sha256_file(const std::string& file_path) {
-    std::ifstream file(file_path, std::ios::binary);
-    if (!file.is_open()) return "";
-
-    std::ostringstream oss;
-    oss << file.rdbuf();
-    return simple_hash(oss.str());
 }
 
 std::string generate_uuid() {
@@ -180,39 +103,6 @@ std::string generate_uuid() {
         }
     }
     return uuid;
-}
-
-bool contains_personal_data_patterns(const std::string& text) {
-    // RFC: 4 letras + 6 digitos + 3 alfanumericos
-    static const std::regex rfc_pattern(R"([A-Z]{4}\d{6}[A-Z0-9]{3})", std::regex::icase);
-    // CURP: 4 letras + 6 digitos + 6 letras + 2 alfanumericos
-    static const std::regex curp_pattern(R"([A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d)", std::regex::icase);
-    // NSS: 11 digitos
-    static const std::regex nss_pattern(R"(\b\d{11}\b)");
-
-    return std::regex_search(text, rfc_pattern) ||
-           std::regex_search(text, curp_pattern) ||
-           std::regex_search(text, nss_pattern);
-}
-
-PersonalData extract_personal_data(const std::string& text) {
-    PersonalData data;
-
-    static const std::regex rfc_pattern(R"(([A-Z]{4}\d{6}[A-Z0-9]{3}))", std::regex::icase);
-    static const std::regex curp_pattern(R"(([A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d))", std::regex::icase);
-    static const std::regex nss_pattern(R"(\b(\d{11})\b)");
-
-    std::smatch match;
-    if (std::regex_search(text, match, rfc_pattern)) {
-        data.rfc = match[1].str();
-    }
-    if (std::regex_search(text, match, curp_pattern)) {
-        data.curp = match[1].str();
-    }
-    if (std::regex_search(text, match, nss_pattern)) {
-        data.nss = match[1].str();
-    }
-    return data;
 }
 
 std::string truncate(const std::string& text, size_t max_length, const std::string& suffix) {

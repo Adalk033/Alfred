@@ -23,7 +23,6 @@ using json = nlohmann::json;
 
 struct QueryResult {
     std::string answer;
-    std::string personal_data;      // JSON de datos personales extraidos
     bool from_cache = false;
     bool cancelled = false;         // true si el usuario cancelo el streaming
     double total_time_ms = 0.0;

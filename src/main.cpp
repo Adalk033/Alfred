@@ -82,6 +82,11 @@ int main(int argc, char* argv[]) {
     alfred::init_paths();
     auto& cfg = alfred::get_config();
 
+    // El CLI es la unica fuente de verdad para host/port: sincronizar con la
+    // config global para que el resto de la app consulte un solo lugar.
+    cfg.host = host;
+    cfg.port = port;
+
     // 2. Inicializar logger
     std::cout << "[2/5] Inicializando logger...\n";
     alfred::init_logger(cfg.logs_dir, verbose ? "debug" : "info");
@@ -133,7 +138,7 @@ int main(int argc, char* argv[]) {
     std::cout << "  [OK] Presiona Ctrl+C para detener\n\n";
 
     // Bloqueante - corre hasta Ctrl+C
-    g_server->start(host, port);
+    g_server->start(cfg.host, cfg.port);
 
     // Limpieza
     alfred::log_info("Alfred detenido correctamente");

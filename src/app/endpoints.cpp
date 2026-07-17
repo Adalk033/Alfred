@@ -205,8 +205,6 @@ void handle_query(const httplib::Request& req, httplib::Response& res,
 
     json data;
     data["answer"] = result.answer;
-    data["personal_data"] = result.personal_data.empty() ? json(nullptr)
-                            : json::parse(result.personal_data, nullptr, false);
     data["from_cache"] = result.from_cache;
     data["time_ms"] = result.total_time_ms;
     json_ok(res, data);
@@ -901,14 +899,6 @@ void handle_autotune(const httplib::Request& req, httplib::Response& res,
 }
 
 // ============================================================================
-// Optimizaciones
-// ============================================================================
-void handle_optimization_stats(const httplib::Request& /*req*/, httplib::Response& res,
-                                AlfredCore& /*core*/) {
-    json_ok(res, json::object());
-}
-
-// ============================================================================
 // Tokens
 // ============================================================================
 void handle_token_count(const httplib::Request& req, httplib::Response& res,
@@ -1233,8 +1223,6 @@ void handle_conversation_query(const httplib::Request& req, httplib::Response& r
 
     json data;
     data["answer"] = result.answer;
-    data["personal_data"] = result.personal_data.empty() ? json(nullptr)
-                            : json::parse(result.personal_data, nullptr, false);
     data["from_cache"] = result.from_cache;
     data["time_ms"] = result.total_time_ms;
     data["conversation_id"] = conv_id;
@@ -1361,11 +1349,6 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Get("/models/autotune", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_autotune(req, res, core);
-    });
-
-    // Optimizaciones
-    server.Get("/optimization/stats", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_optimization_stats(req, res, core);
     });
 
     // Tokens

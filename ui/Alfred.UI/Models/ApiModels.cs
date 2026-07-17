@@ -50,9 +50,6 @@ public sealed class QueryResponse
     [JsonPropertyName("answer")]
     public string Answer { get; set; } = "";
 
-    [JsonPropertyName("personal_data")]
-    public object? PersonalData { get; set; }
-
     [JsonPropertyName("from_cache")]
     public bool FromCache { get; set; }
 
