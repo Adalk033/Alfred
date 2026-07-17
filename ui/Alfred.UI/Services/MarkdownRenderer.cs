@@ -277,13 +277,13 @@ public static class MarkdownRenderer
 
         var codeText = new TextBlock
         {
-            Text = code,
             FontFamily = new FontFamily(MonoFont),
             FontSize = Math.Max(11, BaseSize - 1),
             Foreground = CodeTextBrush,
             IsTextSelectionEnabled = true,
             TextWrapping = TextWrapping.NoWrap
         };
+        ApplyHighlighting(codeText, code, language);
 
         var sv = new ScrollViewer
         {
@@ -297,6 +297,126 @@ public static class MarkdownRenderer
 
         outer.Child = stack;
         return outer;
+    }
+
+    // ========================================================================
+    // Resaltado de sintaxis (tokenizer ligero, ~6 lenguajes)
+    // ========================================================================
+
+    private static Brush SynKeyword => ThemedBrushes.Get("AlfredSynKeyword", Color.FromArgb(255, 197, 134, 192));
+    private static Brush SynString  => ThemedBrushes.Get("AlfredSynString",  Color.FromArgb(255, 152, 195, 121));
+    private static Brush SynComment => ThemedBrushes.Get("AlfredSynComment",  Color.FromArgb(255, 127, 140, 155));
+    private static Brush SynNumber  => ThemedBrushes.Get("AlfredSynNumber",   Color.FromArgb(255, 209, 154, 102));
+
+    // Conjuntos de palabras clave por familia de lenguaje. Se comparten entre
+    // lenguajes similares para mantener el mapa pequeno.
+    private static readonly Dictionary<string, HashSet<string>> KeywordSets = new()
+    {
+        ["c-like"] = new(StringComparer.Ordinal)
+        {
+            "auto","break","case","char","class","const","continue","default","do","double",
+            "else","enum","extern","float","for","goto","if","inline","int","long","namespace",
+            "new","delete","operator","private","protected","public","return","short","signed",
+            "sizeof","static","struct","switch","template","this","typedef","typename","union",
+            "unsigned","using","virtual","void","volatile","while","bool","true","false","nullptr",
+            "override","final","constexpr","noexcept","std","string","vector",
+        },
+        ["csharp"] = new(StringComparer.Ordinal)
+        {
+            "abstract","as","base","bool","break","byte","case","catch","char","class","const",
+            "continue","default","delegate","do","double","else","enum","event","false","finally",
+            "float","for","foreach","get","if","in","int","interface","internal","is","long",
+            "namespace","new","null","object","out","override","private","protected","public",
+            "readonly","ref","return","sealed","set","short","static","string","struct","switch",
+            "this","throw","true","try","using","var","virtual","void","while","async","await","record",
+        },
+        ["python"] = new(StringComparer.Ordinal)
+        {
+            "and","as","assert","async","await","break","class","continue","def","del","elif",
+            "else","except","False","finally","for","from","global","if","import","in","is",
+            "lambda","None","nonlocal","not","or","pass","raise","return","True","try","while",
+            "with","yield","self","print",
+        },
+        ["js"] = new(StringComparer.Ordinal)
+        {
+            "async","await","break","case","catch","class","const","continue","default","delete",
+            "do","else","export","extends","false","finally","for","function","if","import","in",
+            "instanceof","let","new","null","return","super","switch","this","throw","true","try",
+            "typeof","undefined","var","void","while","yield","of","async",
+        },
+        ["sql"] = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "select","from","where","insert","into","values","update","set","delete","create",
+            "table","drop","alter","add","primary","key","foreign","references","join","inner",
+            "left","right","outer","on","group","by","order","having","limit","distinct","and",
+            "or","not","null","as","count","sum","avg","min","max","index","view",
+        },
+    };
+
+    private static HashSet<string>? KeywordsFor(string language)
+    {
+        string lang = (language ?? "").Trim().ToLowerInvariant();
+        return lang switch
+        {
+            "c" or "cpp" or "c++" or "h" or "hpp" or "cc" or "java" => KeywordSets["c-like"],
+            "cs" or "csharp" or "c#" => KeywordSets["csharp"],
+            "py" or "python" => KeywordSets["python"],
+            "js" or "javascript" or "ts" or "typescript" or "jsx" or "tsx" => KeywordSets["js"],
+            "sql" => KeywordSets["sql"],
+            _ => null,
+        };
+    }
+
+    // Un unico regex captura comentarios, cadenas, numeros e identificadores.
+    private static readonly Regex TokenRegex = new(
+        @"(?<comment>//[^\n]*|#[^\n]*|/\*.*?\*/)" +
+        @"|(?<string>""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)" +
+        @"|(?<number>\b\d+(?:\.\d+)?\b)" +
+        @"|(?<ident>[A-Za-z_]\w*)",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
+    /// <summary>
+    /// Colorea el codigo por tokens. Si el lenguaje es desconocido o algo falla,
+    /// cae a texto plano (nunca lanza: el resaltado es cosmetico).
+    /// </summary>
+    private static void ApplyHighlighting(TextBlock target, string code, string language)
+    {
+        try
+        {
+            var keywords = KeywordsFor(language);
+            if (keywords == null)
+            {
+                target.Text = code;   // lenguaje no soportado: texto plano
+                return;
+            }
+
+            target.Inlines.Clear();
+            int last = 0;
+            foreach (Match m in TokenRegex.Matches(code))
+            {
+                if (m.Index > last)
+                    target.Inlines.Add(new Run { Text = code.Substring(last, m.Index - last) });
+
+                Brush? brush = null;
+                if (m.Groups["comment"].Success) brush = SynComment;
+                else if (m.Groups["string"].Success) brush = SynString;
+                else if (m.Groups["number"].Success) brush = SynNumber;
+                else if (m.Groups["ident"].Success && keywords.Contains(m.Value)) brush = SynKeyword;
+
+                var run = new Run { Text = m.Value };
+                if (brush != null) run.Foreground = brush;
+                target.Inlines.Add(run);
+                last = m.Index + m.Length;
+            }
+            if (last < code.Length)
+                target.Inlines.Add(new Run { Text = code.Substring(last) });
+        }
+        catch
+        {
+            // Fallback total a texto plano ante cualquier error del tokenizer.
+            target.Inlines.Clear();
+            target.Text = code;
+        }
     }
 
     private static Button CreateCopyButton(string code)
