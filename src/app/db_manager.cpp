@@ -463,9 +463,12 @@ void DBManager::update_conversation_metadata(const std::string& id, const std::s
 void DBManager::set_memory(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
+    // La clave se guarda en claro: AES-GCM usa IV aleatorio, asi que una
+    // clave encriptada nunca volveria a coincidir en un WHERE key = ?.
+    // Solo el valor es sensible.
     SQLite::Statement query(*g_db,
         "INSERT OR REPLACE INTO memory (key, value) VALUES (?, ?)");
-    query.bind(1, enc.encrypt_if_enabled(key));
+    query.bind(1, key);
     query.bind(2, enc.encrypt_if_enabled(value));
     query.exec();
 }
@@ -473,10 +476,8 @@ void DBManager::set_memory(const std::string& key, const std::string& value) {
 std::optional<std::string> DBManager::get_memory(const std::string& key) {
     std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
-    // Buscar encriptado
-    std::string enc_key = enc.encrypt_if_enabled(key);
     SQLite::Statement query(*g_db, "SELECT value FROM memory WHERE key = ?");
-    query.bind(1, enc_key);
+    query.bind(1, key);
     if (query.executeStep()) {
         return enc.decrypt_if_enabled(query.getColumn(0).getString());
     }
@@ -498,9 +499,8 @@ std::unordered_map<std::string, std::string> DBManager::get_all_memory() {
 
 void DBManager::delete_memory(const std::string& key) {
     std::lock_guard<std::mutex> lock(db_mutex_);
-    auto& enc = Encryption::instance();
     SQLite::Statement query(*g_db, "DELETE FROM memory WHERE key = ?");
-    query.bind(1, enc.encrypt_if_enabled(key));
+    query.bind(1, key);
     query.exec();
 }
 

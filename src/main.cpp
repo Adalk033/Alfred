@@ -101,13 +101,18 @@ int main(int argc, char* argv[]) {
     alfred::DBManager::instance().initialize(cfg.db_path);
     alfred::log_info("Base de datos inicializada");
 
-    // 5. Configurar encriptacion (si hay clave guardada)
+    // 5. Configurar encriptacion: cargar/generar la clave persistente y
+    // restaurar el estado habilitado/deshabilitado guardado en la DB.
     std::cout << "[4/5] Configurando encriptacion...\n";
-    auto enc_key = alfred::DBManager::instance().get_app_setting("encryption_key_hash");
-    if (enc_key) {
-        alfred::log_info("Encriptacion disponible (clave configurada previamente)");
+    if (alfred::Encryption::instance().initialize(
+            alfred::get_encryption_key_path().string())) {
+        auto enc_enabled = alfred::DBManager::instance().get_app_setting("encryption_enabled");
+        bool enabled = enc_enabled && *enc_enabled == "1";
+        alfred::Encryption::instance().set_enabled(enabled);
+        alfred::log_info(std::string("Encriptacion ") +
+                         (enabled ? "habilitada" : "deshabilitada"));
     } else {
-        alfred::log_info("Encriptacion: sin clave configurada");
+        alfred::log_warn("No se pudo inicializar la encriptacion");
     }
 
     // 5.5 Inicializar PDFium (extraccion de PDFs)

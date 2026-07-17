@@ -381,18 +381,22 @@ void handle_encryption_setup(const httplib::Request& req, httplib::Response& res
     bool enable = body.value("enabled", false);
     std::string key = body.value("key", "");
 
-    if (enable && key.empty()) {
-        json_error(res, 400, "Se requiere campo 'key' para habilitar encriptacion");
-        return;
-    }
-
     auto& enc = Encryption::instance();
     if (enable) {
-        enc.set_key(key);
+        // La passphrase es opcional: sin ella se usa la clave de archivo
+        // generada al arrancar. Con passphrase, se deriva y persiste.
+        if (!key.empty()) enc.set_key(key);
+        if (!enc.has_key()) {
+            json_error(res, 500, "No hay clave de encriptacion disponible");
+            return;
+        }
         enc.set_enabled(true);
     } else {
         enc.set_enabled(false);
     }
+
+    // Persistir el estado para restaurarlo en el proximo arranque.
+    DBManager::instance().set_app_setting("encryption_enabled", enable ? "1" : "0");
 
     json_ok(res, {{"status", enable ? "enabled" : "disabled"}});
 }

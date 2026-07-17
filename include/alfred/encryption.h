@@ -10,6 +10,7 @@
 #include <string>
 #include <optional>
 #include <vector>
+#include <mutex>
 
 namespace alfred {
 
@@ -28,7 +29,9 @@ public:
     void set_enabled(bool enabled);
     bool has_key() const;
 
-    // Configurar clave desde string
+    // Configurar clave derivandola de una passphrase (PBKDF2-HMAC-SHA256).
+    // La clave derivada se persiste en el archivo de clave para sobrevivir
+    // reinicios; la passphrase nunca se almacena.
     void set_key(const std::string& key_string);
 
     // Obtener clave para display (base64)
@@ -45,13 +48,24 @@ public:
 private:
     Encryption() = default;
 
+    // Protege key_/enabled_/initialized_/key_path_: los handlers HTTP mutan
+    // el estado mientras los threads de DB encriptan/desencriptan.
+    mutable std::mutex state_mutex_;
+
     std::vector<unsigned char> key_;
-    bool enabled_ = true;
+    std::string key_path_;
+    // La encriptacion solo se activa explicitamente (POST /encryption/setup)
+    // y el estado persiste en app_settings ("encryption_enabled").
+    bool enabled_ = false;
     bool initialized_ = false;
 
-    // Helpers internos
-    std::vector<unsigned char> aes_gcm_encrypt(const std::vector<unsigned char>& plaintext) const;
-    std::vector<unsigned char> aes_gcm_decrypt(const std::vector<unsigned char>& ciphertext) const;
+    // Helpers internos (se llaman con state_mutex_ ya tomado)
+    bool generate_key_locked(const std::string& key_path);
+    bool persist_key_locked() const;
+    std::vector<unsigned char> aes_gcm_encrypt(const std::vector<unsigned char>& plaintext,
+                                               const std::vector<unsigned char>& key) const;
+    std::vector<unsigned char> aes_gcm_decrypt(const std::vector<unsigned char>& ciphertext,
+                                               const std::vector<unsigned char>& key) const;
     std::string to_base64(const std::vector<unsigned char>& data) const;
     std::vector<unsigned char> from_base64(const std::string& encoded) const;
 };
