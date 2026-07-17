@@ -56,6 +56,12 @@ public sealed partial class ConversationsPage : Page
                 .ToList();
         }
 
+        // Las conversaciones fijadas van primero (orden estable respecto al
+        // resto, que ya viene por fecha de actualizacion).
+        filtered = filtered
+            .OrderByDescending(c => Prefs.IsPinned(c.Id))
+            .ToList();
+
         ConversationListView.ItemsSource = filtered;
         EmptyPanel.Visibility = filtered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         CountText.Text = filtered.Count == _allConversations.Count
@@ -159,6 +165,13 @@ public sealed partial class ConversationsPage : Page
             await _api.DeleteConversationAsync(id);
             await LoadConversations();
         }
+    }
+
+    private void OnTogglePin(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not string id) return;
+        Prefs.TogglePinned(id);
+        ApplyFilter();   // reordenar
     }
 
     private async void OnExportConversation(object sender, RoutedEventArgs e)

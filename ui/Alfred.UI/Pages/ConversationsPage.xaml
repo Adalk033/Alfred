@@ -79,6 +79,7 @@
                             Margin="0,3">
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
@@ -86,7 +87,14 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                            <Button Grid.Column="0" ToolTipService.ToolTip="Fijar / desfijar"
+                                    AutomationProperties.Name="Fijar conversacion"
+                                    Click="OnTogglePin" Tag="{Binding Id}"
+                                    Padding="8,4">
+                                <FontIcon Glyph="&#xE718;" FontSize="14" />
+                            </Button>
+
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
                                            FontSize="{Binding BodyFontSize, Source={StaticResource Prefs}}"
                                            TextTrimming="CharacterEllipsis" />
@@ -95,26 +103,26 @@
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </StackPanel>
 
-                            <Button Grid.Column="1" ToolTipService.ToolTip="Abrir"
+                            <Button Grid.Column="2" ToolTipService.ToolTip="Abrir"
                                     Click="OnOpenConversation" Tag="{Binding Id}"
                                     Padding="8,4">
                                 <FontIcon Glyph="&#xE8AD;" FontSize="14" />
                             </Button>
 
-                            <Button Grid.Column="2" ToolTipService.ToolTip="Renombrar"
+                            <Button Grid.Column="3" ToolTipService.ToolTip="Renombrar"
                                     Click="OnRenameConversation" Tag="{Binding}"
                                     Padding="8,4">
                                 <FontIcon Glyph="&#xE8AC;" FontSize="14" />
                             </Button>
 
-                            <Button Grid.Column="3" ToolTipService.ToolTip="Exportar a Markdown"
+                            <Button Grid.Column="4" ToolTipService.ToolTip="Exportar a Markdown"
                                     AutomationProperties.Name="Exportar a Markdown"
                                     Click="OnExportConversation" Tag="{Binding Id}"
                                     Padding="8,4">
                                 <FontIcon Glyph="&#xEDE1;" FontSize="14" />
                             </Button>
 
-                            <Button Grid.Column="4" ToolTipService.ToolTip="Eliminar"
+                            <Button Grid.Column="5" ToolTipService.ToolTip="Eliminar"
                                     Click="OnDeleteConversation" Tag="{Binding Id}"
                                     Padding="8,4">
                                 <FontIcon Glyph="&#xE74D;" FontSize="14" />
