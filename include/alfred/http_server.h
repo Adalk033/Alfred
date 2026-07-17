@@ -24,6 +24,10 @@ public:
     // Configurar y registrar todos los endpoints
     bool setup(AlfredCore& core);
 
+    // Token requerido en la cabecera X-Alfred-Token. Vacio = sin auth
+    // (util para arranque manual del backend). Debe fijarse antes de setup().
+    void set_auth_token(const std::string& token) { auth_token_ = token; }
+
     // Reservar el puerto (no bloqueante). Devuelve false si el bind falla
     // (p.ej. puerto en uso), permitiendo reportar el error antes de aceptar.
     bool bind(const std::string& host = "127.0.0.1", int port = 8000);
@@ -41,9 +45,10 @@ private:
     std::unique_ptr<httplib::Server> server_;
     // Atomico: lo escriben start()/stop() y lo lee el handler de senales.
     std::atomic<bool> running_{false};
+    std::string auth_token_;
 
-    // Configurar CORS
-    void setup_cors();
+    // Pre-routing: valida el token y responde preflight CORS
+    void setup_pre_routing();
 
     // Middleware de logging
     void setup_logging();

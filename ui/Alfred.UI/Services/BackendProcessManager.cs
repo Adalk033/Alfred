@@ -12,6 +12,7 @@ public sealed class BackendProcessManager : IDisposable
     private Process? _process;
     private readonly string _host;
     private readonly int _port;
+    private readonly string? _authToken;
     private readonly JobObject _jobObject = new();
     private bool _disposed;
     private bool _stopRequested;             // true durante un stop/dispose intencional
@@ -23,10 +24,12 @@ public sealed class BackendProcessManager : IDisposable
 
     public bool IsRunning => _process is { HasExited: false };
 
-    public BackendProcessManager(string host = "127.0.0.1", int port = 8000)
+    public BackendProcessManager(string host = "127.0.0.1", int port = 8000,
+        string? authToken = null)
     {
         _host = host;
         _port = port;
+        _authToken = authToken;
     }
 
     /// <summary>
@@ -79,10 +82,12 @@ public sealed class BackendProcessManager : IDisposable
 
         try
         {
+            string tokenArg = string.IsNullOrEmpty(_authToken)
+                ? "" : $" --auth-token {_authToken}";
             var startInfo = new ProcessStartInfo
             {
                 FileName = exePath,
-                Arguments = $"--host {_host} --port {_port}",
+                Arguments = $"--host {_host} --port {_port}{tokenArg}",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,

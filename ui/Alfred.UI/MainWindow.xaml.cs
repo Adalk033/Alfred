@@ -40,8 +40,13 @@ public sealed partial class MainWindow : Window
         if (System.IO.File.Exists(iconPath))
             AppWindow.SetIcon(iconPath);
 
-        _api = new AlfredApiClient();
-        _backend = new BackendProcessManager();
+        // Token de sesion aleatorio compartido: se pasa al backend por CLI y
+        // viaja en cada peticion como X-Alfred-Token. Sin esto, cualquier
+        // pagina web local podria invocar la API (CSRF).
+        string authToken = Convert.ToHexString(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        _api = new AlfredApiClient(authToken: authToken);
+        _backend = new BackendProcessManager(authToken: authToken);
         _backend.StatusChanged += OnBackendStatusChanged;
 
         // Suscribir al servicio global de notificaciones

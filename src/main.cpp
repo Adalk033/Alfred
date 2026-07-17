@@ -61,10 +61,13 @@ int main(int argc, char* argv[]) {
     int port = 8000;
     bool verbose = false;
 
+    std::string auth_token;
+
     auto print_help = []() {
         std::cout << "Uso: alfred [opciones]\n";
         std::cout << "  --host <addr>        Direccion de escucha (default: 127.0.0.1)\n";
         std::cout << "  --port, -p <port>    Puerto (default: 8000)\n";
+        std::cout << "  --auth-token <hex>   Token requerido en la cabecera X-Alfred-Token\n";
         std::cout << "  --verbose, -v        Modo verboso\n";
         std::cout << "  --help, -h           Mostrar ayuda\n";
     };
@@ -80,6 +83,8 @@ int main(int argc, char* argv[]) {
                 std::cerr << "[ERROR] Puerto invalido: " << argv[i] << "\n";
                 return 1;
             }
+        } else if (arg == "--auth-token" && i + 1 < argc) {
+            auth_token = argv[++i];
         } else if (arg == "--verbose" || arg == "-v") {
             verbose = true;
         } else if (arg == "--help" || arg == "-h") {
@@ -144,6 +149,12 @@ int main(int argc, char* argv[]) {
     // 7. Configurar y arrancar servidor HTTP
     std::cout << "\n  Iniciando servidor HTTP...\n";
     g_server = std::make_unique<alfred::HttpServer>();
+    // Debe fijarse antes de setup(): el token queda capturado por el
+    // pre-routing handler. Vacio si no se paso --auth-token (arranque manual).
+    g_server->set_auth_token(auth_token);
+    if (!auth_token.empty()) {
+        alfred::log_info("Autenticacion por token habilitada");
+    }
 
     if (!g_server->setup(core)) {
         alfred::log_error("Error configurando servidor HTTP");
