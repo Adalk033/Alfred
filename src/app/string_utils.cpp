@@ -9,6 +9,10 @@
 #include <iomanip>
 #include <functional>
 
+#ifndef ALFRED_NO_OPENSSL
+#include <openssl/evp.h>
+#endif
+
 namespace alfred {
 
 std::string trim(const std::string& s) {
@@ -67,8 +71,8 @@ std::string join(const std::vector<std::string>& parts, const std::string& separ
     return oss.str();
 }
 
-// Implementacion basica de SHA-256 (DJB2 hash como fallback rapido)
-// Para produccion se recomienda usar OpenSSL SHA256
+// Fallback cuando OpenSSL no esta disponible: std::hash truncado a 16 hex.
+// No es criptografico ni estable entre ejecuciones/toolchains.
 static std::string simple_hash(const std::string& input) {
     std::hash<std::string> hasher;
     size_t hash_val = hasher(input);
@@ -78,7 +82,19 @@ static std::string simple_hash(const std::string& input) {
 }
 
 std::string sha256_string(const std::string& input) {
-    // Usa funcion hash estandar (reemplazar con OpenSSL para criptografia real)
+#ifndef ALFRED_NO_OPENSSL
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digest_len = 0;
+    if (EVP_Digest(input.data(), input.size(), digest, &digest_len,
+                   EVP_sha256(), nullptr) == 1) {
+        std::ostringstream oss;
+        oss << std::hex << std::setfill('0');
+        for (unsigned int i = 0; i < digest_len; ++i) {
+            oss << std::setw(2) << static_cast<int>(digest[i]);
+        }
+        return oss.str();
+    }
+#endif
     return simple_hash(input);
 }
 

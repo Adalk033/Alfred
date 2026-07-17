@@ -527,6 +527,34 @@ void handle_gpu_report(const httplib::Request& /*req*/, httplib::Response& res) 
 // ============================================================================
 // Modelos
 // ============================================================================
+
+// Helper: valida que un nombre de modelo no pueda escapar del directorio de
+// modelos. httplib decodifica percent-encoding despues del match de ruta,
+// asi que "..%2f" llega aqui como "../": rechazamos separadores, "..",
+// unidades (:) y nombres vacios.
+static bool is_safe_model_name(const std::string& name) {
+    if (name.empty()) return false;
+    if (name.find('/') != std::string::npos) return false;
+    if (name.find('\\') != std::string::npos) return false;
+    if (name.find("..") != std::string::npos) return false;
+    if (name.find(':') != std::string::npos) return false;
+    return true;
+}
+
+// Helper: true si `candidate` queda dentro de `base` tras canonizar ambas.
+static bool path_within_dir(const std::filesystem::path& candidate,
+                            const std::filesystem::path& base) {
+    std::error_code ec;
+    auto canon_candidate = std::filesystem::weakly_canonical(candidate, ec);
+    if (ec) return false;
+    auto canon_base = std::filesystem::weakly_canonical(base, ec);
+    if (ec) return false;
+    auto rel = canon_candidate.lexically_relative(canon_base);
+    if (rel.empty()) return false;
+    auto first = rel.begin()->string();
+    return first != ".." && first != ".";
+}
+
 void handle_list_models(const httplib::Request& /*req*/, httplib::Response& res) {
     auto& cfg = get_config();
     std::string models_dir = cfg.models_dir;
@@ -559,15 +587,26 @@ void handle_change_model(const httplib::Request& req, httplib::Response& res,
 
     std::string model_path = body.value("model_path", "");
     if (model_path.empty()) {
-        model_path = body.value("model_name", "");
-        if (!model_path.empty()) {
+        std::string model_name = body.value("model_name", "");
+        if (!model_name.empty()) {
+            if (!is_safe_model_name(model_name)) {
+                json_error(res, 400, "Nombre de modelo invalido");
+                return;
+            }
             // Resolver nombre relativo
-            model_path = get_config().models_dir + "/" + model_path;
+            model_path = get_config().models_dir + "/" + model_name;
         }
     }
 
     if (model_path.empty()) {
         json_error(res, 400, "Campo 'model_path' o 'model_name' requerido");
+        return;
+    }
+
+    // Los modelos solo se cargan desde el directorio de modelos: evita que
+    // un request manipulado apunte a rutas arbitrarias del sistema.
+    if (!path_within_dir(model_path, get_config().models_dir)) {
+        json_error(res, 400, "La ruta del modelo debe estar dentro del directorio de modelos");
         return;
     }
 
@@ -606,8 +645,17 @@ void handle_delete_model(const httplib::Request& req, httplib::Response& res,
         return;
     }
 
-    // Construir ruta completa
+    if (!is_safe_model_name(name)) {
+        json_error(res, 400, "Nombre de modelo invalido");
+        return;
+    }
+
+    // Construir ruta completa y verificar que no escape del directorio
     std::string model_path = get_config().models_dir + "/" + name;
+    if (!path_within_dir(model_path, get_config().models_dir)) {
+        json_error(res, 400, "Nombre de modelo invalido");
+        return;
+    }
 
     if (!std::filesystem::exists(model_path)) {
         json_error(res, 404, "Modelo no encontrado: " + name);
