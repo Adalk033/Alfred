@@ -138,13 +138,13 @@ public sealed partial class MainWindow : Window
         // "Recientes" y "Locales" o dentro de una misma seccion.
         var seenPaths = new HashSet<string>(StringComparer.Ordinal);
 
-        // Recientes (persistidos en user_settings)
-        var recents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync())
+        // Recientes (persistidos en user_settings). Una sola lectura: filtrar
+        // los que ya no existen en disco y, si cambio, re-persistir.
+        var persistedRecents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync());
+        var recents = persistedRecents
             .Where(r => localPaths.Contains(ModelListHelpers.NormalizePath(r.Path, r.Name)))
             .ToList();
 
-        // Si habia recientes que ya no existen en disco, depurarlos de settings.
-        var persistedRecents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync());
         if (recents.Count != persistedRecents.Count)
             await SaveRecentModelsAsync(recents);
 

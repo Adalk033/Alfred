@@ -88,6 +88,14 @@ public sealed class ModelDownloadService : IDisposable
             long totalBytes = headResponse.Content.Headers.ContentLength ?? 0;
             progress.TotalBytes = totalBytes;
 
+            // Verificar espacio libre antes de empezar (los GGUF pesan varios GB).
+            if (totalBytes > 0 && !HasEnoughFreeSpace(totalBytes))
+            {
+                progress.Error = "Espacio en disco insuficiente para descargar el modelo.";
+                onProgress(progress);
+                return false;
+            }
+
             // Soporte de reanudacion: verificar descarga parcial
             long existingBytes = 0;
             if (File.Exists(tempPath))
@@ -169,6 +177,26 @@ public sealed class ModelDownloadService : IDisposable
             IsDownloading = false;
             _cts?.Dispose();
             _cts = null;
+        }
+    }
+
+    /// <summary>
+    /// Comprueba que el volumen de destino tenga sitio para el archivo mas un
+    /// margen del 5% (metadatos, archivo temporal .downloading, etc.).
+    /// </summary>
+    private bool HasEnoughFreeSpace(long requiredBytes)
+    {
+        try
+        {
+            string? root = Path.GetPathRoot(Path.GetFullPath(_modelsDir));
+            if (string.IsNullOrEmpty(root)) return true;   // no verificable: no bloquear
+            var drive = new DriveInfo(root);
+            long needed = requiredBytes + requiredBytes / 20;   // +5%
+            return drive.AvailableFreeSpace >= needed;
+        }
+        catch
+        {
+            return true;   // ante cualquier error, no bloquear la descarga
         }
     }
 

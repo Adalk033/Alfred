@@ -194,6 +194,15 @@ public sealed partial class ModelsPage : Page
     {
         if (sender is not Button btn || btn.Tag is not HfGgufFile file) return;
 
+        // Ya hay una descarga en curso: no deshabilitar este boton (quedaria
+        // atascado porque DownloadModelAsync retorna sin invocar onProgress).
+        if (_downloader.IsDownloading)
+        {
+            NotificationService.Instance.ShowWarning(
+                "Ya hay una descarga en curso. Espera a que termine.", "Descarga");
+            return;
+        }
+
         btn.IsEnabled = false;
         btn.Content = "Descargando...";
 
@@ -237,10 +246,12 @@ public sealed partial class ModelsPage : Page
             });
         });
 
-        if (success)
-        {
+        // Reset defensivo: si la descarga fallo sin pasar por un callback que
+        // rehabilite el boton, restaurarlo aqui.
+        if (!success)
+            ResetDownloadUI(btn);
+        else
             await LoadData();
-        }
     }
 
     private void OnCancelDownload(object sender, RoutedEventArgs e)
