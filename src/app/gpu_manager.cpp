@@ -131,12 +131,18 @@ GPUManager& GPUManager::instance() {
 }
 
 void GPUManager::refresh() {
+    std::lock_guard<std::mutex> lock(info_mutex_);
     detected_ = false;
     gpu_info_ = GPUInfo{};
-    detect();
+    detect_locked();
 }
 
 void GPUManager::detect() {
+    std::lock_guard<std::mutex> lock(info_mutex_);
+    detect_locked();
+}
+
+void GPUManager::detect_locked() {
     if (detected_) return;
     detected_ = true;
 
@@ -233,23 +239,27 @@ void GPUManager::detect() {
     }
 }
 
-const GPUInfo& GPUManager::info() const {
+GPUInfo GPUManager::info() const {
+    std::lock_guard<std::mutex> lock(info_mutex_);
     return gpu_info_;
 }
 
 bool GPUManager::has_cuda() const {
+    std::lock_guard<std::mutex> lock(info_mutex_);
     return gpu_info_.available;
 }
 
 size_t GPUManager::free_vram_mb() const {
+    std::lock_guard<std::mutex> lock(info_mutex_);
     return gpu_info_.free_vram_mb;
 }
 
 int GPUManager::optimal_gpu_layers(size_t model_size_mb) const {
-    if (!gpu_info_.available || gpu_info_.free_vram_mb == 0) return 0;
+    GPUInfo snapshot = info();
+    if (!snapshot.available || snapshot.free_vram_mb == 0) return 0;
 
     // Estimar: necesitamos ~1.2x el tamano del modelo en VRAM
-    size_t available = gpu_info_.free_vram_mb;
+    size_t available = snapshot.free_vram_mb;
     size_t needed = static_cast<size_t>(static_cast<double>(model_size_mb) * 1.2);
 
     if (available >= needed) {
@@ -263,19 +273,20 @@ int GPUManager::optimal_gpu_layers(size_t model_size_mb) const {
 }
 
 std::string GPUManager::status_report() const {
+    GPUInfo snapshot = info();
     std::ostringstream oss;
     oss << "=== Estado GPU ===\n";
 
-    if (!gpu_info_.available) {
+    if (!snapshot.available) {
         oss << "  GPU CUDA: No disponible\n";
         oss << "  Modo: CPU solamente\n";
     } else {
-        oss << "  GPU: " << gpu_info_.device_name << "\n";
-        oss << "  Driver: " << gpu_info_.driver_version << "\n";
-        oss << "  VRAM Total: " << gpu_info_.total_vram_mb << " MB\n";
-        oss << "  VRAM Libre: " << gpu_info_.free_vram_mb << " MB\n";
-        oss << "  VRAM Usada: " << gpu_info_.used_vram_mb << " MB\n";
-        oss << "  GPUs encontradas: " << gpu_info_.device_count << "\n";
+        oss << "  GPU: " << snapshot.device_name << "\n";
+        oss << "  Driver: " << snapshot.driver_version << "\n";
+        oss << "  VRAM Total: " << snapshot.total_vram_mb << " MB\n";
+        oss << "  VRAM Libre: " << snapshot.free_vram_mb << " MB\n";
+        oss << "  VRAM Usada: " << snapshot.used_vram_mb << " MB\n";
+        oss << "  GPUs encontradas: " << snapshot.device_count << "\n";
     }
 
     oss << "==================\n";
@@ -283,19 +294,21 @@ std::string GPUManager::status_report() const {
 }
 
 std::string GPUManager::status_json() const {
+    GPUInfo snapshot = info();
     json j;
-    j["available"] = gpu_info_.available;
-    j["device_name"] = gpu_info_.device_name;
-    j["driver_version"] = gpu_info_.driver_version;
-    j["total_vram_mb"] = gpu_info_.total_vram_mb;
-    j["free_vram_mb"] = gpu_info_.free_vram_mb;
-    j["used_vram_mb"] = gpu_info_.used_vram_mb;
-    j["device_count"] = gpu_info_.device_count;
+    j["available"] = snapshot.available;
+    j["device_name"] = snapshot.device_name;
+    j["driver_version"] = snapshot.driver_version;
+    j["total_vram_mb"] = snapshot.total_vram_mb;
+    j["free_vram_mb"] = snapshot.free_vram_mb;
+    j["used_vram_mb"] = snapshot.used_vram_mb;
+    j["device_count"] = snapshot.device_count;
     return j.dump();
 }
 
 AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
     AutoTuneSettings s;
+    GPUInfo snapshot = info();
 
     // --- Detectar CPU ---
     int hw_threads = static_cast<int>(std::thread::hardware_concurrency());
@@ -305,11 +318,11 @@ AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
     s.n_threads    = physical_cores;
 
     // --- Detectar GPU ---
-    s.gpu_available  = gpu_info_.available;
-    s.vram_total_mb  = gpu_info_.total_vram_mb;
-    s.vram_free_mb   = gpu_info_.free_vram_mb;
+    s.gpu_available  = snapshot.available;
+    s.vram_total_mb  = snapshot.total_vram_mb;
+    s.vram_free_mb   = snapshot.free_vram_mb;
 
-    if (!gpu_info_.available || gpu_info_.total_vram_mb == 0) {
+    if (!snapshot.available || snapshot.total_vram_mb == 0) {
         // Sin GPU: configuracion conservadora CPU-only
         s.n_gpu_layers = 0;
         s.n_ctx        = 2048;
@@ -321,7 +334,7 @@ AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
         return s;
     }
 
-    size_t vram_gb = gpu_info_.total_vram_mb / 1024;
+    size_t vram_gb = snapshot.total_vram_mb / 1024;
 
     // --- Configuracion base segun VRAM total ---
     if (vram_gb <= 6) {
@@ -348,20 +361,20 @@ AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
         size_t vram_needed = static_cast<size_t>(model_size_mb * 1.2);
 
         // Antes de reducir capas, intentamos KV cache cuantizado (ahorra hasta ~75% de KV)
-        if (vram_needed > static_cast<size_t>(gpu_info_.free_vram_mb * 0.85)) {
+        if (vram_needed > static_cast<size_t>(snapshot.free_vram_mb * 0.85)) {
             // Q8_0 ahorra ~50% del KV cache: permite mantener mas capas en GPU
             s.cache_type_k = "q8_0";
             s.cache_type_v = "q8_0";
         }
-        if (vram_needed > static_cast<size_t>(gpu_info_.free_vram_mb * 1.2)) {
+        if (vram_needed > static_cast<size_t>(snapshot.free_vram_mb * 1.2)) {
             // Muy ajustado: Q4_0 ahorra ~75%
             s.cache_type_k = "q4_0";
             s.cache_type_v = "q4_0";
         }
 
         // Si el modelo no cabe completo en VRAM libre, reducir capas
-        if (vram_needed > gpu_info_.free_vram_mb) {
-            double ratio = static_cast<double>(gpu_info_.free_vram_mb) /
+        if (vram_needed > snapshot.free_vram_mb) {
+            double ratio = static_cast<double>(snapshot.free_vram_mb) /
                            static_cast<double>(vram_needed);
             // Usar ~80% del ratio para dejar margen al contexto
             int safe_layers = static_cast<int>(ratio * 40 * 0.8);
@@ -385,15 +398,15 @@ AutoTuneSettings GPUManager::auto_tune(size_t model_size_mb) const {
     size_t ctx_vram_estimate = static_cast<size_t>(s.n_ctx) * s.n_gpu_layers / 10;
     size_t total_estimate = (model_size_mb > 0 ? model_size_mb : 4000) + ctx_vram_estimate;
 
-    if (total_estimate > gpu_info_.free_vram_mb && s.n_gpu_layers > 0) {
+    if (total_estimate > snapshot.free_vram_mb && s.n_gpu_layers > 0) {
         // Primero reducir capas GPU
-        while (total_estimate > gpu_info_.free_vram_mb && s.n_gpu_layers > 0) {
+        while (total_estimate > snapshot.free_vram_mb && s.n_gpu_layers > 0) {
             s.n_gpu_layers = std::max(0, s.n_gpu_layers - 5);
             ctx_vram_estimate = static_cast<size_t>(s.n_ctx) * s.n_gpu_layers / 10;
             total_estimate = (model_size_mb > 0 ? model_size_mb : 4000) + ctx_vram_estimate;
         }
         // Luego reducir batch si aun no cabe
-        if (total_estimate > gpu_info_.free_vram_mb) {
+        if (total_estimate > snapshot.free_vram_mb) {
             s.n_batch = std::max(32, s.n_batch / 2);
         }
     }

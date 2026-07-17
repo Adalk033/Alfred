@@ -12,6 +12,7 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 
 #include "alfred/llm_engine.h"
@@ -89,10 +90,12 @@ private:
 
     bool initialized_ = false;
 
-    // Cancelacion de streaming: id incremental del request activo y flag.
+    // Cancelacion de streaming: cada request registra su propio flag de
+    // cancelacion en un mapa (un flag global permitia que un request B
+    // concurrente anulara la cancelacion pendiente de A).
     std::atomic<uint64_t> next_request_id_{1};
-    std::atomic<uint64_t> active_request_id_{0};
-    std::atomic<bool>     cancel_flag_{false};
+    std::mutex requests_mutex_;
+    std::unordered_map<uint64_t, std::shared_ptr<std::atomic<bool>>> active_cancel_flags_;
 
     // Generar respuesta (conocimiento general)
     QueryResult generate_response(const std::string& question,

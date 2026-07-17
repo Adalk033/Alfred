@@ -9,6 +9,7 @@
 
 #include <string>
 #include <memory>
+#include <atomic>
 #include <httplib.h>
 
 namespace alfred {
@@ -34,7 +35,8 @@ public:
 
 private:
     std::unique_ptr<httplib::Server> server_;
-    bool running_ = false;
+    // Atomico: lo escriben start()/stop() y lo lee el handler de senales.
+    std::atomic<bool> running_{false};
 
     // Configurar CORS
     void setup_cors();

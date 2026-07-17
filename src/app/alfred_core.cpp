@@ -405,14 +405,17 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     ModelLifecycle::Scope scope(lifecycle_);
 
     uint64_t my_id = next_request_id_.fetch_add(1);
-    active_request_id_.store(my_id);
-    cancel_flag_.store(false);
+    auto my_cancel = std::make_shared<std::atomic<bool>>(false);
+    {
+        std::lock_guard<std::mutex> lk(requests_mutex_);
+        active_cancel_flags_[my_id] = my_cancel;
+    }
 
     if (on_started) on_started(my_id);
 
     auto cleanup_active = [this, my_id]() {
-        uint64_t expected = my_id;
-        active_request_id_.compare_exchange_strong(expected, 0);
+        std::lock_guard<std::mutex> lk(requests_mutex_);
+        active_cancel_flags_.erase(my_id);
     };
 
     auto start = std::chrono::steady_clock::now();
@@ -454,8 +457,8 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     std::string raw_output;
     size_t emitted_chars = 0;
 
-    auto wrapped_cb = [this, &on_token, &raw_output, &emitted_chars](const std::string& tok) -> bool {
-        if (cancel_flag_.load()) return false;
+    auto wrapped_cb = [&my_cancel, &on_token, &raw_output, &emitted_chars](const std::string& tok) -> bool {
+        if (my_cancel->load()) return false;
 
         raw_output += tok;
         std::string visible = extract_final_response_text(raw_output);
@@ -470,7 +473,7 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     };
 
     auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
-    const bool was_cancelled = cancel_flag_.load();
+    const bool was_cancelled = my_cancel->load();
 
     if (llm_result.success || !llm_result.text.empty()) {
         if (raw_output.empty()) {
@@ -490,11 +493,23 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
 }
 
 bool AlfredCore::cancel_query(uint64_t request_id) {
-    uint64_t active = active_request_id_.load();
-    if (active == 0) return false;
-    if (request_id != 0 && request_id != active) return false;
-    cancel_flag_.store(true);
-    log_info("Cancelacion solicitada para request_id=" + std::to_string(active));
+    std::lock_guard<std::mutex> lk(requests_mutex_);
+    if (active_cancel_flags_.empty()) return false;
+
+    if (request_id == 0) {
+        // Sin id: cancelar todos los requests activos.
+        for (auto& [id, flag] : active_cancel_flags_) {
+            flag->store(true);
+        }
+        log_info("Cancelacion solicitada para todos los requests activos ("
+                 + std::to_string(active_cancel_flags_.size()) + ")");
+        return true;
+    }
+
+    auto it = active_cancel_flags_.find(request_id);
+    if (it == active_cancel_flags_.end()) return false;
+    it->second->store(true);
+    log_info("Cancelacion solicitada para request_id=" + std::to_string(request_id));
     return true;
 }
 
