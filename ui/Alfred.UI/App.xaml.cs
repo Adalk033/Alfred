@@ -1,5 +1,9 @@
 using Alfred.UI.Services;
 using Microsoft.UI.Xaml;
+using Microsoft.Windows.AppLifecycle;
+using System;
+using System.Diagnostics;
+using System.IO;
 
 namespace Alfred.UI;
 
@@ -10,10 +14,29 @@ public partial class App : Application
     public App()
     {
         this.InitializeComponent();
+
+        // Handler global: sin esto, cualquier excepcion no observada en un
+        // handler async void mata el proceso en silencio. La registramos en
+        // disco para poder diagnosticar cierres inesperados.
+        this.UnhandledException += OnUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Instancia unica: si ya hay una instancia de Alfred corriendo,
+        // redirigir la activacion a ella y salir. Evita dos backends
+        // peleando por el puerto 8000.
+        var keyInstance = AppInstance.FindOrRegisterForKey("Alfred-Main-Instance");
+        if (!keyInstance.IsCurrent)
+        {
+            var activatedArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
+            keyInstance.RedirectActivationToAsync(activatedArgs).AsTask().Wait();
+            Process.GetCurrentProcess().Kill();
+            return;
+        }
+
         // Registrar el singleton de preferencias como recurso global ANTES de
         // crear la ventana para que los DataTemplates puedan enlazar
         // tipografía/densidad vía {Binding ..., Source={StaticResource Prefs}}.
@@ -36,4 +59,41 @@ public partial class App : Application
     }
 
     public static Window? CurrentWindow => ((App)Current)._window;
+
+    // ------------------------------------------------------------------
+    // Registro de excepciones no controladas
+    // ------------------------------------------------------------------
+    private static void LogCrash(string source, Exception? ex)
+    {
+        try
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Alfred", "logs");
+            Directory.CreateDirectory(dir);
+            string line = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] ({source}) " +
+                          $"{ex?.GetType().Name}: {ex?.Message}\n{ex?.StackTrace}\n\n";
+            File.AppendAllText(Path.Combine(dir, "ui-crash.log"), line);
+        }
+        catch { /* el logging de crash nunca debe lanzar */ }
+    }
+
+    private void OnUnhandledException(object sender,
+        Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        LogCrash("UI", e.Exception);
+        // Marcar como manejada para no derribar el proceso por un fallo
+        // recuperable (p.ej. una excepcion en un handler de UI).
+        e.Handled = true;
+    }
+
+    private void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        => LogCrash("AppDomain", e.ExceptionObject as Exception);
+
+    private void OnUnobservedTaskException(object? sender,
+        System.Threading.Tasks.UnobservedTaskExceptionEventArgs e)
+    {
+        LogCrash("Task", e.Exception);
+        e.SetObserved();
+    }
 }
