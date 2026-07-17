@@ -2,7 +2,12 @@
     x:Class="Alfred.UI.Pages.ModelsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:Alfred.UI.Converters"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVis" />
+    </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Padding="{x:Bind Prefs.PagePadding, Mode=OneWay}">
@@ -159,6 +164,11 @@
                                            FontSize="{Binding TinyFontSize, Source={StaticResource Prefs}}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding VramFit}"
+                                           Visibility="{Binding HasVramFit, Converter={StaticResource BoolToVis}}"
+                                           FontSize="{Binding TinyFontSize, Source={StaticResource Prefs}}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource AlfredAccent}" />
                             </StackPanel>
 
                             <TextBlock Grid.Column="1" VerticalAlignment="Center"
