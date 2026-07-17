@@ -77,15 +77,32 @@
         </Border>
 
         <!-- Lista de mensajes -->
-        <ScrollViewer x:Name="ChatScroll" Grid.Row="1"
-                      VerticalScrollMode="Enabled"
-                      VerticalScrollBarVisibility="Visible"
-                      HorizontalScrollMode="Disabled"
-                      HorizontalScrollBarVisibility="Disabled"
-                      Padding="24,16,24,8">
-            <StackPanel x:Name="MessagesPanel" Spacing="12"
-                        HorizontalAlignment="Stretch" />
-        </ScrollViewer>
+        <Grid Grid.Row="1">
+            <ScrollViewer x:Name="ChatScroll"
+                          VerticalScrollMode="Enabled"
+                          VerticalScrollBarVisibility="Visible"
+                          HorizontalScrollMode="Disabled"
+                          HorizontalScrollBarVisibility="Disabled"
+                          ViewChanged="OnChatScrollViewChanged"
+                          Padding="24,16,24,8">
+                <StackPanel x:Name="MessagesPanel" Spacing="12"
+                            HorizontalAlignment="Stretch" />
+            </ScrollViewer>
+
+            <!-- Boton "Ir al final": visible solo cuando el usuario subio -->
+            <Button x:Name="JumpToBottomButton"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                    Margin="0,0,0,12" Visibility="Collapsed"
+                    Click="OnJumpToBottom"
+                    Style="{StaticResource AccentButtonStyle}"
+                    CornerRadius="16" Padding="12,6"
+                    AutomationProperties.Name="Ir al final de la conversacion">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE74B;" FontSize="12" />
+                    <TextBlock Text="Ir al final" FontSize="12" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
         <!-- Panel de bienvenida (visible cuando no hay mensajes) -->
         <StackPanel x:Name="WelcomePanel" Grid.Row="1"
@@ -202,10 +219,10 @@
             </StackPanel>
 
             <TextBox x:Name="InputBox" Grid.Column="1"
-                     PlaceholderText="Escribe tu pregunta..."
+                     PlaceholderText="Escribe tu pregunta... (Shift+Enter para nueva linea)"
                      FontSize="{x:Bind Prefs.BodyFontSize, Mode=OneWay}"
-                     AcceptsReturn="False"
-                     MaxHeight="120"
+                     AcceptsReturn="True"
+                     MaxHeight="160"
                      TextWrapping="Wrap"
                      KeyDown="OnInputKeyDown"
                      TextChanged="OnInputTextChanged"
