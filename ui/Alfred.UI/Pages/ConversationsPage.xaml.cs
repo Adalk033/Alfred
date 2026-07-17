@@ -161,6 +161,41 @@ public sealed partial class ConversationsPage : Page
         }
     }
 
+    private async void OnExportConversation(object sender, RoutedEventArgs e)
+    {
+        if (_api == null) return;
+        if (sender is not Button btn || btn.Tag is not string id) return;
+
+        var detail = await _api.GetConversationAsync(id);
+        if (detail == null || detail.Messages.Count == 0)
+        {
+            NotificationService.Instance.ShowWarning(
+                "La conversacion no tiene mensajes para exportar.", "Exportar");
+            return;
+        }
+
+        string markdown = ConversationExporter.ToMarkdown(detail);
+
+        var picker = new Windows.Storage.Pickers.FileSavePicker
+        {
+            SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
+            SuggestedFileName = ConversationExporter.SuggestFileName(detail.Title),
+        };
+        picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
+
+        // App unpackaged: el picker necesita el HWND de la ventana.
+        if (App.CurrentWindow is null) return;
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.CurrentWindow);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+        var file = await picker.PickSaveFileAsync();
+        if (file == null) return;
+
+        await Windows.Storage.FileIO.WriteTextAsync(file, markdown);
+        NotificationService.Instance.ShowSuccess(
+            $"Conversacion exportada a {file.Name}.", "Exportar");
+    }
+
     // ========================================================================
     // Seleccion multiple + eliminacion en lote
     // ========================================================================
