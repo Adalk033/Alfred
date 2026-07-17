@@ -13,6 +13,8 @@
 #include <thread>
 #include <chrono>
 #include <unordered_map>
+#include <list>
+#include <optional>
 #include <nlohmann/json.hpp>
 
 #include "alfred/llm_engine.h"
@@ -97,6 +99,25 @@ private:
     std::atomic<uint64_t> next_request_id_{1};
     std::mutex requests_mutex_;
     std::unordered_map<uint64_t, std::shared_ptr<std::atomic<bool>>> active_cancel_flags_;
+
+    // ------------------------------------------------------------------
+    // Cache LRU de respuestas (la que anuncia el README). Solo para queries
+    // sin conversacion (stateless): clave = hash(modelo + pregunta + params).
+    // TTL y capacidad configurables (query_cache_*). max=0 la deshabilita.
+    // ------------------------------------------------------------------
+    struct CacheEntry {
+        std::string answer;
+        std::chrono::steady_clock::time_point stored_at;
+        std::list<size_t>::iterator lru_it;
+    };
+    std::mutex cache_mutex_;
+    std::unordered_map<size_t, CacheEntry> query_cache_;
+    std::list<size_t> query_cache_lru_;
+
+    size_t cache_key(const std::string& question) const;
+    // Devuelve la respuesta cacheada valida (dentro del TTL) o nullopt.
+    std::optional<std::string> cache_lookup(size_t key);
+    void cache_store(size_t key, const std::string& answer);
 
     // Generar respuesta (conocimiento general)
     QueryResult generate_response(const std::string& question,

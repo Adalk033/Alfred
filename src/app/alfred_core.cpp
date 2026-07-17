@@ -335,6 +335,7 @@ QueryResult AlfredCore::generate_response(
     if (!llm_->is_loaded()) {
         result.answer = "Error: Modelo LLM no cargado. "
                        "Coloca un modelo GGUF en la carpeta de modelos.";
+        result.is_error = true;
         return result;
     }
 
@@ -347,9 +348,77 @@ QueryResult AlfredCore::generate_response(
         result.answer = extract_final_response_text(llm_result.text);
     } else {
         result.answer = "Error generando respuesta: " + llm_result.error;
+        result.is_error = true;
     }
 
     return result;
+}
+
+// ============================================================================
+// Cache LRU de respuestas (stateless)
+// ============================================================================
+size_t AlfredCore::cache_key(const std::string& question) const {
+    // Clave = hash(modelo + parametros de sampling + pregunta). Cambiar de
+    // modelo o de temperatura invalida entradas anteriores implicitamente.
+    const auto& cfg = get_config();
+    std::string material = llm_ ? llm_->model_name() : "";
+    material += "|t=" + std::to_string(cfg.temperature);
+    material += "|p=" + std::to_string(cfg.top_p);
+    material += "|k=" + std::to_string(cfg.top_k);
+    material += "|m=" + std::to_string(cfg.max_tokens);
+    material += "|q=" + question;
+    return std::hash<std::string>{}(material);
+}
+
+std::optional<std::string> AlfredCore::cache_lookup(size_t key) {
+    const auto& cfg = get_config();
+    if (cfg.query_cache_max <= 0) return std::nullopt;
+
+    std::lock_guard<std::mutex> lk(cache_mutex_);
+    auto it = query_cache_.find(key);
+    if (it == query_cache_.end()) return std::nullopt;
+
+    // Expiracion por TTL.
+    auto age = std::chrono::steady_clock::now() - it->second.stored_at;
+    if (std::chrono::duration_cast<std::chrono::seconds>(age).count()
+            > cfg.query_cache_ttl_seconds) {
+        query_cache_lru_.erase(it->second.lru_it);
+        query_cache_.erase(it);
+        return std::nullopt;
+    }
+
+    // Marcar como usado recientemente (mover al frente).
+    query_cache_lru_.erase(it->second.lru_it);
+    query_cache_lru_.push_front(key);
+    it->second.lru_it = query_cache_lru_.begin();
+    return it->second.answer;
+}
+
+void AlfredCore::cache_store(size_t key, const std::string& answer) {
+    const auto& cfg = get_config();
+    if (cfg.query_cache_max <= 0 || answer.empty()) return;
+
+    std::lock_guard<std::mutex> lk(cache_mutex_);
+    auto [it, inserted] = query_cache_.try_emplace(
+        key, CacheEntry{answer, std::chrono::steady_clock::now(), query_cache_lru_.end()});
+    if (inserted) {
+        query_cache_lru_.push_front(key);
+        it->second.lru_it = query_cache_lru_.begin();
+    } else {
+        it->second.answer = answer;
+        it->second.stored_at = std::chrono::steady_clock::now();
+        query_cache_lru_.erase(it->second.lru_it);
+        query_cache_lru_.push_front(key);
+        it->second.lru_it = query_cache_lru_.begin();
+    }
+
+    // Evicts LRU hasta respetar la capacidad.
+    while (query_cache_.size() > static_cast<size_t>(cfg.query_cache_max)
+            && !query_cache_lru_.empty()) {
+        size_t victim = query_cache_lru_.back();
+        query_cache_lru_.pop_back();
+        query_cache_.erase(victim);
+    }
 }
 
 // ============================================================================
@@ -357,6 +426,20 @@ QueryResult AlfredCore::generate_response(
 // ============================================================================
 QueryResult AlfredCore::query(const std::string& question,
                                const std::string& conversation_id) {
+    // Cache solo para queries sin conversacion (deterministas respecto a la
+    // entrada). Con historial la respuesta depende del contexto acumulado.
+    const bool cacheable = conversation_id.empty();
+    size_t key = 0;
+    if (cacheable) {
+        key = cache_key(question);
+        if (auto hit = cache_lookup(key)) {
+            QueryResult cached;
+            cached.answer = *hit;
+            cached.from_cache = true;
+            return cached;
+        }
+    }
+
     ensure_model_loaded();
 
     ModelLifecycle::Scope scope(lifecycle_);
@@ -390,6 +473,11 @@ QueryResult AlfredCore::query(const std::string& question,
 
     auto end = std::chrono::steady_clock::now();
     result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+    // Guardar en cache solo respuestas validas de queries stateless.
+    if (cacheable && !result.is_error && !result.answer.empty()) {
+        cache_store(key, result.answer);
+    }
 
     return result;
 }
