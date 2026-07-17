@@ -445,6 +445,7 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     if (!llm_->is_loaded()) {
         result.answer = "Error: Modelo LLM no cargado. "
                         "Coloca un modelo GGUF en la carpeta de modelos.";
+        result.is_error = true;
         if (on_token) on_token(result.answer);
         auto end = std::chrono::steady_clock::now();
         result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
@@ -482,6 +483,7 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
         result.answer = extract_final_response_text(raw_output);
     } else {
         result.answer = "Error generando respuesta: " + llm_result.error;
+        result.is_error = true;
     }
     result.cancelled = was_cancelled;
 

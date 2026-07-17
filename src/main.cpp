@@ -28,12 +28,16 @@
 #include <csignal>
 #include <memory>
 #include <thread>
+#include <atomic>
 
 // Servidor global para manejo de senales
 static std::unique_ptr<alfred::HttpServer> g_server;
+// Flag async-signal-safe: el handler solo lo setea; el hilo principal
+// hace el stop() real (que toma mutexes y loguea, no seguro en un handler).
+static std::atomic<bool> g_stop_requested{false};
 
-void signal_handler(int signum) {
-    std::cout << "\n[Alfred] Senal recibida (" << signum << "), deteniendo...\n";
+void signal_handler(int /*signum*/) {
+    g_stop_requested.store(true);
     if (g_server) {
         g_server->stop();
     }
@@ -57,20 +61,29 @@ int main(int argc, char* argv[]) {
     int port = 8000;
     bool verbose = false;
 
+    auto print_help = []() {
+        std::cout << "Uso: alfred [opciones]\n";
+        std::cout << "  --host <addr>        Direccion de escucha (default: 127.0.0.1)\n";
+        std::cout << "  --port, -p <port>    Puerto (default: 8000)\n";
+        std::cout << "  --verbose, -v        Modo verboso\n";
+        std::cout << "  --help, -h           Mostrar ayuda\n";
+    };
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if ((arg == "--host" || arg == "-h") && i + 1 < argc) {
+        if (arg == "--host" && i + 1 < argc) {
             host = argv[++i];
         } else if ((arg == "--port" || arg == "-p") && i + 1 < argc) {
-            port = std::stoi(argv[++i]);
+            try {
+                port = std::stoi(argv[++i]);
+            } catch (const std::exception&) {
+                std::cerr << "[ERROR] Puerto invalido: " << argv[i] << "\n";
+                return 1;
+            }
         } else if (arg == "--verbose" || arg == "-v") {
             verbose = true;
-        } else if (arg == "--help") {
-            std::cout << "Uso: alfred [opciones]\n";
-            std::cout << "  --host, -h <addr>  Direccion de escucha (default: 127.0.0.1)\n";
-            std::cout << "  --port, -p <port>  Puerto (default: 8000)\n";
-            std::cout << "  --verbose, -v      Modo verboso\n";
-            std::cout << "  --help             Mostrar ayuda\n";
+        } else if (arg == "--help" || arg == "-h") {
+            print_help();
             return 0;
         }
     }
@@ -137,13 +150,21 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    alfred::log_info("Servidor listo en http://" + host + ":" + std::to_string(port));
-    std::cout << "\n  [OK] Alfred listo en http://" << host << ":" << port << "\n";
+    // Reservar el puerto antes de anunciar que esta listo: si esta en uso,
+    // el error se reporta aqui y no despues de un falso "OK".
+    if (!g_server->bind(cfg.host, cfg.port)) {
+        std::cerr << "\n  [ERROR] No se pudo iniciar en http://" << cfg.host
+                  << ":" << cfg.port << " (¿puerto en uso?)\n";
+        return 1;
+    }
+
+    alfred::log_info("Servidor listo en http://" + cfg.host + ":" + std::to_string(cfg.port));
+    std::cout << "\n  [OK] Alfred listo en http://" << cfg.host << ":" << cfg.port << "\n";
     std::cout << "  [OK] API docs: GET /health, POST /query, GET /models\n";
     std::cout << "  [OK] Presiona Ctrl+C para detener\n\n";
 
     // Bloqueante - corre hasta Ctrl+C
-    g_server->start(cfg.host, cfg.port);
+    g_server->start();
 
     // Limpieza
     alfred::log_info("Alfred detenido correctamente");

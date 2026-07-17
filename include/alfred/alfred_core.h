@@ -26,6 +26,7 @@ struct QueryResult {
     std::string answer;
     bool from_cache = false;
     bool cancelled = false;         // true si el usuario cancelo el streaming
+    bool is_error = false;          // true si la generacion fallo (no persistir)
     double total_time_ms = 0.0;
 };
 

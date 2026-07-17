@@ -24,8 +24,12 @@ public:
     // Configurar y registrar todos los endpoints
     bool setup(AlfredCore& core);
 
-    // Iniciar servidor (bloqueante)
-    void start(const std::string& host = "127.0.0.1", int port = 8000);
+    // Reservar el puerto (no bloqueante). Devuelve false si el bind falla
+    // (p.ej. puerto en uso), permitiendo reportar el error antes de aceptar.
+    bool bind(const std::string& host = "127.0.0.1", int port = 8000);
+
+    // Iniciar servidor (bloqueante). Requiere un bind() previo exitoso.
+    void start();
 
     // Detener servidor
     void stop();

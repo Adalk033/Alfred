@@ -120,25 +120,37 @@ void HttpServer::setup_logging() {
         });
 }
 
-void HttpServer::start(const std::string& host, int port) {
+bool HttpServer::bind(const std::string& host, int port) {
     if (!server_) {
         log_error("Servidor no inicializado");
+        return false;
+    }
+
+    // bind_to_port reserva el socket de inmediato: si el puerto esta ocupado
+    // falla aqui, antes de que main reporte "listo".
+    int bound = server_->bind_to_port(host, port);
+    if (bound <= 0) {
+        log_error("Error: No se pudo reservar el puerto " +
+                  host + ":" + std::to_string(port) + " (¿en uso?)");
+        return false;
+    }
+
+    log_info("=== Alfred HTTP Server enlazado en http://" + host + ":" +
+             std::to_string(port) + " ===");
+    running_ = true;
+    return true;
+}
+
+void HttpServer::start() {
+    if (!server_ || !running_) {
+        log_error("start() requiere un bind() previo exitoso");
         return;
     }
-
-    log_info("=== Iniciando Alfred HTTP Server ===");
-    log_info("Escuchando en http://" + host + ":" + std::to_string(port));
-    log_info("CORS habilitado para todos los origenes");
-    log_info("Presiona Ctrl+C para detener");
-
-    running_ = true;
-
-    if (!server_->listen(host, port)) {
-        log_error("Error: No se pudo iniciar el servidor en " +
-                  host + ":" + std::to_string(port));
-        log_error("Verifica que el puerto no este en uso");
-        running_ = false;
+    log_info("Escuchando (Ctrl+C para detener)");
+    if (!server_->listen_after_bind()) {
+        log_error("Error durante la escucha del servidor");
     }
+    running_ = false;
 }
 
 void HttpServer::stop() {

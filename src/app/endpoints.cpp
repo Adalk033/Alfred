@@ -289,10 +289,11 @@ static void run_query_stream(const httplib::Request& req,
             QueryResult result = core.query_streaming(
                 captured_full, on_started, on_token, captured_conv_id);
 
-            // Guardar la respuesta completa del asistente en la conversacion
+            // Guardar la respuesta completa del asistente en la conversacion.
+            // Se usa el flag is_error (no un substring "Error", que descartaba
+            // respuestas validas que mencionaran la palabra).
             if (!captured_conv_id.empty() && !result.cancelled &&
-                !result.answer.empty() &&
-                result.answer.find("Error") == std::string::npos) {
+                !result.is_error && !result.answer.empty()) {
                 ConversationManager::instance().add_message(
                     captured_conv_id, "assistant", extract_final_response_text(result.answer));
             }
