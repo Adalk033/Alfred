@@ -9,19 +9,28 @@ Esto significa que:
 - El usuario mantiene control total sobre sus archivos y modelos.
 
 ### Componentes protegidos
-- **Frontend:** Aplicación WinUI 3 empaquetada para Windows. No realiza conexiones de red salientes.
+- **Frontend:** Aplicación WinUI 3 para Windows. No realiza conexiones de red salientes salvo la descarga de modelos que el usuario solicita explícitamente desde HuggingFace.
 - **Backend:** Servidor REST en C++ nativo (`alfred.exe`) escuchando exclusivamente en `localhost:8000`. Sin dependencias de Python ni servicios externos.
 - **Base de datos y almacenamiento:** Los archivos `.db` de conversaciones e historial se almacenan exclusivamente en `%APPDATA%\Alfred\` en la máquina del usuario.
 - **Modelos:** Los archivos GGUF residen localmente. Alfred no descarga ni actualiza modelos de forma automática.
+
+### Autenticación de la API local
+La interfaz genera un **token de sesión aleatorio (32 bytes)** en cada
+arranque y lo pasa al backend mediante `--auth-token`. Todas las peticiones
+lo incluyen en la cabecera `X-Alfred-Token`; el backend responde `401` si no
+coincide (solo `/health` queda exento). Además, se eliminó el `CORS *`, de
+modo que una página web abierta en el navegador **no puede** invocar la API
+local (mitigación de CSRF / DNS-rebinding).
 
 ---
 
 ## 2. Cifrado y datos sensibles
 
-- Los datos sensibles almacenados localmente están protegidos con **AES-256-GCM**.
+- Los datos sensibles almacenados localmente pueden protegerse con **AES-256-GCM**.
+- La clave se deriva de la passphrase del usuario con **PBKDF2-HMAC-SHA256** (100 000 iteraciones, salt aleatoria) y se persiste de forma que el historial cifrado siga siendo legible tras reiniciar.
+- El cifrado está **deshabilitado por defecto**; solo se activa explícitamente desde Configuración, y su estado se persiste.
 - No se incluyen archivos `.env`, claves API ni credenciales en el repositorio público.
 - Los archivos de configuración personal y las bases de datos están listados en `.gitignore` y **no se versionan**.
-- La aplicación no solicita ni almacena contraseñas ni tokens externos.
 
 ---
 

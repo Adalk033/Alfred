@@ -6,13 +6,16 @@ Alfred is a local AI assistant for Windows that runs entirely offline, with no e
 
 - **Offline inference** — powered by llama.cpp, no internet or cloud required
 - **GPU acceleration** — native CUDA support for NVIDIA GPUs (Turing, Ampere, Ada)
-- **Modern UI** — WinUI 3 frontend with conversation history and Markdown rendering
+- **Modern UI** — WinUI 3 frontend with conversation history, Markdown rendering and code syntax highlighting
 - **REST API backend** — local server on `localhost:8000` with endpoints for queries, models, conversations, and GPU status
-- **Persistent conversations** — SQLite-backed history and context management
+- **Local API authentication** — random per-session token (`X-Alfred-Token`) shared between UI and backend; no wildcard CORS
+- **Persistent conversations** — SQLite-backed history and context management, with pinning and Markdown export
 - **PDF support** — extract and query text from PDF files
-- **Query caching** — LRU cache for repeated queries
+- **Query caching** — LRU cache (TTL-based) for repeated stateless queries
+- **VRAM-aware model picker** — flags whether each GGUF fits in available VRAM
+- **Quick prompts & keyboard shortcuts** — reusable prompt library, multiline composer (Shift+Enter), Ctrl+N/L/F
 - **Lazy model loading** — models load on demand and unload after inactivity
-- **AES-256-GCM encryption** — for sensitive stored data
+- **AES-256-GCM encryption** — optional, PBKDF2-derived key for sensitive stored data
 
 ## Requirements
 
