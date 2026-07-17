@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <nlohmann/json.hpp>
@@ -113,6 +114,11 @@ private:
     DBManager() = default;
     void create_tables();
     void run_migrations();
+
+    // Serializa todo acceso a la conexion SQLite compartida: cpp-httplib
+    // atiende cada request en su propio thread y una conexion SQLite no
+    // admite uso concurrente (SQLITE_MISUSE / corrupcion).
+    std::mutex db_mutex_;
 
     std::string db_path_;
     bool initialized_ = false;
