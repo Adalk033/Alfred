@@ -4,19 +4,5 @@
     "cmake.configureSettings": {
         "ALFRED_CUDA": "ON",
         "ALFRED_CUDA_ARCH": "89"
-    },
-    "alfred.agent.mcpServers": [
-        {
-            "name": "alfred",
-            "command": "node",
-            "args": ["${workspaceFolder}/mcp-server/dist/index.js"],
-            "enabled": true
-        },
-        {
-            "name": "git",
-            "command": "uvx",
-            "args": ["mcp-server-git"],
-            "enabled": false
-        }
-    ]
+    }
 }
