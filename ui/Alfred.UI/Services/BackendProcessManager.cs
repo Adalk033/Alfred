@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 
 namespace Alfred.UI.Services;
 
@@ -11,7 +12,11 @@ public sealed class BackendProcessManager : IDisposable
     private Process? _process;
     private readonly string _host;
     private readonly int _port;
+    private readonly JobObject _jobObject = new();
     private bool _disposed;
+    private bool _stopRequested;             // true durante un stop/dispose intencional
+    private int _restartAttempts;
+    private const int MaxRestartAttempts = 3;
 
     public event EventHandler<string>? StatusChanged;
     public event EventHandler<string>? OutputReceived;
@@ -25,17 +30,51 @@ public sealed class BackendProcessManager : IDisposable
     }
 
     /// <summary>
+    /// True si el puerto ya esta ocupado por otro proceso (p.ej. un backend
+    /// huerfano de una sesion anterior).
+    /// </summary>
+    private bool IsPortInUse()
+    {
+        try
+        {
+            var listeners = IPGlobalProperties.GetIPGlobalProperties()
+                .GetActiveTcpListeners();
+            foreach (var ep in listeners)
+            {
+                if (ep.Port == _port) return true;
+            }
+        }
+        catch { /* si no se puede consultar, asumir libre */ }
+        return false;
+    }
+
+    /// <summary>
     /// Inicia alfred.exe y espera a que el endpoint /health responda.
     /// </summary>
     public async Task<bool> StartAsync()
     {
         if (IsRunning) return true;
 
+        _stopRequested = false;
+
         string exePath = FindAlfredExe();
         if (string.IsNullOrEmpty(exePath))
         {
             StatusChanged?.Invoke(this, "error: alfred.exe no encontrado. Reinstala la aplicacion.");
             return false;
+        }
+
+        // Si el puerto ya esta ocupado, un /health exitoso podria venir de un
+        // backend ajeno u orfano: sondear antes de lanzar un hijo condenado.
+        if (IsPortInUse())
+        {
+            if (await WaitForHealthAsync(TimeSpan.FromSeconds(2)))
+            {
+                StatusChanged?.Invoke(this,
+                    $"error: el puerto {_port} ya esta en uso por otro proceso. " +
+                    "Cierra la instancia previa de Alfred y reintenta.");
+                return false;
+            }
         }
 
         try
@@ -57,6 +96,9 @@ public sealed class BackendProcessManager : IDisposable
             _process.Exited             += OnExited;
 
             _process.Start();
+            // Asignar al Job Object kill-on-close: si la UI muere de forma
+            // abrupta (crash, kill), Windows termina alfred.exe con ella.
+            _jobObject.Assign(_process);
             _process.BeginOutputReadLine();
             _process.BeginErrorReadLine();
 
@@ -66,6 +108,7 @@ public sealed class BackendProcessManager : IDisposable
             bool ready = await WaitForHealthAsync(TimeSpan.FromSeconds(120));
             if (ready)
             {
+                _restartAttempts = 0;   // arranque sano: resetear el contador
                 StatusChanged?.Invoke(this, "running");
                 return true;
             }
@@ -85,6 +128,7 @@ public sealed class BackendProcessManager : IDisposable
     /// </summary>
     public async Task StopAsync()
     {
+        _stopRequested = true;
         if (_process == null || _process.HasExited) return;
 
         try
@@ -198,12 +242,34 @@ public sealed class BackendProcessManager : IDisposable
     private void OnExited(object? sender, EventArgs e)
     {
         StatusChanged?.Invoke(this, "stopped");
+
+        // Salida inesperada (no un stop/dispose intencional): intentar
+        // reiniciar con backoff, hasta un maximo de intentos.
+        if (_stopRequested || _disposed) return;
+        if (_restartAttempts >= MaxRestartAttempts)
+        {
+            StatusChanged?.Invoke(this,
+                "error: el backend se detuvo repetidamente. Revisa los logs.");
+            return;
+        }
+
+        _restartAttempts++;
+        int attempt = _restartAttempts;
+        _ = Task.Run(async () =>
+        {
+            StatusChanged?.Invoke(this,
+                $"reiniciando backend (intento {attempt}/{MaxRestartAttempts})...");
+            await Task.Delay(TimeSpan.FromSeconds(attempt * 2));   // backoff lineal
+            if (_stopRequested || _disposed) return;
+            await StartAsync();
+        });
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        _stopRequested = true;
 
         if (_process != null)
         {
@@ -218,5 +284,8 @@ public sealed class BackendProcessManager : IDisposable
             _process.Dispose();
             _process = null;
         }
+
+        // Cerrar el job termina cualquier proceso asignado que aun viva.
+        _jobObject.Dispose();
     }
 }
