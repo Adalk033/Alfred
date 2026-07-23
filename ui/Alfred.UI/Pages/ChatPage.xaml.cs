@@ -1386,7 +1386,7 @@ public sealed partial class ChatPage : Page
             UpdateAttachmentPanel();
             SendButton.IsEnabled = true;
 
-            string sizeStr = FormatFileSize((long)basicProps.Size);
+            string sizeStr = FormatFileSize((long)props.Size);
             ShowNotification(InfoBarSeverity.Success, $"Adjunto: {file.Name} ({sizeStr})");
         }
         catch (Exception ex)

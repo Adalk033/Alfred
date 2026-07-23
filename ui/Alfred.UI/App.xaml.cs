@@ -87,7 +87,7 @@ public partial class App : Application
         e.Handled = true;
     }
 
-    private void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    private void OnDomainUnhandledException(object sender, System.UnhandledExceptionEventArgs e)
         => LogCrash("AppDomain", e.ExceptionObject as Exception);
 
     private void OnUnobservedTaskException(object? sender,
