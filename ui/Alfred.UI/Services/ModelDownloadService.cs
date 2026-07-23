@@ -46,8 +46,8 @@ public sealed class ModelDownloadService : IDisposable
     /// </summary>
     public bool IsModelDownloaded(string fileName)
     {
-        string path = Path.Combine(_modelsDir, fileName);
-        return File.Exists(path);
+        return TryGetLocalModelPath(fileName, out string path) &&
+               File.Exists(path);
     }
 
     /// <summary>
@@ -71,7 +71,12 @@ public sealed class ModelDownloadService : IDisposable
             // Crear directorio si no existe
             Directory.CreateDirectory(_modelsDir);
 
-            string targetPath = Path.Combine(_modelsDir, fileName);
+            if (!TryGetLocalModelPath(fileName, out string targetPath))
+            {
+                progress.Error = "Nombre de archivo GGUF invalido.";
+                onProgress(progress);
+                return false;
+            }
             string tempPath = targetPath + ".downloading";
 
             // Verificar si ya existe
@@ -198,6 +203,33 @@ public sealed class ModelDownloadService : IDisposable
         {
             return true;   // ante cualquier error, no bloquear la descarga
         }
+    }
+
+    /// <summary>
+    /// Convierte la ruta remota del repositorio en un nombre local plano y
+    /// comprueba que el destino permanezca dentro del directorio de modelos.
+    /// </summary>
+    private bool TryGetLocalModelPath(string fileName, out string targetPath)
+    {
+        targetPath = "";
+        string normalized = fileName.Replace('\\', '/');
+        string safeName = Path.GetFileName(normalized);
+        if (string.IsNullOrWhiteSpace(safeName) ||
+            !safeName.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) ||
+            safeName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return false;
+        }
+
+        string modelsRoot = Path.GetFullPath(_modelsDir)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+            Path.DirectorySeparatorChar;
+        string candidate = Path.GetFullPath(Path.Combine(modelsRoot, safeName));
+        if (!candidate.StartsWith(modelsRoot, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        targetPath = candidate;
+        return true;
     }
 
     /// <summary>

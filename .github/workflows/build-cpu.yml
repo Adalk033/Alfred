@@ -36,6 +36,33 @@ jobs:
       - name: Compilar
         run: cmake --build build --config Release --parallel
 
+      - name: Copiar runtime de Visual C++ al output
+        shell: pwsh
+        run: |
+          $dest = "build/Release"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "No se encontro vswhere para localizar el runtime de Visual C++"
+          }
+
+          $vsPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $vsPath) {
+            throw "No se encontro una instalacion de Visual C++"
+          }
+
+          $crtDir = Get-ChildItem `
+            -Path "$vsPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" `
+            -Directory -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $crtDir) {
+            throw "No se encontro el runtime x64 de Visual C++"
+          }
+
+          Copy-Item -Path "$($crtDir.FullName)\*.dll" -Destination $dest -Force
+
       - name: Copiar DLLs de OpenSSL al output
         shell: pwsh
         run: |

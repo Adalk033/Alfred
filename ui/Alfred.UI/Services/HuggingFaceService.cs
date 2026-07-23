@@ -109,7 +109,7 @@ public sealed partial class HuggingFaceService : IDisposable
 
         try
         {
-            var response = await _http.GetAsync(searchUrl, ct);
+            using var response = await _http.GetAsync(searchUrl, ct);
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync(ct);
@@ -154,7 +154,7 @@ public sealed partial class HuggingFaceService : IDisposable
         try
         {
             string url = $"api/models/{repoId}/tree/main";
-            var response = await _http.GetAsync(url, ct);
+            using var response = await _http.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
                 return files;
 
@@ -190,7 +190,7 @@ public sealed partial class HuggingFaceService : IDisposable
     {
         try
         {
-            var response = await _http.GetAsync($"api/models/{repoId}", ct);
+            using var response = await _http.GetAsync($"api/models/{repoId}", ct);
             return response.IsSuccessStatusCode;
         }
         catch

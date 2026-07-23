@@ -40,7 +40,7 @@ public sealed partial class AlfredApiClient : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
-            var response = await _http.GetAsync("/health", cts.Token);
+            using var response = await _http.GetAsync("/health", cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch (OperationCanceledException)
@@ -218,7 +218,7 @@ public sealed partial class AlfredApiClient : IDisposable
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var response = await _http.PostAsync("/query/cancel",
+            using var response = await _http.PostAsync("/query/cancel",
                 ToJsonContent(new { request_id = requestId }), cts.Token);
             return response.IsSuccessStatusCode;
         }
@@ -247,7 +247,8 @@ public sealed partial class AlfredApiClient : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         try
         {
-            var response = await _http.DeleteAsync($"/models/{Uri.EscapeDataString(modelName)}", cts.Token);
+            using var response = await _http.DeleteAsync(
+                $"/models/{Uri.EscapeDataString(modelName)}", cts.Token);
             if (response.IsSuccessStatusCode)
                 return (true, "");
 
@@ -270,7 +271,8 @@ public sealed partial class AlfredApiClient : IDisposable
 
     public async Task<(bool Success, string Error, string Warning)> ChangeModelAsync(string modelPath)
     {
-        var response = await PostRawAsync("/models/change", new { model_path = modelPath }, 300);
+        using var response = await PostRawAsync(
+            "/models/change", new { model_path = modelPath }, 300);
         if (response == null)
             return (false, "No se pudo conectar con el backend", "");
 
@@ -307,7 +309,7 @@ public sealed partial class AlfredApiClient : IDisposable
     /// </summary>
     public async Task<(bool Success, bool Busy, string Message)> UnloadModelAsync()
     {
-        var response = await PostRawAsync("/models/unload", new { }, 30);
+        using var response = await PostRawAsync("/models/unload", new { }, 30);
         if (response == null)
             return (false, false, "No se pudo conectar con el backend");
 
@@ -360,7 +362,7 @@ public sealed partial class AlfredApiClient : IDisposable
     /// </summary>
     public async Task<(bool Success, bool NeedsReload)> SetModelConfigAsync(ModelConfig config)
     {
-        var response = await PostRawAsync("/models/config", config, 15);
+        using var response = await PostRawAsync("/models/config", config, 15);
         if (response == null || !response.IsSuccessStatusCode)
             return (false, false);
 
@@ -404,13 +406,13 @@ public sealed partial class AlfredApiClient : IDisposable
 
     public async Task<TokenBudget?> GetTokenBudgetAsync(string? conversationId = null, string? draft = null)
     {
-        var qs = new List<string>();
-        if (!string.IsNullOrEmpty(conversationId))
-            qs.Add($"conversation_id={Uri.EscapeDataString(conversationId)}");
-        if (!string.IsNullOrEmpty(draft))
-            qs.Add($"draft={Uri.EscapeDataString(draft)}");
-        var endpoint = "/tokens/budget" + (qs.Count > 0 ? "?" + string.Join("&", qs) : "");
-        return await GetAsync<TokenBudget>(endpoint, 10);
+        // El borrador puede ser grande. Enviarlo en la query string provocaba
+        // HTTP 414 y desactivaba silenciosamente el medidor de contexto.
+        return await PostAsync<TokenBudget>("/tokens/budget", new
+        {
+            conversation_id = conversationId ?? "",
+            draft = draft ?? "",
+        }, 10);
     }
 
     // ========================================================================
@@ -447,7 +449,8 @@ public sealed partial class AlfredApiClient : IDisposable
         if (ids == null || ids.Count == 0)
             return (0, 0);
 
-        var response = await PostRawAsync("/conversations/delete-bulk", new { ids }, 120);
+        using var response = await PostRawAsync(
+            "/conversations/delete-bulk", new { ids }, 120);
         if (response == null || !response.IsSuccessStatusCode)
             return (ids.Count, 0);
 
@@ -480,7 +483,7 @@ public sealed partial class AlfredApiClient : IDisposable
     /// </summary>
     public async Task<bool> AddMessageAsync(string id, string role, string content)
     {
-        var response = await PostRawAsync($"/conversations/{id}/messages",
+        using var response = await PostRawAsync($"/conversations/{id}/messages",
             new { role, content }, 15);
         return response?.IsSuccessStatusCode ?? false;
     }
@@ -524,7 +527,7 @@ public sealed partial class AlfredApiClient : IDisposable
 
     public async Task<bool> SetUserSettingAsync(string key, string value)
     {
-        var response = await PostRawAsync("/user/settings", new { key, value });
+        using var response = await PostRawAsync("/user/settings", new { key, value });
         return response?.IsSuccessStatusCode ?? false;
     }
 
@@ -544,7 +547,7 @@ public sealed partial class AlfredApiClient : IDisposable
 
     public async Task<bool> SetupEncryptionAsync(bool enabled, string key = "")
     {
-        var response = await PostRawAsync("/encryption/setup", new { enabled, key });
+        using var response = await PostRawAsync("/encryption/setup", new { enabled, key });
         return response?.IsSuccessStatusCode ?? false;
     }
 
@@ -560,7 +563,7 @@ public sealed partial class AlfredApiClient : IDisposable
 
     public async Task<bool> SetAppSettingAsync(string key, string value)
     {
-        var response = await PostRawAsync("/settings", new { key, value });
+        using var response = await PostRawAsync("/settings", new { key, value });
         return response?.IsSuccessStatusCode ?? false;
     }
 
@@ -573,7 +576,7 @@ public sealed partial class AlfredApiClient : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.GetAsync(endpoint, cts.Token);
+            using var response = await _http.GetAsync(endpoint, cts.Token);
             if (!response.IsSuccessStatusCode) return default;
             var json = await response.Content.ReadAsStringAsync(cts.Token);
             return JsonSerializer.Deserialize<T>(json, JsonOptions);
@@ -600,7 +603,8 @@ public sealed partial class AlfredApiClient : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.PostAsync(endpoint, ToJsonContent(body), cts.Token);
+            using var response = await _http.PostAsync(
+                endpoint, ToJsonContent(body), cts.Token);
             if (!response.IsSuccessStatusCode) return default;
             var json = await response.Content.ReadAsStringAsync(cts.Token);
             return JsonSerializer.Deserialize<T>(json, JsonOptions);
@@ -645,7 +649,8 @@ public sealed partial class AlfredApiClient : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.PutAsync(endpoint, ToJsonContent(body), cts.Token);
+            using var response = await _http.PutAsync(
+                endpoint, ToJsonContent(body), cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -659,7 +664,7 @@ public sealed partial class AlfredApiClient : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
         try
         {
-            var response = await _http.DeleteAsync(endpoint, cts.Token);
+            using var response = await _http.DeleteAsync(endpoint, cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch

@@ -368,7 +368,10 @@ std::string Encryption::encrypt_if_enabled(const std::string& data) const {
 }
 
 std::string Encryption::decrypt_if_enabled(const std::string& data) const {
-    if (!is_enabled()) return data;
+    // `enabled_` controla si las escrituras nuevas se cifran. Las lecturas
+    // siempre intentan descifrar porque la base puede contener una mezcla de
+    // filas creadas antes/durante/despues de activar el toggle. decrypt()
+    // devuelve el original cuando el valor esta en claro o no valida el tag.
     return decrypt(data);
 }
 

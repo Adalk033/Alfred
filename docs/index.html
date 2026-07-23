@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="Alfred - Tu asistente personal con IA local. 100% privado, sin envío de datos. Disponible para Windows.">
+        content="Alfred - Tu asistente personal con IA local, sin telemetría ni envío de prompts a la nube. Disponible para Windows.">
     <meta name="keywords" content="IA local, asistente personal, privacidad, RAG, Windows">
     <title>Alfred - Asistente Personal con IA Local</title>
     <link rel="stylesheet" href="styles.css">
@@ -67,7 +67,7 @@
     <section class="hero">
         <div class="hero-content container">
             <div class="hero-text">
-                <span class="badge">100% Local • 100% Privado</span>
+                <span class="badge">IA local • Sin telemetría</span>
                 <h1 class="hero-title">
                     Tu Asistente Personal con <span class="gradient-text">IA Local</span>
                 </h1>
@@ -209,8 +209,8 @@
                     </div>
                     <h3 class="feature-title">IA 100% Local</h3>
                     <p class="feature-description">
-                        Usa modelos GGUF directamente con llama.cpp. Sin Ollama, sin Python, sin dependencias externas.
-                        Todo corre en tu máquina.
+                        Usa modelos GGUF directamente con llama.cpp. Sin Ollama, Python, MCP ni un servicio de IA
+                        externo. La inferencia corre en tu máquina.
                     </p>
                 </div>
 
@@ -226,8 +226,8 @@
                     </div>
                     <h3 class="feature-title">Privacidad Total</h3>
                     <p class="feature-description">
-                        Encriptación AES-256-GCM para tus datos. Nunca enviamos información a servidores externos. Tu
-                        privacidad es nuestra prioridad.
+                        Tus prompts, respuestas y archivos no se envían a una IA remota. El cifrado AES-256-GCM
+                        opcional protege determinados datos nuevos cuando el build incluye OpenSSL.
                     </p>
                 </div>
 
@@ -295,10 +295,10 @@
                                 stroke-linejoin="round" />
                         </svg>
                     </div>
-                    <h3 class="feature-title">Múltiples Formatos</h3>
+                    <h3 class="feature-title">Archivos Adjuntos</h3>
                     <p class="feature-description">
-                        Procesa PDF, Word, Excel, texto plano y más. Gestiona grandes colecciones de documentos sin
-                        esfuerzo.
+                        Extrae texto de PDFs con PDFium y usa archivos de texto, Markdown, JSON, CSV y otros formatos
+                        basados en texto como contexto de una conversación.
                     </p>
                 </div>
             </div>
@@ -314,7 +314,8 @@
                     <h2 class="section-title">Tus Datos, Solo Tuyos</h2>
                     <p class="privacy-description">
                         A diferencia de otros asistentes con IA, Alfred no requiere conexión a internet para funcionar.
-                        Todo se procesa localmente en tu dispositivo.
+                        La inferencia se procesa localmente; solo la búsqueda y descarga de modelos desde Hugging Face
+                        requiere red.
                     </p>
                     <ul class="privacy-list">
                         <li>
@@ -326,7 +327,7 @@
                                 <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
-                            <span>Sin conexiones a APIs externas ni servicios en la nube</span>
+                            <span>Sin APIs externas ni servicios en la nube durante la inferencia</span>
                         </li>
                         <li>
                             <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -337,7 +338,7 @@
                                 <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
-                            <span>Encriptación AES-256-GCM para datos sensibles</span>
+                            <span>Cifrado AES-256-GCM opcional cuando OpenSSL está disponible</span>
                         </li>
                         <li>
                             <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -348,7 +349,7 @@
                                 <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
-                            <span>Almacenamiento local seguro de documentos y conversaciones</span>
+                            <span>Conversaciones, configuración y modelos almacenados localmente</span>
                         </li>
                         <li>
                             <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -402,7 +403,7 @@
                         <h3>Sistema Operativo</h3>
                     </div>
                     <ul class="requirement-list">
-                        <li>Windows 10 o superior</li>
+                        <li>Windows 10 build 19041 o superior</li>
                         <li>64-bit requerido</li>
                     </ul>
                 </div>
@@ -435,9 +436,9 @@
                         <h3>Hardware</h3>
                     </div>
                     <ul class="requirement-list">
-                        <li>RAM: 8 GB mínimo (16 GB recomendado)</li>
-                        <li>Almacenamiento: 20 GB libres (30 GB recomendado)</li>
-                        <li>GPU: NVIDIA recomendada para versión CUDA (opcional)</li>
+                        <li>RAM suficiente para el modelo GGUF seleccionado</li>
+                        <li>Almacenamiento según el tamaño del modelo y su cuantización</li>
+                        <li>GPU: NVIDIA RTX 20xx+ para la versión CUDA (opcional)</li>
                     </ul>
                 </div>
 
@@ -456,7 +457,7 @@
                     </div>
                     <ul class="requirement-list">
                         <li>Modelo GGUF compatible (formato llama.cpp)</li>
-                        <li>Descarga desde HuggingFace u otra fuente</li>
+                        <li>Descarga directa o copia manual en AppData\Roaming\Alfred\models</li>
                         <li>No se incluye en el instalador</li>
                     </ul>
                 </div>
@@ -473,8 +474,8 @@
                 </svg>
                 <p>
                     <strong>Nota:</strong> Alfred no requiere Ollama ni Python. Solo necesitas un modelo en formato
-                    GGUF descargado desde HuggingFace. Una vez configurada la ruta del modelo en la app, todo
-                    funciona offline.
+                    GGUF. Puedes buscarlo y descargarlo desde la pantalla Modelos o copiar un archivo local en
+                    <code>%APPDATA%\Alfred\models\</code>; después, la inferencia funciona offline.
                 </p>
             </div>
         </div>
@@ -503,7 +504,7 @@
                         <p>
                             Si tienes una GPU <strong>NVIDIA (RTX 20xx o superior)</strong>, descarga la versión GPU
                             para inferencia acelerada con CUDA. Si no tienes GPU NVIDIA o no estás seguro,
-                            descarga la versión <strong>CPU</strong> — funciona en cualquier PC con Windows.
+                            descarga la versión <strong>CPU</strong> para Windows x64.
                         </p>
                     </div>
                 </div>
@@ -558,7 +559,7 @@
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">Compatible con</span>
-                                <span class="detail-value">Cualquier PC Windows</span>
+                                <span class="detail-value">Windows x64</span>
                             </div>
                         </div>
                         <a href="https://github.com/Adalk033/Alfred/releases/latest" target="_blank" rel="noopener"
@@ -585,29 +586,29 @@
                         <div class="step">
                             <div class="step-number">1</div>
                             <div class="step-content">
-                                <h4>Descarga un modelo GGUF</h4>
-                                <p>Obtén un modelo compatible desde HuggingFace (ej. Llama 3, Mistral, Phi)</p>
+                                <h4>Instala Alfred</h4>
+                                <p>Ejecuta el instalador correspondiente a GPU o CPU, o extrae el ZIP portable</p>
                             </div>
                         </div>
                         <div class="step">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <h4>Ejecuta el Instalador</h4>
-                                <p>Abre Alfred-Setup.exe y sigue el asistente de instalación</p>
+                                <h4>Abre Modelos</h4>
+                                <p>Busca un repositorio GGUF de Hugging Face o copia un GGUF en la carpeta de modelos</p>
                             </div>
                         </div>
                         <div class="step">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <h4>Configura el modelo</h4>
-                                <p>En Configuración, indica la ruta a tu archivo .gguf</p>
+                                <h4>Descarga y selecciona</h4>
+                                <p>Elige una cuantización adecuada para tu RAM o VRAM y selecciona el modelo</p>
                             </div>
                         </div>
                         <div class="step">
                             <div class="step-number">4</div>
                             <div class="step-content">
                                 <h4>¡Listo!</h4>
-                                <p>El modelo carga de forma lazy al primer mensaje. Todo offline.</p>
+                                <p>El modelo se carga al primer mensaje y la inferencia se realiza localmente</p>
                             </div>
                         </div>
                     </div>
@@ -637,16 +638,16 @@
                 <div class="faq-item">
                     <h3 class="faq-question">¿Necesito conexión a internet?</h3>
                     <p class="faq-answer">
-                        Solo para descargar el modelo GGUF desde HuggingFace antes del primer uso. Una vez que tienes
-                        el archivo, Alfred funciona completamente offline.
+                        Solo para obtener Alfred y, si lo deseas, buscar o descargar un GGUF desde Hugging Face. Con un
+                        modelo local seleccionado, los chats funcionan sin internet.
                     </p>
                 </div>
 
                 <div class="faq-item">
                     <h3 class="faq-question">¿Qué tan privado es realmente?</h3>
                     <p class="faq-answer">
-                        100% privado. Todo se procesa localmente. No hay telemetría, no hay servidores externos,
-                        no se envían datos a ningún lugar.
+                        No hay telemetría y los prompts no se envían a un proveedor de IA. La pantalla Modelos sí se
+                        conecta a Hugging Face cuando buscas o descargas; los logs de diagnóstico permanecen locales.
                     </p>
                 </div>
 
@@ -661,15 +662,15 @@
                 <div class="faq-item">
                     <h3 class="faq-question">¿Qué formatos de documentos soporta?</h3>
                     <p class="faq-answer">
-                        Actualmente Alfred soporta extracción de texto desde archivos PDF (via PDFium). El soporte
-                        de otros formatos está en desarrollo.
+                        Alfred extrae texto de PDFs mediante PDFium y puede adjuntar formatos basados en texto como TXT,
+                        Markdown, JSON, XML, CSV, HTML, YAML y logs.
                     </p>
                 </div>
 
                 <div class="faq-item">
                     <h3 class="faq-question">¿Está disponible para Mac o Linux?</h3>
                     <p class="faq-answer">
-                        De momento solo para Windows. Las versiones para macOS y Linux están en desarrollo.
+                        La aplicación de escritorio oficial se distribuye actualmente solo para Windows x64.
                     </p>
                 </div>
             </div>
@@ -694,7 +695,7 @@
                     </div>
                     <p class="footer-description">
                         Tu asistente personal con IA local.<br>
-                        100% privado. 100% tuyo.
+                        Sin telemetría. Datos bajo tu control.
                     </p>
                 </div>
 

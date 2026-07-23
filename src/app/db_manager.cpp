@@ -490,7 +490,9 @@ std::unordered_map<std::string, std::string> DBManager::get_all_memory() {
     std::unordered_map<std::string, std::string> result;
     SQLite::Statement query(*g_db, "SELECT key, value FROM memory");
     while (query.executeStep()) {
-        std::string k = enc.decrypt_if_enabled(query.getColumn(0).getString());
+        // Las claves se guardan siempre en claro para poder consultarlas con
+        // WHERE key = ?. Solo los valores pueden estar cifrados.
+        std::string k = query.getColumn(0).getString();
         std::string v = enc.decrypt_if_enabled(query.getColumn(1).getString());
         result[k] = v;
     }

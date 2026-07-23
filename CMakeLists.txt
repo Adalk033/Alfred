@@ -35,26 +35,26 @@ set(ALFRED_CUDA_ARCH "75;86;89" CACHE STRING "Arquitecturas CUDA objetivo para d
 
 # Habilitar lenguaje CUDA si esta solicitado y disponible
 if(ALFRED_CUDA)
+    # Usar cudart dinamico para que el runtime CUDA que requiere el ejecutable
+    # se pueda distribuir de forma explicita junto con la aplicacion.
+    set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
     include(CheckLanguage)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
         enable_language(CUDA)
+        # Mantener compilador, headers y librerias en el mismo toolkit cuando
+        # hay varias versiones de CUDA instaladas en la maquina.
+        get_filename_component(ALFRED_CUDA_BIN_DIR
+            "${CMAKE_CUDA_COMPILER}" DIRECTORY)
+        get_filename_component(ALFRED_CUDA_TOOLKIT_ROOT
+            "${ALFRED_CUDA_BIN_DIR}" DIRECTORY)
+        set(CUDAToolkit_ROOT "${ALFRED_CUDA_TOOLKIT_ROOT}"
+            CACHE PATH "CUDA toolkit matching CMAKE_CUDA_COMPILER" FORCE)
         message(STATUS "CUDA habilitado: ${CMAKE_CUDA_COMPILER}")
     else()
         message(WARNING "CUDA solicitado pero no se encontro compilador CUDA. Deshabilitando CUDA.")
         set(ALFRED_CUDA OFF)
     endif()
-endif()
-
-if(MSVC)
-    # Usar generator expressions para no pasar flags MSVC a nvcc (CUDA)
-    add_compile_options(
-        $<$<COMPILE_LANGUAGE:CXX>:/W4>
-        $<$<COMPILE_LANGUAGE:CXX>:/permissive->
-        $<$<COMPILE_LANGUAGE:CXX>:/utf-8>
-    )
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Wshadow -Wconversion)
 endif()
 
 # ============================================================================
@@ -203,6 +203,21 @@ target_include_directories(alfred PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 
+# Los warnings estrictos pertenecen al codigo de Alfred. Aplicarlos
+# globalmente tambien afectaba a llama.cpp/CUDA y generaba millones de lineas
+# de warnings de terceros en cada build del action.
+if(MSVC)
+    target_compile_options(alfred PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:/W4>
+        $<$<COMPILE_LANGUAGE:CXX>:/permissive->
+        $<$<COMPILE_LANGUAGE:CXX>:/utf-8>
+    )
+else()
+    target_compile_options(alfred PRIVATE
+        -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+    )
+endif()
+
 target_link_libraries(alfred PRIVATE
     llama
     httplib::httplib
@@ -211,6 +226,13 @@ target_link_libraries(alfred PRIVATE
     SQLiteCpp
     pdfium
 )
+
+# cudadevrt es siempre una biblioteca estatica y declara LIBCMT incluso cuando
+# todo el codigo host se compila con /MD. Ignorar esa directiva concreta evita
+# mezclar el CRT estatico con MSVCRT; los proyectos generados conservan /MD.
+if(MSVC AND ALFRED_CUDA)
+    target_link_options(alfred PRIVATE /NODEFAULTLIB:LIBCMT)
+endif()
 
 # Copiar runtime de PDFium junto al ejecutable (Windows requiere el DLL al lado).
 add_custom_command(TARGET alfred POST_BUILD
@@ -227,8 +249,11 @@ endif()
 find_package(Threads REQUIRED)
 target_link_libraries(alfred PRIVATE Threads::Threads)
 
-# Version como define del compilador (accesible via ALFRED_VERSION en el codigo)
-target_compile_definitions(alfred PRIVATE ALFRED_VERSION="${PROJECT_VERSION}")
+# Defines accesibles desde el codigo de Alfred.
+target_compile_definitions(alfred PRIVATE
+    ALFRED_VERSION="${PROJECT_VERSION}"
+    ALFRED_CUDA_ENABLED=$<BOOL:${ALFRED_CUDA}>
+)
 
 # Whole Program Optimization + Link-Time Code Generation en Release (MSVC)
 # Las demas flags de Release/Debug las gestiona CMake automaticamente

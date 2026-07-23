@@ -80,20 +80,6 @@ static bool get_int_param(const httplib::Request& req, httplib::Response& res,
     return true;
 }
 
-// Helper: parsear parametro float de query string con clamping de rango
-static bool get_float_param(const httplib::Request& req, httplib::Response& res,
-                             const std::string& name, float& out, float min_val, float max_val) {
-    if (!req.has_param(name)) return true;
-    try {
-        out = std::stof(req.get_param_value(name));
-    } catch (const std::exception&) {
-        json_error(res, 400, "Parametro '" + name + "' invalido (debe ser un numero)");
-        return false;
-    }
-    out = std::max(min_val, std::min(max_val, out));
-    return true;
-}
-
 // ============================================================================
 // Root y salud
 // ============================================================================
@@ -102,7 +88,11 @@ void handle_root(const httplib::Request& /*req*/, httplib::Response& res) {
     data["name"] = "Alfred";
     data["version"] = ALFRED_VERSION;
     data["status"] = "running";
+#if defined(ALFRED_CUDA_ENABLED) && ALFRED_CUDA_ENABLED
     data["engine"] = "llama.cpp + CUDA";
+#else
+    data["engine"] = "llama.cpp + CPU";
+#endif
     json_ok(res, data);
 }
 
@@ -979,9 +969,21 @@ void handle_token_count(const httplib::Request& req, httplib::Response& res,
 
 void handle_token_budget(const httplib::Request& req, httplib::Response& res,
                          AlfredCore& core) {
-    const std::string conv_id = req.has_param("conversation_id")
-                                ? req.get_param_value("conversation_id") : "";
-    const std::string draft   = req.has_param("draft") ? req.get_param_value("draft") : "";
+    std::string conv_id;
+    std::string draft;
+
+    // POST evita el limite de longitud de URI cuando el borrador es grande.
+    // GET se conserva por compatibilidad con clientes anteriores.
+    if (!req.body.empty()) {
+        json body;
+        if (!parse_body(req, res, body)) return;
+        conv_id = body.value("conversation_id", std::string{});
+        draft   = body.value("draft", std::string{});
+    } else {
+        conv_id = req.has_param("conversation_id")
+                    ? req.get_param_value("conversation_id") : "";
+        draft = req.has_param("draft") ? req.get_param_value("draft") : "";
+    }
 
     int context_max         = core.llm().context_length();
     int reserved_for_reply  = get_config().max_tokens;
@@ -1271,8 +1273,10 @@ void handle_conversation_query(const httplib::Request& req, httplib::Response& r
 
     auto result = core.query(full_question, conv_id);
 
-    ConversationManager::instance().add_message(
-        conv_id, "assistant", extract_final_response_text(result.answer));
+    if (!result.is_error && !result.answer.empty()) {
+        ConversationManager::instance().add_message(
+            conv_id, "assistant", extract_final_response_text(result.answer));
+    }
 
     json data;
     data["answer"] = result.answer;
@@ -1409,6 +1413,9 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
         handle_token_count(req, res, core);
     });
     server.Get("/tokens/budget", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_token_budget(req, res, core);
+    });
+    server.Post("/tokens/budget", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_token_budget(req, res, core);
     });
 
