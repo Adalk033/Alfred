@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     private string? _currentModelPath;
     private string _modelState = "idle";   // idle|loading|processing
     private DateTime _lastTokenFetch = DateTime.MinValue;
+    private bool _tokenFetchInProgress;
     private int _healthFailuresConsecutive = 0;
 
     public UiPreferences Prefs => UiPreferences.Instance;
@@ -33,15 +34,13 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Windows.System.VirtualKey no expone las teclas OEM de puntuacion
-        // como miembros del enum, por lo que Ctrl+, debe registrarse en codigo.
-        var settingsAccelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
-        {
-            Modifiers = Windows.System.VirtualKeyModifiers.Control,
-            Key = (Windows.System.VirtualKey)COMMA_VIRTUAL_KEY_CODE,
-        };
-        settingsAccelerator.Invoked += OnSettingsAccelerator;
-        RootGrid.KeyboardAccelerators.Add(settingsAccelerator);
+        // VirtualKey no declara las teclas OEM de puntuacion. Capturar KeyDown
+        // permite reconocer Ctrl+, por su codigo sin asignar un valor invalido
+        // a KeyboardAccelerator.Key (WinUI falla nativamente al hacerlo).
+        RootGrid.AddHandler(
+            UIElement.KeyDownEvent,
+            new Microsoft.UI.Xaml.Input.KeyEventHandler(OnRootKeyDown),
+            handledEventsToo: true);
 
         Title = "Alfred - Asistente IA Local";
         ExtendsContentIntoTitleBar = true;
@@ -302,6 +301,11 @@ public sealed partial class MainWindow : Window
     // ========================================================================
     private async Task RefreshTokenMeter()
     {
+        // DispatcherTimer no espera a que termine un Tick async. Evitar
+        // acumular peticiones si tokenizar el contexto tarda mas de 600 ms.
+        if (_tokenFetchInProgress)
+            return;
+
         // Throttle: no pegar al endpoint mas rapido que cada 400ms salvo que
         // el usuario haya cambiado algo (ChatContext.Changed resetea la marca).
         if ((DateTime.UtcNow - _lastTokenFetch).TotalMilliseconds < 400)
@@ -310,23 +314,32 @@ public sealed partial class MainWindow : Window
 
         if (TokenMeterPanel.Visibility != Visibility.Visible) return;
 
-        var budget = await _api.GetTokenBudgetAsync(ChatContext.ConversationId, ChatContext.Draft);
-        if (budget == null) return;
-
-        DispatcherQueue.TryEnqueue(() =>
+        _tokenFetchInProgress = true;
+        try
         {
-            TokenMeterBar.Value = budget.PorcentajeUsado;
-            TokenMeterText.Text = $"{budget.TotalTokensUsados} / {budget.MaxTokensContexto}";
+            var budget = await _api.GetTokenBudgetAsync(
+                ChatContext.ConversationId, ChatContext.Draft);
+            if (budget == null) return;
 
-            // Color por umbrales
-            var color = budget.PorcentajeUsado switch
+            DispatcherQueue.TryEnqueue(() =>
             {
-                >= 90 => Colors.OrangeRed,
-                >= 70 => Colors.Goldenrod,
-                _     => Colors.MediumSeaGreen,
-            };
-            TokenMeterBar.Foreground = new SolidColorBrush(color);
-        });
+                TokenMeterBar.Value = budget.PorcentajeUsado;
+                TokenMeterText.Text = $"{budget.TotalTokensUsados} / {budget.MaxTokensContexto}";
+
+                // Color por umbrales
+                var color = budget.PorcentajeUsado switch
+                {
+                    >= 90 => Colors.OrangeRed,
+                    >= 70 => Colors.Goldenrod,
+                    _     => Colors.MediumSeaGreen,
+                };
+                TokenMeterBar.Foreground = new SolidColorBrush(color);
+            });
+        }
+        finally
+        {
+            _tokenFetchInProgress = false;
+        }
     }
 
     private async Task CheckHealth()
@@ -366,6 +379,8 @@ public sealed partial class MainWindow : Window
                 UpdateStatus("Conectado", Colors.LimeGreen);
             else if (status == "stopped")
                 UpdateStatus("Detenido", Colors.Red);
+            else if (status.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+                UpdateStatus(status, Colors.Red);
             else
                 UpdateStatus(status, Colors.Orange);
         });
@@ -397,9 +412,16 @@ public sealed partial class MainWindow : Window
     }
 
     // Ctrl+, abre Configuracion.
-    private void OnSettingsAccelerator(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
-        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    private void OnRootKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs args)
     {
+        if ((int)args.Key != COMMA_VIRTUAL_KEY_CODE)
+            return;
+
+        var controlState = Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+        if ((controlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == 0)
+            return;
+
         args.Handled = true;
         foreach (var item in NavView.FooterMenuItems.OfType<NavigationViewItem>())
         {
@@ -545,7 +567,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void OnWindowClosed(object sender, WindowEventArgs args)
+    private void OnWindowClosed(object sender, WindowEventArgs args)
     {
         _healthTimer.Stop();
         _tokenTimer.Stop();

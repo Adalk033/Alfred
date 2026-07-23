@@ -64,7 +64,7 @@
         <div class="container">
             <div class="legal-header">
                 <h1 class="legal-title">Términos de Uso</h1>
-                <p class="legal-updated">Última actualización: 4 de noviembre de 2025</p>
+                <p class="legal-updated">Última actualización: 23 de julio de 2026</p>
             </div>
 
             <div class="legal-content">
@@ -89,10 +89,10 @@
                     </p>
                     <ul>
                         <li>Procesa documentos personales localmente en tu dispositivo</li>
-                        <li>Utiliza modelos de IA ejecutados completamente offline (mediante Ollama)</li>
-                        <li>Proporciona búsqueda inteligente y respuestas basadas en tus documentos</li>
+                        <li>Ejecuta modelos GGUF directamente mediante llama.cpp, sin Ollama, Python ni MCP</li>
+                        <li>Permite adjuntar PDFs y archivos de texto como contexto de una conversación</li>
                         <li>Almacena todos los datos exclusivamente en tu dispositivo local</li>
-                        <li>No requiere conexión a internet para su funcionamiento normal</li>
+                        <li>No requiere conexión a internet para inferir una vez que existe un modelo local</li>
                     </ul>
                 </div>
 
@@ -129,11 +129,12 @@
                         Para usar Alfred necesitas:
                     </p>
                     <ul>
-                        <li><strong>Sistema Operativo:</strong> Windows 10 o superior (64-bit)</li>
-                        <li><strong>RAM:</strong> Mínimo 8 GB (16 GB recomendado)</li>
-                        <li><strong>Almacenamiento:</strong> 20 GB libres (30 GB recomendado)</li>
-                        <li><strong>Software Adicional:</strong> Ollama instalado para ejecutar modelos de IA</li>
-                        <li><strong>GPU (Opcional):</strong> NVIDIA, AMD o Apple Silicon para mejor rendimiento</li>
+                        <li><strong>Sistema Operativo:</strong> Windows 10 build 19041 o superior (x64)</li>
+                        <li><strong>RAM:</strong> suficiente para el tamaño y cuantización del GGUF elegido</li>
+                        <li><strong>Almacenamiento:</strong> suficiente para la aplicación y los modelos locales</li>
+                        <li><strong>Modelo:</strong> un archivo GGUF compatible; no se incluye en el instalador</li>
+                        <li><strong>GPU (Opcional):</strong> NVIDIA RTX 20xx o superior para la variante CUDA, con un
+                            driver compatible</li>
                     </ul>
                 </div>
 
@@ -172,8 +173,9 @@
                     </p>
                     <ul>
                         <li>No recopilamos ni transmitimos datos personales</li>
-                        <li>Todo el procesamiento ocurre localmente en tu dispositivo</li>
-                        <li>No hay servidores externos ni telemetría</li>
+                        <li>La inferencia y el manejo de conversaciones ocurren localmente en tu dispositivo</li>
+                        <li>No hay telemetría ni una API de IA externa durante la inferencia</li>
+                        <li>La pantalla Modelos se conecta a Hugging Face solo cuando buscas o descargas un GGUF</li>
                         <li>Tus datos permanecen bajo tu exclusivo control</li>
                     </ul>
                     <p>
@@ -213,12 +215,14 @@
                         Alfred utiliza software de terceros:
                     </p>
                     <ul>
-                        <li><strong>Ollama:</strong> Servidor de modelos LLM local (licencia MIT)</li>
-                        <li><strong>Electron:</strong> Framework para aplicaciones de escritorio (licencia MIT)</li>
-                        <li><strong>FastAPI:</strong> Framework Python para APIs (licencia MIT)</li>
-                        <li><strong>LangChain:</strong> Framework de LLM (licencia MIT)</li>
-                        <li><strong>ChromaDB:</strong> Base de datos vectorial (licencia Apache 2.0)</li>
-                        <li><strong>PyTorch:</strong> Framework de deep learning (licencia BSD)</li>
+                        <li><strong>llama.cpp / ggml:</strong> carga e inferencia de modelos GGUF</li>
+                        <li><strong>WinUI 3 y Windows App SDK:</strong> interfaz nativa de Windows</li>
+                        <li><strong>cpp-httplib:</strong> API HTTP local entre la UI y el backend</li>
+                        <li><strong>SQLiteCpp / SQLite:</strong> almacenamiento local</li>
+                        <li><strong>PDFium:</strong> extracción de texto desde PDFs</li>
+                        <li><strong>nlohmann/json y spdlog:</strong> JSON y logging</li>
+                        <li><strong>OpenSSL (opcional):</strong> cifrado AES-256-GCM</li>
+                        <li><strong>NVIDIA CUDA (variante GPU):</strong> aceleración de inferencia</li>
                     </ul>
                     <p>
                         Cada componente está sujeto a sus propias licencias respectivas.
@@ -231,10 +235,11 @@
                         Los modelos de IA utilizados por Alfred:
                     </p>
                     <ul>
-                        <li>Se descargan a través de Ollama desde repositorios públicos</li>
+                        <li>Pueden descargarse directamente desde Hugging Face o proporcionarse como archivos locales
+                        </li>
                         <li>Están sujetos a sus propias licencias individuales</li>
                         <li>Se ejecutan completamente en tu dispositivo local</li>
-                        <li>No envían ni reciben datos de servidores externos</li>
+                        <li>No contactan a un proveedor remoto durante la inferencia local</li>
                     </ul>
                     <p>
                         Es tu responsabilidad verificar las licencias de los modelos que descargues y uses.
@@ -307,12 +312,12 @@
 
                     <h3>12.1 Actualizaciones del Software</h3>
                     <p>
-                        Alfred puede notificarte sobre actualizaciones disponibles, pero:
+                        Alfred no incluye actualmente un actualizador ni un verificador automático:
                     </p>
                     <ul>
-                        <li>Las actualizaciones NO se instalan automáticamente</li>
-                        <li>Tienes control completo sobre cuándo actualizar</li>
-                        <li>Puedes desactivar las notificaciones de actualización</li>
+                        <li>Las versiones se publican en GitHub Releases</li>
+                        <li>Las actualizaciones no se descargan ni instalan automáticamente</li>
+                        <li>Tienes control completo sobre cuándo descargar y actualizar</li>
                         <li>No estás obligado a mantener el software actualizado</li>
                     </ul>
 
@@ -323,7 +328,7 @@
                     <ul>
                         <li>Los cambios se publicarán en esta página con fecha de actualización</li>
                         <li>El uso continuado después de cambios constituye aceptación</li>
-                        <li>Los cambios importantes se notificarán en la aplicación</li>
+                        <li>El historial de cambios permanecerá disponible en el repositorio</li>
                     </ul>
                 </div>
 
@@ -436,7 +441,7 @@
                     </div>
                     <p class="footer-description">
                         Tu asistente personal con IA local.<br>
-                        100% privado. 100% tuyo.
+                        Sin telemetría. Datos bajo tu control.
                     </p>
                 </div>
 
@@ -456,7 +461,8 @@
                         <ul>
                             <li><a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener">GitHub</a>
                             </li>
-                            <li><a href="https://ollama.ai" target="_blank" rel="noopener">Ollama</a></li>
+                            <li><a href="https://huggingface.co/models?library=gguf" target="_blank"
+                                    rel="noopener">Modelos GGUF</a></li>
                             <li><a href="index.html#faq">FAQ</a></li>
                         </ul>
                     </div>
@@ -474,7 +480,7 @@
             </div>
 
             <div class="footer-bottom">
-                <p>&copy; 2025 Alfred. Código abierto bajo Apache License 2.0.</p>
+                <p>&copy; 2026 Alfred. Código abierto bajo Apache License 2.0.</p>
                 <div class="footer-social">
                     <a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener" aria-label="GitHub">
                         <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">

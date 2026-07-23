@@ -22,11 +22,15 @@
 #include <windows.h>
 #endif
 
+#ifndef ALFRED_CUDA_ENABLED
+#define ALFRED_CUDA_ENABLED 0
+#endif
+
 namespace alfred {
 
 using json = nlohmann::json;
 
-#ifdef _WIN32
+#if ALFRED_CUDA_ENABLED && defined(_WIN32)
 struct CudaRuntimeProbeResult {
     bool cudart_loaded = false;
     bool cublas_loaded = false;
@@ -109,6 +113,7 @@ static CudaRuntimeProbeResult probe_cuda_runtime() {
 }
 #endif
 
+#if ALFRED_CUDA_ENABLED
 // Ejecutar comando y capturar salida
 static std::string exec_command(const std::string& cmd) {
     std::array<char, 256> buffer;
@@ -124,6 +129,7 @@ static std::string exec_command(const std::string& cmd) {
     }
     return result;
 }
+#endif
 
 GPUManager& GPUManager::instance() {
     static GPUManager mgr;
@@ -148,6 +154,14 @@ void GPUManager::detect_locked() {
 
     log_info("Detectando GPU CUDA...");
 
+#if !ALFRED_CUDA_ENABLED
+    // La presencia de una GPU o de nvidia-smi no significa que este binario
+    // tenga el backend ggml-cuda. La variante CPU debe reportar su capacidad
+    // real y evitar autoajustes con capas GPU que no puede usar.
+    log_info("Binario compilado sin soporte CUDA - usando CPU solamente");
+    gpu_info_.available = false;
+    return;
+#else
 #ifdef _WIN32
     auto cuda_probe = probe_cuda_runtime();
     log_info("CUDA runtime cudart: " + std::string(cuda_probe.cudart_loaded ? "OK" : "NO") +
@@ -176,7 +190,24 @@ void GPUManager::detect_locked() {
         "--format=csv,noheader,nounits 2>&1"
     );
 
-    if (output.empty() || output.find("NVIDIA") == std::string::npos) {
+    const size_t first_line_end = output.find('\n');
+    const std::string first_line = output.substr(0, first_line_end);
+    const bool has_expected_csv =
+        std::count(first_line.begin(), first_line.end(), ',') >= 4;
+
+    if (output.empty() || !has_expected_csv) {
+#ifdef _WIN32
+        // nvidia-smi aporta nombre y VRAM, pero no debe ser la unica fuente
+        // de verdad. Si cudart enumero dispositivos, CUDA es utilizable aun
+        // cuando nvidia-smi no este en PATH o no devuelva el formato esperado.
+        if (cuda_probe.cuda_api_available && cuda_probe.device_count > 0) {
+            gpu_info_.available = true;
+            gpu_info_.device_name = "NVIDIA CUDA GPU";
+            gpu_info_.device_count = cuda_probe.device_count;
+            log_warn("CUDA disponible, pero nvidia-smi no devolvio detalles de GPU");
+            return;
+        }
+#endif
         // Verificar si nvidia-smi existe pero no encontro GPU
         std::string check = exec_command("nvidia-smi --version 2>&1");
         if (check.find("NVIDIA") != std::string::npos) {
@@ -237,6 +268,7 @@ void GPUManager::detect_locked() {
         log_info("GPU detectada: " + gpu_info_.device_name +
                  " (" + std::to_string(gpu_info_.total_vram_mb) + " MB VRAM)");
     }
+#endif
 }
 
 GPUInfo GPUManager::info() const {
@@ -296,6 +328,13 @@ std::string GPUManager::status_report() const {
 std::string GPUManager::status_json() const {
     GPUInfo snapshot = info();
     json j;
+    // Nombres canonicos usados por el cliente WinUI.
+    j["has_cuda"] = snapshot.available;
+    j["vram_total_mb"] = snapshot.total_vram_mb;
+    j["vram_free_mb"] = snapshot.free_vram_mb;
+    j["vram_used_mb"] = snapshot.used_vram_mb;
+
+    // Alias legacy para consumidores anteriores del API.
     j["available"] = snapshot.available;
     j["device_name"] = snapshot.device_name;
     j["driver_version"] = snapshot.driver_version;

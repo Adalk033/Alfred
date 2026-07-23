@@ -23,9 +23,14 @@ fs::path get_app_data_dir() {
         CoTaskMemFree(appdata);
         return result;
     }
-    // Fallback
-    const char* env = std::getenv("APPDATA");
-    if (env) return fs::path(env) / "Alfred";
+    // Fallback Unicode si Known Folders no estuviera disponible.
+    DWORD env_len = GetEnvironmentVariableW(L"APPDATA", nullptr, 0);
+    if (env_len > 0) {
+        std::vector<wchar_t> env(env_len);
+        if (GetEnvironmentVariableW(L"APPDATA", env.data(), env_len) > 0) {
+            return fs::path(env.data()) / "Alfred";
+        }
+    }
     return fs::path("./data");
 #elif defined(__APPLE__)
     // macOS: ~/Library/Application Support/Alfred/

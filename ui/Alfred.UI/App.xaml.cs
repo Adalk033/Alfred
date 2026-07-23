@@ -10,6 +10,7 @@ namespace Alfred.UI;
 public partial class App : Application
 {
     private Window? _window;
+    private AppInstance? _mainInstance;
 
     public App()
     {
@@ -36,6 +37,8 @@ public partial class App : Application
             Process.GetCurrentProcess().Kill();
             return;
         }
+        _mainInstance = keyInstance;
+        _mainInstance.Activated += OnAppInstanceActivated;
 
         // Registrar el singleton de preferencias como recurso global ANTES de
         // crear la ventana para que los DataTemplates puedan enlazar
@@ -59,6 +62,13 @@ public partial class App : Application
     }
 
     public static Window? CurrentWindow => ((App)Current)._window;
+
+    private void OnAppInstanceActivated(object? sender, AppActivationArguments args)
+    {
+        var window = _window;
+        if (window == null) return;
+        window.DispatcherQueue.TryEnqueue(window.Activate);
+    }
 
     // ------------------------------------------------------------------
     // Registro de excepciones no controladas

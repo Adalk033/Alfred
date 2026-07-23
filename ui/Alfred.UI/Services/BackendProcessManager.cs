@@ -71,13 +71,15 @@ public sealed class BackendProcessManager : IDisposable
         // backend ajeno u orfano: sondear antes de lanzar un hijo condenado.
         if (IsPortInUse())
         {
-            if (await WaitForHealthAsync(TimeSpan.FromSeconds(2)))
-            {
-                StatusChanged?.Invoke(this,
-                    $"error: el puerto {_port} ya esta en uso por otro proceso. " +
-                    "Cierra la instancia previa de Alfred y reintenta.");
-                return false;
-            }
+            bool isAlfredBackend = await WaitForHealthAsync(
+                TimeSpan.FromSeconds(2), requireManagedProcess: false);
+            string owner = isAlfredBackend
+                ? "otra instancia del backend de Alfred"
+                : "otro proceso";
+            StatusChanged?.Invoke(this,
+                $"error: el puerto {_port} ya esta en uso por {owner}. " +
+                "Cierra el proceso que ocupa el puerto y reintenta.");
+            return false;
         }
 
         try
@@ -155,14 +157,15 @@ public sealed class BackendProcessManager : IDisposable
         }
     }
 
-    private async Task<bool> WaitForHealthAsync(TimeSpan timeout)
+    private async Task<bool> WaitForHealthAsync(
+        TimeSpan timeout, bool requireManagedProcess = true)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
         var deadline = DateTime.UtcNow + timeout;
 
         while (DateTime.UtcNow < deadline)
         {
-            if (_process == null || _process.HasExited)
+            if (requireManagedProcess && (_process == null || _process.HasExited))
                 return false;
 
             try

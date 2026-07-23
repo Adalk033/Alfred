@@ -125,6 +125,57 @@ jobs:
       - name: Compilar
         run: cmake --build build --config Release --parallel
 
+      - name: Copiar runtime CUDA requerido al output
+        shell: pwsh
+        run: |
+          $dest = "build/Release"
+          $requiredPatterns = @(
+            "cudart64_*.dll",
+            "cublas64_*.dll",
+            "cublasLt64_*.dll"
+          )
+
+          if (-not $env:CUDA_PATH -or -not (Test-Path $env:CUDA_PATH)) {
+            throw "CUDA_PATH no esta definido o no existe despues de instalar CUDA"
+          }
+
+          foreach ($pattern in $requiredPatterns) {
+            $source = Get-ChildItem -Path $env:CUDA_PATH -Filter $pattern -File -Recurse |
+              Select-Object -First 1
+            if (-not $source) {
+              throw "No se encontro el runtime requerido: $pattern"
+            }
+            Write-Host "Copiando $($source.FullName) -> $dest"
+            Copy-Item $source.FullName -Destination $dest -Force
+          }
+
+      - name: Copiar runtime de Visual C++ al output
+        shell: pwsh
+        run: |
+          $dest = "build/Release"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "No se encontro vswhere para localizar el runtime de Visual C++"
+          }
+
+          $vsPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $vsPath) {
+            throw "No se encontro una instalacion de Visual C++"
+          }
+
+          $crtDir = Get-ChildItem `
+            -Path "$vsPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" `
+            -Directory -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $crtDir) {
+            throw "No se encontro el runtime x64 de Visual C++"
+          }
+
+          Copy-Item -Path "$($crtDir.FullName)\*.dll" -Destination $dest -Force
+
       - name: Copiar DLLs de OpenSSL al output
         shell: pwsh
         run: |

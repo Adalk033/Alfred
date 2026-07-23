@@ -1,64 +1,105 @@
 # Alfred
 
-Alfred is a local AI assistant for Windows that runs entirely offline, with no external dependencies like Ollama or Python. It combines a native C++ backend with a modern WinUI 3 desktop interface, enabling private, on-device LLM inference using GGUF models from HuggingFace.
+Alfred is a local AI assistant for Windows. It combines a native C++20 backend with a WinUI 3 desktop interface and runs GGUF language models directly through llama.cpp. Inference, conversations, and document processing stay on the device; Alfred does not require Ollama, Python, a cloud LLM API, or an MCP server.
 
-## Features
+> Current project version: **v0.3.0 (beta)**. The official desktop distribution targets Windows x64.
 
-- **Offline inference** — powered by llama.cpp, no internet or cloud required
-- **GPU acceleration** — native CUDA support for NVIDIA GPUs (Turing, Ampere, Ada)
-- **Modern UI** — WinUI 3 frontend with conversation history, Markdown rendering and code syntax highlighting
-- **REST API backend** — local server on `localhost:8000` with endpoints for queries, models, conversations, and GPU status
-- **Local API authentication** — random per-session token (`X-Alfred-Token`) shared between UI and backend; no wildcard CORS
-- **Persistent conversations** — SQLite-backed history and context management, with pinning and Markdown export
-- **PDF support** — extract and query text from PDF files
-- **Query caching** — LRU cache (TTL-based) for repeated stateless queries
-- **VRAM-aware model picker** — flags whether each GGUF fits in available VRAM
-- **Quick prompts & keyboard shortcuts** — reusable prompt library, multiline composer (Shift+Enter), Ctrl+N/L/F
-- **Lazy model loading** — models load on demand and unload after inactivity
-- **AES-256-GCM encryption** — optional, PBKDF2-derived key for sensitive stored data
+## Highlights
 
-## Requirements
+- **Local GGUF inference** with lazy model loading and automatic unload after inactivity.
+- **CUDA acceleration** for NVIDIA Turing, Ampere, and Ada GPUs, plus a CPU-only build.
+- **Direct Hugging Face integration** to search GGUF repositories and download a selected model with progress and resume support.
+- **Native WinUI 3 interface** with streaming responses, Markdown, code highlighting, quick prompts, and keyboard shortcuts.
+- **Persistent conversations** in SQLite, including pinning, branching/regeneration, bulk deletion, and Markdown export.
+- **Local attachments** with PDF text extraction through PDFium and support for text-based files as prompt context.
+- **VRAM-aware model selection** and configurable generation parameters.
+- **Local API protection** through a random per-session `X-Alfred-Token`; `/health` is the only unauthenticated endpoint and wildcard CORS is disabled.
+- **Optional AES-256-GCM encryption** for newly stored conversation content, memory values, and selected profile fields when the backend is built with OpenSSL.
 
-- Windows 10 (build 19041) or later, 64-bit
-- For the GPU version: NVIDIA GPU (Turing / RTX 20xx or newer) with up-to-date drivers
+## Runtime architecture
 
-## Tech Stack
+The WinUI application starts and owns `alfred.exe`. The backend listens on `127.0.0.1:8000`, loads the selected GGUF model through llama.cpp, stores application data in SQLite, and streams generated tokens back to the UI. Closing the UI also terminates its managed backend process.
+
+The application needs internet access only when you choose to search for or download a model from `huggingface.co`. Once a compatible GGUF file is available locally, inference works offline and prompts are not sent to Hugging Face or another remote service.
+
+### MCP removal
+
+Alfred v0.3.0 has no MCP integration, MCP configuration page, or MCP runtime dependency. A legacy `%APPDATA%\Alfred\mcp_servers.json` left by an older build is ignored. It is not removed automatically, so it can be deleted manually after confirming that no older Alfred installation still needs it.
+
+## End-user requirements
+
+- Windows 10 build 19041 or later, x64.
+- Enough RAM and free disk space for the selected GGUF model; requirements vary significantly by model size and quantization.
+- GPU package: NVIDIA RTX 20xx or newer with a compatible, up-to-date driver.
+- CPU package: no NVIDIA GPU is required; generation is slower and still depends on the selected model fitting in system RAM.
+
+## Installable packages
+
+Both variants are published as an installer and a portable ZIP on the [Releases](https://github.com/Adalk033/Alfred/releases) page.
+
+| Variant | Installer | Portable ZIP |
+|---|---|---|
+| GPU (CUDA) | `Alfred-vX.X.X-win-x64-setup.exe` | `Alfred-vX.X.X-win-x64.zip` |
+| CPU-only | `Alfred-vX.X.X-cpu-win-x64-setup.exe` | `Alfred-vX.X.X-win-x64-cpu.zip` |
+
+After installation, open **Models**, search for a GGUF repository, or copy an existing GGUF file into `%APPDATA%\Alfred\models\`. Then select the model and start a conversation. Models are not bundled with Alfred and remain subject to their authors' licenses and usage terms.
+
+## Local data
+
+| Location | Contents |
+|---|---|
+| `%APPDATA%\Alfred\db\alfred.db` | Conversations, memory, model configuration, and application settings |
+| `%APPDATA%\Alfred\models\` | Downloaded GGUF models |
+| `%APPDATA%\Alfred\logs\` | Backend diagnostic logs |
+| `%APPDATA%\Alfred\data\secret.key` | Local encryption key when OpenSSL encryption is available |
+| `%LOCALAPPDATA%\Alfred\preferences.json` | UI theme and interface preferences |
+| `%LOCALAPPDATA%\Alfred\logs\ui-crash.log` | UI crash details, when an unhandled error occurs |
+
+Backend logs can include the first 80 characters of a prompt for diagnostics. See [SECURITY.md](SECURITY.md) and the [privacy policy](docs/privacy.html) before using highly sensitive data.
+
+## Technology
 
 | Layer | Technology |
 |---|---|
-| Backend | C++20, CMake, llama.cpp, cpp-httplib, SQLite, OpenSSL |
-| Frontend | WinUI 3, Windows App SDK 1.6, .NET 9, C# |
-| GPU | CUDA Toolkit 13.2 |
-| Extras | nlohmann/json, spdlog, PDFium |
+| Backend | C++20, CMake, llama.cpp, cpp-httplib, SQLiteCpp |
+| Frontend | C#, WinUI 3, Windows App SDK 1.6, .NET 9 |
+| Acceleration | CUDA 13.2 in the GPU release; llama.cpp CPU backend otherwise |
+| Supporting libraries | nlohmann/json, spdlog, PDFium, optional OpenSSL |
 
-## Building from Source
+## Building from source
 
-```bash
-# GPU (CUDA) build — adjust ALFRED_CUDA_ARCH to your GPU generation
-cmake -S . -B build -DALFRED_CUDA=ON -DALFRED_CUDA_ARCH=89
-cmake --build build --config Release
+### Prerequisites
 
-# CPU-only build
+- Visual Studio 2022 Build Tools with the **Desktop development with C++** workload.
+- CMake 3.20 or later and Git.
+- .NET 9 SDK and MSBuild.
+- CUDA Toolkit 13.2 for a CUDA build.
+- OpenSSL development libraries only if AES-256-GCM support is required.
+- Internet access during the first configure/restore so CMake and NuGet can fetch dependencies.
+
+Run these commands from a Visual Studio Developer PowerShell:
+
+```powershell
+# Backend: CPU-only
 cmake -S . -B build -DALFRED_CUDA=OFF
-cmake --build build --config Release
+cmake --build build --config Release --parallel
+
+# Backend: CUDA distribution build (Turing, Ampere, Ada)
+cmake -S . -B build -DALFRED_CUDA=ON '-DALFRED_CUDA_ARCH=75;86;89'
+cmake --build build --config Release --parallel
+
+# Frontend: same configuration used by CI
+dotnet workload restore --project ui/Alfred.UI/Alfred.UI.csproj
+dotnet restore ui/Alfred.UI/Alfred.UI.csproj
+msbuild ui/Alfred.UI/Alfred.UI.csproj /restore /m /verbosity:minimal `
+  /p:Configuration=Release /p:Platform=x64 /p:RuntimeIdentifier=win-x64 `
+  /p:SelfContained=true /p:WindowsAppSDKSelfContained=true
 ```
 
-Dependencies are fetched automatically via CMake FetchContent — no vcpkg or manual setup required.
+CMake fetches the pinned native dependencies with `FetchContent`; vcpkg is not required. The UI can locate a development backend at `build\Release\alfred.exe`, so run:
 
----
+```powershell
+.\ui\Alfred.UI\bin\x64\Release\net9.0-windows10.0.19041.0\win-x64\Alfred.UI.exe
+```
 
-## Installable Versions
-
-Alfred is distributed in two variants. Choose the one that matches your hardware:
-
-### Alfred (GPU — CUDA)
-Recommended for users with a compatible NVIDIA GPU. Provides significantly faster inference through native CUDA acceleration.
-
-> `Alfred-vX.X.X-win-x64-setup.exe` / `Alfred-vX.X.X-win-x64.zip`
-
-### Alfred (CPU-only)
-For systems without a dedicated NVIDIA GPU. Runs entirely on the CPU — slower for large models, but fully functional.
-
-> `Alfred-vX.X.X-cpu-win-x64-setup.exe` / `Alfred-vX.X.X-cpu-win-x64.zip`
-
-Both variants are available as an **installer** (recommended) or a **portable ZIP**. Download from the [Releases](../../releases) page.
+The release workflows in `.github/workflows/` build the same frontend configuration, package the native runtimes, and produce the installer/ZIP names listed above.

@@ -26,21 +26,18 @@
 #include <iostream>
 #include <string>
 #include <csignal>
+#include <chrono>
 #include <memory>
 #include <thread>
-#include <atomic>
 
 // Servidor global para manejo de senales
 static std::unique_ptr<alfred::HttpServer> g_server;
 // Flag async-signal-safe: el handler solo lo setea; el hilo principal
 // hace el stop() real (que toma mutexes y loguea, no seguro en un handler).
-static std::atomic<bool> g_stop_requested{false};
+static volatile std::sig_atomic_t g_stop_requested = 0;
 
 void signal_handler(int /*signum*/) {
-    g_stop_requested.store(true);
-    if (g_server) {
-        g_server->stop();
-    }
+    g_stop_requested = 1;
 }
 
 void print_banner() {
@@ -174,8 +171,19 @@ int main(int argc, char* argv[]) {
     std::cout << "  [OK] API docs: GET /health, POST /query, GET /models\n";
     std::cout << "  [OK] Presiona Ctrl+C para detener\n\n";
 
+    // El handler de senal solo toca sig_atomic_t. Este hilo auxiliar ejecuta
+    // stop(), que usa locks y logging y por tanto no es async-signal-safe.
+    std::thread signal_monitor([] {
+        while (!g_stop_requested) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (g_server) g_server->stop();
+    });
+
     // Bloqueante - corre hasta Ctrl+C
     g_server->start();
+    g_stop_requested = 1;
+    if (signal_monitor.joinable()) signal_monitor.join();
 
     // Limpieza
     alfred::log_info("Alfred detenido correctamente");

@@ -64,33 +64,33 @@
         <div class="container">
             <div class="legal-header">
                 <h1 class="legal-title">Política de Privacidad</h1>
-                <p class="legal-updated">Última actualización: 4 de noviembre de 2025</p>
+                <p class="legal-updated">Última actualización: 23 de julio de 2026</p>
             </div>
 
             <div class="legal-content">
                 <div class="highlight-box">
-                    <p>Alfred es 100% privado. No recopilamos, almacenamos ni compartimos ningún
-                        dato personal. Todo se procesa localmente en tu dispositivo. No hay servidores externos, no hay
-                        telemetría, no hay seguimiento.</p>
+                    <p>El proyecto Alfred no recibe, recopila ni comparte tus conversaciones o documentos. La
+                        inferencia y el almacenamiento operativo ocurren en tu dispositivo y no hay telemetría. La
+                        aplicación solo se conecta a Hugging Face cuando tú buscas o descargas un modelo.</p>
                 </div>
 
                 <div class="legal-section">
                     <h2>1. Introducción</h2>
                     <p>
                         En Alfred, tu privacidad no es solo una prioridad, es el núcleo de nuestro diseño. Esta Política
-                        de Privacidad explica cómo Alfred maneja tus datos y por qué puedes confiar en que nunca dejamos
-                        tu dispositivo.
+                        de Privacidad explica qué datos guarda la aplicación, dónde se almacenan y en qué casos realiza
+                        una conexión de red.
                     </p>
                     <p>
                         Alfred es un asistente de escritorio con inteligencia artificial completamente local. A
-                        diferencia de otros asistentes, no requiere conexión a internet para funcionar y nunca envía tus
-                        datos a servidores externos.
+                        diferencia de otros asistentes, no envía tus prompts, respuestas o archivos a un proveedor de
+                        IA. Con un GGUF local seleccionado, el chat no requiere conexión a internet.
                     </p>
                 </div>
 
                 <div class="legal-section">
                     <h2>2. Información que NO Recopilamos</h2>
-                    <p>Alfred NO recopila, transmite ni comparte:</p>
+                    <p>El proyecto Alfred NO recibe, transmite a sus desarrolladores ni comparte:</p>
                     <ul>
                         <li>Información personal identificable (nombre, email, dirección, etc.)</li>
                         <li>Documentos que procesas con la aplicación</li>
@@ -100,36 +100,44 @@
                         <li>Información del dispositivo o sistema operativo</li>
                         <li>Dirección IP o ubicación geográfica</li>
                         <li>Cookies o identificadores de seguimiento</li>
-                        <li>Cualquier otro tipo de dato personal o de uso</li>
+                        <li>Cualquier otro dato de uso de la aplicación</li>
                     </ul>
+                    <p>
+                        La aplicación sí guarda localmente conversaciones, configuración y logs para poder funcionar.
+                        “No recopilamos” significa que esos datos no se envían a los desarrolladores de Alfred.
+                    </p>
                 </div>
 
                 <div class="legal-section">
                     <h2>3. Cómo Funciona Alfred</h2>
 
-                    <h3>Procesamiento 100% Local</h3>
+                    <h3>Inferencia y almacenamiento local</h3>
                     <p>
-                        Todo el procesamiento de Alfred ocurre exclusivamente en tu dispositivo:
+                        La generación de respuestas y el almacenamiento operativo ocurren en tu dispositivo:
                     </p>
                     <ul>
-                        <li><strong>IA Local:</strong> Utiliza Ollama para ejecutar modelos de lenguaje directamente en
-                            tu computadora</li>
-                        <li><strong>Base de Datos Local:</strong> ChromaDB se ejecuta localmente para búsqueda vectorial
-                        </li>
-                        <li><strong>Almacenamiento Local:</strong> Todos los datos se guardan en tu dispositivo
-                            (Windows: AppData, Linux: ~/.alfred, macOS: Application Support)</li>
-                        <li><strong>Sin Conexiones Externas:</strong> No hay comunicación con servidores externos
-                            durante el uso normal</li>
+                        <li><strong>IA local:</strong> el backend C++ carga modelos GGUF directamente con llama.cpp; no
+                            usa Ollama, Python, MCP ni una API de IA en la nube</li>
+                        <li><strong>Base de datos local:</strong> SQLite guarda conversaciones, memoria y configuración
+                            en el perfil de Windows</li>
+                        <li><strong>API local:</strong> la UI se comunica con el backend en
+                            <code>127.0.0.1:8000</code></li>
+                        <li><strong>Red limitada:</strong> Hugging Face solo se consulta cuando el usuario busca o
+                            descarga un modelo</li>
                     </ul>
 
                     <h3>Encriptación de Datos</h3>
                     <p>
-                        Tus datos sensibles están protegidos con encriptación AES-256-GCM:
+                        El cifrado AES-256-GCM es opcional, está desactivado por defecto y requiere que el backend se
+                        haya compilado con OpenSSL:
                     </p>
                     <ul>
-                        <li>Datos personales como RFC, CURP, NSS están encriptados en la base de datos</li>
-                        <li>Las claves de encriptación se generan y almacenan únicamente en tu dispositivo</li>
-                        <li>Ni siquiera nosotros podemos acceder a tus datos encriptados</li>
+                        <li>Al activarlo, cifra escrituras nuevas de mensajes, valores de memoria y determinados campos
+                            de perfil; no cifra retroactivamente datos existentes</li>
+                        <li>La clave aleatoria se almacena en
+                            <code>%APPDATA%\Alfred\data\secret.key</code></li>
+                        <li>No cifra modelos GGUF, logs, preferencias de UI ni todos los metadatos de SQLite</li>
+                        <li>Quien obtenga la base de datos y la clave local puede descifrar los valores protegidos</li>
                     </ul>
                 </div>
 
@@ -139,39 +147,47 @@
                         Alfred almacena datos exclusivamente en tu dispositivo local:
                     </p>
                     <ul>
-                        <li><strong>Documentos indexados:</strong> Fragmentos de texto procesados para búsqueda
-                            (embeddings vectoriales)</li>
+                        <li><strong>Modelos:</strong> archivos GGUF descargados o copiados al directorio local de modelos
+                        </li>
                         <li><strong>Historial de conversaciones:</strong> Tus conversaciones con el asistente, guardadas
                             localmente</li>
-                        <li><strong>Caché de respuestas:</strong> Respuestas previas para acelerar consultas repetidas
+                        <li><strong>Memoria y configuración:</strong> ajustes de modelo, perfil y aplicación en SQLite
                         </li>
+                        <li><strong>Documentos:</strong> rutas y metadatos de documentos cuando se usan esas funciones;
+                            el texto extraído de un adjunto se procesa como contexto local</li>
+                        <li><strong>Caché temporal:</strong> determinadas consultas sin conversación pueden mantenerse
+                            en memoria hasta que termina el backend</li>
                         <li><strong>Configuración de usuario:</strong> Preferencias y ajustes de la aplicación</li>
-                        <li><strong>Logs locales:</strong> Registros de funcionamiento para diagnóstico (nunca contienen
-                            datos personales)</li>
+                        <li><strong>Logs locales:</strong> registros de diagnóstico. El backend puede incluir los
+                            primeros 80 caracteres de un prompt; el log de fallos de UI puede incluir mensajes y stack
+                            traces</li>
                     </ul>
                     <p>
                         Ubicaciones de almacenamiento:
                     </p>
                     <ul>
-                        <li><strong>Windows:</strong> C:\Users\&lt;Usuario&gt;\AppData\Roaming\Alfred\</li>
-                        <li><strong>Linux:</strong> ~/.alfred/</li>
-                        <li><strong>macOS:</strong> ~/Library/Application Support/Alfred/</li>
+                        <li><strong>Datos del backend:</strong>
+                            <code>%APPDATA%\Alfred\</code> (AppData\Roaming)</li>
+                        <li><strong>Preferencias y fallos de UI:</strong>
+                            <code>%LOCALAPPDATA%\Alfred\</code> (AppData\Local)</li>
                     </ul>
                 </div>
 
                 <div class="legal-section">
                     <h2>5. Conexiones a Internet</h2>
                     <p>
-                        Alfred requiere conexión a internet ÚNICAMENTE para:
+                        La aplicación puede conectarse a internet cuando tú:
                     </p>
                     <ul>
-                        <li><strong>Descarga inicial:</strong> Descargar modelos de IA desde Ollama (primera vez)</li>
-                        <li><strong>Actualizaciones de software:</strong> Verificar nuevas versiones (opcional, puedes
-                            desactivarlo)</li>
+                        <li><strong>Buscas modelos:</strong> el texto de búsqueda se envía a la API pública de Hugging
+                            Face</li>
+                        <li><strong>Descargas un modelo:</strong> el archivo GGUF se obtiene directamente de
+                            <code>huggingface.co</code></li>
                     </ul>
                     <p>
-                        Una vez instalado y con los modelos descargados, Alfred funciona completamente offline. No hay
-                        comunicación con servidores durante el uso normal de la aplicación.
+                        Hugging Face recibe la consulta y los metadatos normales de red, como la dirección IP, bajo sus
+                        propias políticas. Alfred no incluye telemetría ni un verificador automático de actualizaciones.
+                        Con un modelo local, la inferencia funciona offline.
                     </p>
                 </div>
 
@@ -185,7 +201,7 @@
                                 href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener">GitHub</a></li>
                         <li>Cualquiera puede auditar el código para verificar nuestras afirmaciones de privacidad</li>
                         <li>La comunidad puede contribuir y mejorar la aplicación</li>
-                        <li>No hay código oculto ni funcionalidades no documentadas</li>
+                        <li>Las funcionalidades pueden contrastarse con el código publicado</li>
                     </ul>
                 </div>
 
@@ -199,12 +215,13 @@
                         <li>Servicios de publicidad</li>
                         <li>Servicios de seguimiento o rastreo</li>
                         <li>CDNs para contenido dinámico</li>
-                        <li>APIs de terceros para funcionalidad principal</li>
+                        <li>APIs de IA de terceros para generar respuestas</li>
                     </ul>
                     <p>
-                        <strong>Nota sobre Ollama:</strong> Ollama es un servidor de modelos de IA que también se
-                        ejecuta localmente en tu dispositivo. No envía datos a servidores externos durante el uso
-                        normal.
+                        <strong>Hugging Face:</strong> La búsqueda y descarga de modelos es una integración directa y
+                        opcional. También puedes copiar un GGUF local en
+                        <code>%APPDATA%\Alfred\models\</code> y evitar esas solicitudes desde la aplicación. Los enlaces
+                        externos que abras en el navegador quedan sujetos a las políticas del sitio correspondiente.
                     </p>
                 </div>
 
@@ -214,12 +231,15 @@
                         Tienes control total sobre tus datos:
                     </p>
                     <ul>
-                        <li><strong>Eliminar datos:</strong> Puedes eliminar conversaciones, documentos indexados o toda
-                            la base de datos desde la aplicación</li>
-                        <li><strong>Exportar datos:</strong> Tus datos están en formatos estándar (SQLite, ChromaDB) que
-                            puedes acceder directamente</li>
-                        <li><strong>Desinstalar:</strong> Al desinstalar Alfred, puedes elegir mantener o eliminar todos
-                            los datos locales</li>
+                        <li><strong>Eliminar conversaciones:</strong> Puedes borrar conversaciones individuales o en
+                            grupo desde la aplicación</li>
+                        <li><strong>Exportar conversaciones:</strong> Puedes exportarlas a Markdown; la base local usa
+                            SQLite</li>
+                        <li><strong>Eliminar todo:</strong> Cierra Alfred y elimina manualmente
+                            <code>%APPDATA%\Alfred\</code> y <code>%LOCALAPPDATA%\Alfred\</code>. La desinstalación no
+                            garantiza borrar esos datos ni los modelos</li>
+                        <li><strong>Cifrado:</strong> Conserva <code>secret.key</code> mientras necesites leer filas
+                            cifradas; perderla hace que esos valores sean irrecuperables</li>
                     </ul>
                 </div>
 
@@ -229,25 +249,27 @@
                         Medidas de seguridad implementadas:
                     </p>
                     <ul>
-                        <li><strong>Encriptación AES-256-GCM:</strong> Para datos sensibles en la base de datos</li>
-                        <li><strong>Context Isolation:</strong> Electron ejecuta con aislamiento de contexto activado
-                        </li>
-                        <li><strong>Sandboxing:</strong> Procesos renderer ejecutan en sandbox</li>
-                        <li><strong>Sin Node Integration:</strong> El renderer no tiene acceso directo al sistema</li>
-                        <li><strong>Host fijo:</strong> El backend solo escucha en 127.0.0.1 (localhost)</li>
+                        <li><strong>Host local:</strong> El backend administrado por la UI escucha en
+                            <code>127.0.0.1:8000</code></li>
+                        <li><strong>Token de sesión:</strong> Las rutas distintas de <code>/health</code> requieren un
+                            token aleatorio de 32 bytes en <code>X-Alfred-Token</code></li>
+                        <li><strong>CORS restringido:</strong> No se publica un origen comodín para páginas web</li>
+                        <li><strong>Ciclo de vida:</strong> La UI mantiene el backend en un Job Object para terminarlo
+                            también ante un cierre abrupto</li>
+                        <li><strong>Cifrado opcional:</strong> AES-256-GCM protege los campos descritos anteriormente
+                            cuando OpenSSL está disponible</li>
                     </ul>
                 </div>
 
                 <div class="legal-section">
                     <h2>10. Actualizaciones de la Aplicación</h2>
                     <p>
-                        Las actualizaciones de Alfred:
+                        Alfred no incluye actualmente un actualizador ni una comprobación automática de versiones:
                     </p>
                     <ul>
-                        <li>Se notifican al usuario pero no se instalan automáticamente</li>
-                        <li>La verificación de actualizaciones es opcional y puede desactivarse</li>
-                        <li>No se recopila información del dispositivo durante la verificación</li>
-                        <li>Las actualizaciones se descargan desde repositorios públicos (GitHub Releases)</li>
+                        <li>Las versiones se publican manualmente en GitHub Releases</li>
+                        <li>El usuario decide cuándo descargar e instalar una nueva versión</li>
+                        <li>La aplicación no envía información del dispositivo para comprobar actualizaciones</li>
                     </ul>
                 </div>
 
@@ -266,7 +288,6 @@
                     </p>
                     <ul>
                         <li>Publicado en esta página con fecha de actualización</li>
-                        <li>Notificado a través de la aplicación (para cambios importantes)</li>
                         <li>Disponible en el repositorio de GitHub con historial de cambios</li>
                     </ul>
                     <p>
@@ -288,9 +309,9 @@
                 </div>
 
                 <div class="highlight-box">
-                    <p><strong>Resumen:</strong> Alfred está diseñado desde cero para proteger tu privacidad. No
-                        recopilamos datos. No compartimos datos. No hay servidores externos. Todo es local. Tu
-                        privacidad es absoluta.</p>
+                    <p><strong>Resumen:</strong> Alfred no incorpora telemetría ni envía tus conversaciones a una IA
+                        remota. Tus datos operativos permanecen locales. Solo se contacta a Hugging Face cuando eliges
+                        buscar o descargar un modelo.</p>
                 </div>
 
                 <a href="index.html" class="back-link">
@@ -314,7 +335,7 @@
                     </div>
                     <p class="footer-description">
                         Tu asistente personal con IA local.<br>
-                        100% privado. 100% tuyo.
+                        Sin telemetría. Datos bajo tu control.
                     </p>
                 </div>
 
@@ -334,7 +355,8 @@
                         <ul>
                             <li><a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener">GitHub</a>
                             </li>
-                            <li><a href="https://ollama.ai" target="_blank" rel="noopener">Ollama</a></li>
+                            <li><a href="https://huggingface.co/models?library=gguf" target="_blank"
+                                    rel="noopener">Modelos GGUF</a></li>
                             <li><a href="index.html#faq">FAQ</a></li>
                         </ul>
                     </div>
@@ -352,7 +374,7 @@
             </div>
 
             <div class="footer-bottom">
-                <p>&copy; 2025 Alfred. Código abierto bajo Apache License 2.0.</p>
+                <p>&copy; 2026 Alfred. Código abierto bajo Apache License 2.0.</p>
                 <div class="footer-social">
                     <a href="https://github.com/Adalk033/Alfred" target="_blank" rel="noopener" aria-label="GitHub">
                         <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
