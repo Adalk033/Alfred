@@ -1,7 +1,6 @@
 using Alfred.UI.Models;
 using Alfred.UI.Pages;
 using Alfred.UI.Services;
-using Alfred.UI.Services.Mcp;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -41,8 +40,13 @@ public sealed partial class MainWindow : Window
         if (System.IO.File.Exists(iconPath))
             AppWindow.SetIcon(iconPath);
 
-        _api = new AlfredApiClient();
-        _backend = new BackendProcessManager();
+        // Token de sesion aleatorio compartido: se pasa al backend por CLI y
+        // viaja en cada peticion como X-Alfred-Token. Sin esto, cualquier
+        // pagina web local podria invocar la API (CSRF).
+        string authToken = Convert.ToHexString(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        _api = new AlfredApiClient(authToken: authToken);
+        _backend = new BackendProcessManager(authToken: authToken);
         _backend.StatusChanged += OnBackendStatusChanged;
 
         // Suscribir al servicio global de notificaciones
@@ -74,20 +78,6 @@ public sealed partial class MainWindow : Window
             _healthTimer.Start();
             _tokenTimer.Start();
             await LoadModelInfo();
-            // MCP servers (Fase 3): conectar los habilitados en background. No
-            // bloquear el inicio del UI; los errores se reportan en McpServersPage.
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var registry = McpServerRegistry.Instance.LoadOrSeed();
-                    await McpClientService.Instance.SyncWithRegistryAsync(registry);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[MainWindow] MCP sync error: {ex.Message}");
-                }
-            });
         }
         else
         {
@@ -118,6 +108,11 @@ public sealed partial class MainWindow : Window
                     TokenMeterPanel.Visibility  = loaded ? Visibility.Visible : Visibility.Collapsed;
                     _modelState = state;
                     UpdateModelStateDot(loaded, state);
+
+                    // Backoff: el medidor de tokens solo tiene sentido con un
+                    // modelo cargado. Pausar su timer (600ms) cuando no lo hay.
+                    if (loaded && !_tokenTimer.IsEnabled) _tokenTimer.Start();
+                    else if (!loaded && _tokenTimer.IsEnabled) _tokenTimer.Stop();
                 });
             }
         }
@@ -153,13 +148,13 @@ public sealed partial class MainWindow : Window
         // "Recientes" y "Locales" o dentro de una misma seccion.
         var seenPaths = new HashSet<string>(StringComparer.Ordinal);
 
-        // Recientes (persistidos en user_settings)
-        var recents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync())
+        // Recientes (persistidos en user_settings). Una sola lectura: filtrar
+        // los que ya no existen en disco y, si cambio, re-persistir.
+        var persistedRecents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync());
+        var recents = persistedRecents
             .Where(r => localPaths.Contains(ModelListHelpers.NormalizePath(r.Path, r.Name)))
             .ToList();
 
-        // Si habia recientes que ya no existen en disco, depurarlos de settings.
-        var persistedRecents = ModelListHelpers.Deduplicate(await LoadRecentModelsAsync());
         if (recents.Count != persistedRecents.Count)
             await SaveRecentModelsAsync(recents);
 
@@ -389,6 +384,21 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    // Ctrl+, abre Configuracion (Key=Number188 es la tecla de la coma).
+    private void OnSettingsAccelerator(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        foreach (var item in NavView.FooterMenuItems.OfType<NavigationViewItem>())
+        {
+            if ((item.Tag?.ToString() ?? "") == "settings")
+            {
+                NavView.SelectedItem = item;
+                break;
+            }
+        }
+    }
+
     private void OnNavigationChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         if (_suppressNavigation) return;
@@ -401,7 +411,6 @@ public sealed partial class MainWindow : Window
                 "chat" => typeof(ChatPage),
                 "conversations" => typeof(ConversationsPage),
                 "models" => typeof(ModelsPage),
-                "mcp" => typeof(McpServersPage),
                 "settings" => typeof(SettingsPage),
                 _ => typeof(ChatPage)
             };
@@ -419,7 +428,6 @@ public sealed partial class MainWindow : Window
             Type t when t == typeof(ChatPage) => "chat",
             Type t when t == typeof(ConversationsPage) => "conversations",
             Type t when t == typeof(ModelsPage) => "models",
-            Type t when t == typeof(McpServersPage) => "mcp",
             Type t when t == typeof(SettingsPage) => "settings",
             _ => null
         };
@@ -531,7 +539,6 @@ public sealed partial class MainWindow : Window
         _tokenTimer.Stop();
         _backend.StatusChanged -= OnBackendStatusChanged;
         NotificationService.Instance.NotificationRequested -= OnNotificationRequested;
-        try { await McpClientService.Instance.DisposeAsync(); } catch { /* ignore */ }
         _backend.Dispose();
         _api.Dispose();
     }

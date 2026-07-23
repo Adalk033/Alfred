@@ -13,6 +13,8 @@
     <Page.KeyboardAccelerators>
         <KeyboardAccelerator Modifiers="Control" Key="F" Invoked="OnFindAccelerator" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeAccelerator" />
+        <KeyboardAccelerator Modifiers="Control" Key="L" Invoked="OnFocusInputAccelerator" />
+        <KeyboardAccelerator Modifiers="Control" Key="N" Invoked="OnNewConversationAccelerator" />
     </Page.KeyboardAccelerators>
 
     <Grid Padding="0">
@@ -62,30 +64,47 @@
                            FontSize="11"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 <Button Grid.Column="3" Click="OnSearchPrev" Padding="6,4"
-                        ToolTipService.ToolTip="Anterior (Shift+Enter)">
+                        ToolTipService.ToolTip="Anterior (Shift+Enter)" AutomationProperties.Name="Coincidencia anterior">
                     <FontIcon Glyph="&#xE70E;" FontSize="11" />
                 </Button>
                 <Button Grid.Column="4" Click="OnSearchNext" Padding="6,4" Margin="4,0,0,0"
-                        ToolTipService.ToolTip="Siguiente (Enter)">
+                        ToolTipService.ToolTip="Siguiente (Enter)" AutomationProperties.Name="Coincidencia siguiente">
                     <FontIcon Glyph="&#xE70D;" FontSize="11" />
                 </Button>
                 <Button Grid.Column="5" Click="OnSearchClose" Padding="6,4" Margin="4,0,0,0"
-                        ToolTipService.ToolTip="Cerrar (Esc)">
+                        ToolTipService.ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar busqueda">
                     <FontIcon Glyph="&#xE711;" FontSize="11" />
                 </Button>
             </Grid>
         </Border>
 
         <!-- Lista de mensajes -->
-        <ScrollViewer x:Name="ChatScroll" Grid.Row="1"
-                      VerticalScrollMode="Enabled"
-                      VerticalScrollBarVisibility="Visible"
-                      HorizontalScrollMode="Disabled"
-                      HorizontalScrollBarVisibility="Disabled"
-                      Padding="24,16,24,8">
-            <StackPanel x:Name="MessagesPanel" Spacing="12"
-                        HorizontalAlignment="Stretch" />
-        </ScrollViewer>
+        <Grid Grid.Row="1">
+            <ScrollViewer x:Name="ChatScroll"
+                          VerticalScrollMode="Enabled"
+                          VerticalScrollBarVisibility="Visible"
+                          HorizontalScrollMode="Disabled"
+                          HorizontalScrollBarVisibility="Disabled"
+                          ViewChanged="OnChatScrollViewChanged"
+                          Padding="24,16,24,8">
+                <StackPanel x:Name="MessagesPanel" Spacing="12"
+                            HorizontalAlignment="Stretch" />
+            </ScrollViewer>
+
+            <!-- Boton "Ir al final": visible solo cuando el usuario subio -->
+            <Button x:Name="JumpToBottomButton"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                    Margin="0,0,0,12" Visibility="Collapsed"
+                    Click="OnJumpToBottom"
+                    Style="{StaticResource AccentButtonStyle}"
+                    CornerRadius="16" Padding="12,6"
+                    AutomationProperties.Name="Ir al final de la conversacion">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE74B;" FontSize="12" />
+                    <TextBlock Text="Ir al final" FontSize="12" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
         <!-- Panel de bienvenida (visible cuando no hay mensajes) -->
         <StackPanel x:Name="WelcomePanel" Grid.Row="1"
@@ -175,7 +194,7 @@
                         </ItemsRepeater.Layout>
                     </ItemsRepeater>
                     <Button Grid.Column="2" Click="OnRemoveAllAttachments" Padding="6,4"
-                            ToolTipService.ToolTip="Quitar todos los archivos">
+                            ToolTipService.ToolTip="Quitar todos los archivos" AutomationProperties.Name="Quitar todos los archivos">
                         <FontIcon Glyph="&#xE711;" FontSize="12" />
                     </Button>
                 </Grid>
@@ -190,29 +209,29 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Boton adjuntar archivo + toggle de modo agente -->
+            <!-- Boton adjuntar archivo + prompts rapidos -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4"
                         VerticalAlignment="Bottom" Margin="0,0,4,0">
                 <Button x:Name="AttachButton"
                         Click="OnAttachFile"
-                        ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)"
+                        ToolTipService.ToolTip="Adjuntar archivo (PDF, DOCX, TXT, etc.)" AutomationProperties.Name="Adjuntar archivo"
                         Width="38" Height="38">
                     <FontIcon Glyph="&#xE723;" FontSize="16" />
                 </Button>
-                <ToggleButton x:Name="AgentToggle"
-                              Width="38" Height="38"
-                              ToolTipService.ToolTip="Modo agente (usa MCP tools)"
-                              Checked="OnAgentToggleChanged"
-                              Unchecked="OnAgentToggleChanged">
-                    <FontIcon Glyph="&#xE945;" FontSize="16" />
-                </ToggleButton>
+                <Button x:Name="QuickPromptButton"
+                        ToolTipService.ToolTip="Prompts rapidos"
+                        AutomationProperties.Name="Prompts rapidos"
+                        Click="OnQuickPromptsOpening"
+                        Width="38" Height="38">
+                    <FontIcon Glyph="&#xE762;" FontSize="16" />
+                </Button>
             </StackPanel>
 
             <TextBox x:Name="InputBox" Grid.Column="1"
-                     PlaceholderText="Escribe tu pregunta..."
+                     PlaceholderText="Escribe tu pregunta... (Shift+Enter para nueva linea)"
                      FontSize="{x:Bind Prefs.BodyFontSize, Mode=OneWay}"
-                     AcceptsReturn="False"
-                     MaxHeight="120"
+                     AcceptsReturn="True"
+                     MaxHeight="160"
                      TextWrapping="Wrap"
                      KeyDown="OnInputKeyDown"
                      TextChanged="OnInputTextChanged"
@@ -226,7 +245,7 @@
                     Click="OnSendClick" Margin="8,0,0,0"
                     VerticalAlignment="Bottom" Width="38" Height="38"
                     IsEnabled="False"
-                    ToolTipService.ToolTip="Enviar">
+                    ToolTipService.ToolTip="Enviar" AutomationProperties.Name="Enviar mensaje">
                 <FontIcon Glyph="&#xE724;" FontSize="16" />
             </Button>
 
@@ -235,7 +254,7 @@
                     VerticalAlignment="Bottom" Width="38" Height="38"
                     Visibility="Collapsed"
                     Background="{ThemeResource SystemFillColorCriticalBrush}"
-                    ToolTipService.ToolTip="Detener generación">
+                    ToolTipService.ToolTip="Detener generación" AutomationProperties.Name="Detener generacion">
                 <FontIcon Glyph="&#xE73B;" FontSize="14" Foreground="White" />
             </Button>
         </Grid>

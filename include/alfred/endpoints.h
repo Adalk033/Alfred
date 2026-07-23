@@ -37,12 +37,6 @@ void handle_conversation_query_stream(const httplib::Request& req, httplib::Resp
 void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
 
-// Query agentico con tool-calling (Fase 0 plan VSC+MCP). SSE con eventos
-// adicionales `tool_call`. Acepta `tools` y `tool_results` en el body para
-// continuar bucles agenticos.
-void handle_query_agent_stream(const httplib::Request& req, httplib::Response& res,
-                                AlfredCore& core);
-
 // Conversaciones
 void handle_create_conversation(const httplib::Request& req, httplib::Response& res);
 void handle_list_conversations(const httplib::Request& req, httplib::Response& res);
@@ -89,10 +83,6 @@ void handle_set_model_config(const httplib::Request& req, httplib::Response& res
                               AlfredCore& core);
 void handle_autotune(const httplib::Request& req, httplib::Response& res,
                       AlfredCore& core);
-
-// Optimizaciones
-void handle_optimization_stats(const httplib::Request& req, httplib::Response& res,
-                                AlfredCore& core);
 
 // Tokens
 void handle_token_count(const httplib::Request& req, httplib::Response& res,

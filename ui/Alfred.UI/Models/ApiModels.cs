@@ -50,9 +50,6 @@ public sealed class QueryResponse
     [JsonPropertyName("answer")]
     public string Answer { get; set; } = "";
 
-    [JsonPropertyName("personal_data")]
-    public object? PersonalData { get; set; }
-
     [JsonPropertyName("from_cache")]
     public bool FromCache { get; set; }
 
@@ -136,6 +133,14 @@ public sealed class ModelInfo
 
     [JsonPropertyName("size_gb")]
     public double SizeGb { get; set; }
+
+    // Recomendacion segun VRAM detectada (calculada en el cliente). No viene
+    // del backend; se rellena en ModelsPage tras consultar el estado de GPU.
+    [JsonIgnore]
+    public string VramFit { get; set; } = "";
+
+    [JsonIgnore]
+    public bool HasVramFit => !string.IsNullOrEmpty(VramFit);
 }
 
 public sealed class ModelStatus

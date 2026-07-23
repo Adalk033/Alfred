@@ -335,6 +335,7 @@ QueryResult AlfredCore::generate_response(
     if (!llm_->is_loaded()) {
         result.answer = "Error: Modelo LLM no cargado. "
                        "Coloca un modelo GGUF en la carpeta de modelos.";
+        result.is_error = true;
         return result;
     }
 
@@ -347,9 +348,77 @@ QueryResult AlfredCore::generate_response(
         result.answer = extract_final_response_text(llm_result.text);
     } else {
         result.answer = "Error generando respuesta: " + llm_result.error;
+        result.is_error = true;
     }
 
     return result;
+}
+
+// ============================================================================
+// Cache LRU de respuestas (stateless)
+// ============================================================================
+size_t AlfredCore::cache_key(const std::string& question) const {
+    // Clave = hash(modelo + parametros de sampling + pregunta). Cambiar de
+    // modelo o de temperatura invalida entradas anteriores implicitamente.
+    const auto& cfg = get_config();
+    std::string material = llm_ ? llm_->model_name() : "";
+    material += "|t=" + std::to_string(cfg.temperature);
+    material += "|p=" + std::to_string(cfg.top_p);
+    material += "|k=" + std::to_string(cfg.top_k);
+    material += "|m=" + std::to_string(cfg.max_tokens);
+    material += "|q=" + question;
+    return std::hash<std::string>{}(material);
+}
+
+std::optional<std::string> AlfredCore::cache_lookup(size_t key) {
+    const auto& cfg = get_config();
+    if (cfg.query_cache_max <= 0) return std::nullopt;
+
+    std::lock_guard<std::mutex> lk(cache_mutex_);
+    auto it = query_cache_.find(key);
+    if (it == query_cache_.end()) return std::nullopt;
+
+    // Expiracion por TTL.
+    auto age = std::chrono::steady_clock::now() - it->second.stored_at;
+    if (std::chrono::duration_cast<std::chrono::seconds>(age).count()
+            > cfg.query_cache_ttl_seconds) {
+        query_cache_lru_.erase(it->second.lru_it);
+        query_cache_.erase(it);
+        return std::nullopt;
+    }
+
+    // Marcar como usado recientemente (mover al frente).
+    query_cache_lru_.erase(it->second.lru_it);
+    query_cache_lru_.push_front(key);
+    it->second.lru_it = query_cache_lru_.begin();
+    return it->second.answer;
+}
+
+void AlfredCore::cache_store(size_t key, const std::string& answer) {
+    const auto& cfg = get_config();
+    if (cfg.query_cache_max <= 0 || answer.empty()) return;
+
+    std::lock_guard<std::mutex> lk(cache_mutex_);
+    auto [it, inserted] = query_cache_.try_emplace(
+        key, CacheEntry{answer, std::chrono::steady_clock::now(), query_cache_lru_.end()});
+    if (inserted) {
+        query_cache_lru_.push_front(key);
+        it->second.lru_it = query_cache_lru_.begin();
+    } else {
+        it->second.answer = answer;
+        it->second.stored_at = std::chrono::steady_clock::now();
+        query_cache_lru_.erase(it->second.lru_it);
+        query_cache_lru_.push_front(key);
+        it->second.lru_it = query_cache_lru_.begin();
+    }
+
+    // Evicts LRU hasta respetar la capacidad.
+    while (query_cache_.size() > static_cast<size_t>(cfg.query_cache_max)
+            && !query_cache_lru_.empty()) {
+        size_t victim = query_cache_lru_.back();
+        query_cache_lru_.pop_back();
+        query_cache_.erase(victim);
+    }
 }
 
 // ============================================================================
@@ -357,6 +426,20 @@ QueryResult AlfredCore::generate_response(
 // ============================================================================
 QueryResult AlfredCore::query(const std::string& question,
                                const std::string& conversation_id) {
+    // Cache solo para queries sin conversacion (deterministas respecto a la
+    // entrada). Con historial la respuesta depende del contexto acumulado.
+    const bool cacheable = conversation_id.empty();
+    size_t key = 0;
+    if (cacheable) {
+        key = cache_key(question);
+        if (auto hit = cache_lookup(key)) {
+            QueryResult cached;
+            cached.answer = *hit;
+            cached.from_cache = true;
+            return cached;
+        }
+    }
+
     ensure_model_loaded();
 
     ModelLifecycle::Scope scope(lifecycle_);
@@ -391,6 +474,11 @@ QueryResult AlfredCore::query(const std::string& question,
     auto end = std::chrono::steady_clock::now();
     result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
+    // Guardar en cache solo respuestas validas de queries stateless.
+    if (cacheable && !result.is_error && !result.answer.empty()) {
+        cache_store(key, result.answer);
+    }
+
     return result;
 }
 
@@ -405,14 +493,17 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     ModelLifecycle::Scope scope(lifecycle_);
 
     uint64_t my_id = next_request_id_.fetch_add(1);
-    active_request_id_.store(my_id);
-    cancel_flag_.store(false);
+    auto my_cancel = std::make_shared<std::atomic<bool>>(false);
+    {
+        std::lock_guard<std::mutex> lk(requests_mutex_);
+        active_cancel_flags_[my_id] = my_cancel;
+    }
 
     if (on_started) on_started(my_id);
 
     auto cleanup_active = [this, my_id]() {
-        uint64_t expected = my_id;
-        active_request_id_.compare_exchange_strong(expected, 0);
+        std::lock_guard<std::mutex> lk(requests_mutex_);
+        active_cancel_flags_.erase(my_id);
     };
 
     auto start = std::chrono::steady_clock::now();
@@ -442,6 +533,7 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     if (!llm_->is_loaded()) {
         result.answer = "Error: Modelo LLM no cargado. "
                         "Coloca un modelo GGUF en la carpeta de modelos.";
+        result.is_error = true;
         if (on_token) on_token(result.answer);
         auto end = std::chrono::steady_clock::now();
         result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
@@ -454,8 +546,8 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     std::string raw_output;
     size_t emitted_chars = 0;
 
-    auto wrapped_cb = [this, &on_token, &raw_output, &emitted_chars](const std::string& tok) -> bool {
-        if (cancel_flag_.load()) return false;
+    auto wrapped_cb = [&my_cancel, &on_token, &raw_output, &emitted_chars](const std::string& tok) -> bool {
+        if (my_cancel->load()) return false;
 
         raw_output += tok;
         std::string visible = extract_final_response_text(raw_output);
@@ -470,7 +562,7 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     };
 
     auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
-    const bool was_cancelled = cancel_flag_.load();
+    const bool was_cancelled = my_cancel->load();
 
     if (llm_result.success || !llm_result.text.empty()) {
         if (raw_output.empty()) {
@@ -479,6 +571,7 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
         result.answer = extract_final_response_text(raw_output);
     } else {
         result.answer = "Error generando respuesta: " + llm_result.error;
+        result.is_error = true;
     }
     result.cancelled = was_cancelled;
 
@@ -489,171 +582,24 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     return result;
 }
 
-// ============================================================================
-// Query agentico con tool-calling (Fase 0 del plan VSC+MCP)
-// ============================================================================
-AlfredCore::AgentResult AlfredCore::query_agent_streaming(
-    const std::string&              question,
-    const std::vector<ToolSpec>&    tools,
-    const std::vector<ToolResult>&  tool_results,
-    StartedCallback                 on_started,
-    TokenStreamCallback             on_token,
-    ToolCallStreamCallback          on_tool_call,
-    const std::string&              conversation_id) {
-    ensure_model_loaded();
-    ModelLifecycle::Scope scope(lifecycle_);
-
-    uint64_t my_id = next_request_id_.fetch_add(1);
-    active_request_id_.store(my_id);
-    cancel_flag_.store(false);
-
-    if (on_started) on_started(my_id);
-
-    auto cleanup_active = [this, my_id]() {
-        uint64_t expected = my_id;
-        active_request_id_.compare_exchange_strong(expected, 0);
-    };
-
-    auto start = std::chrono::steady_clock::now();
-    AgentResult result;
-
-    if (!llm_->is_loaded()) {
-        result.answer = "Error: Modelo LLM no cargado. "
-                        "Coloca un modelo GGUF en la carpeta de modelos.";
-        if (on_token) on_token(result.answer);
-        auto end = std::chrono::steady_clock::now();
-        result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-        cleanup_active();
-        return result;
-    }
-
-    // 1. Contexto agentico: tools + historial de conversacion + tool_results.
-    //    Todo se mete en el placeholder {context} de la plantilla actual.
-    std::string conversation_context;
-    if (!conversation_id.empty()) {
-        const int context_max = llm_->context_length();
-        const int reserved    = get_config().max_tokens;
-        const int safety      = 256;   // mas margen porque inyectamos tools
-
-        int system_toks   = llm_->count_tokens(resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS));
-        int question_toks = llm_->count_tokens(question);
-        if (system_toks   < 0) system_toks   = 512;
-        if (question_toks < 0) question_toks = static_cast<int>(question.size()) / 4;
-
-        const int history_budget = context_max - reserved - system_toks - question_toks - safety;
-        if (history_budget > 0) {
-            auto msgs = ConversationManager::instance()
-                .select_history_within_budget(conversation_id, *llm_, history_budget);
-            conversation_context = ConversationManager::format_messages_as_context(msgs);
-        }
-    }
-
-    std::string agent_context = format_tools_section(tools);
-    if (!conversation_context.empty()) {
-        agent_context += "\n";
-        agent_context += conversation_context;
-    }
-    agent_context += format_tool_results_section(tool_results);
-
-    // En turnos de continuacion (question vacia con tool_results) inyectar
-    // un prompt interno para que el modelo no reciba {input} en blanco.
-    const std::string effective_question = (!question.empty())
-        ? question
-        : (!tool_results.empty()
-              ? "Tool results are above. Analyze them and decide the next step: "
-                "if another tool is needed output a <tool_call> block with valid JSON; "
-                "if the task is complete respond to the user directly in plain text."
-            : question);
-
-    std::string prompt = build_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, effective_question);
-
-    // 2. Parser de tool_calls envolviendo el callback de tokens.
-    ToolCallParser parser;
-
-    bool stream_ok = true;
-
-    std::string raw_visible_output;
-    size_t emitted_chars = 0;
-
-    auto wrapped_cb = [this, &parser, &on_token, &on_tool_call, &result, &stream_ok,
-                       &raw_visible_output, &emitted_chars]
-                      (const std::string& tok) -> bool {
-        if (cancel_flag_.load() || !stream_ok) return false;
-        parser.feed(tok,
-            [&](const std::string& clean) {
-                if (clean.empty()) return;
-                raw_visible_output += clean;
-                std::string filtered = extract_final_response_text(raw_visible_output);
-                if (filtered.size() <= emitted_chars) return;
-
-                std::string delta = filtered.substr(emitted_chars);
-                emitted_chars = filtered.size();
-                result.answer += delta;
-                if (on_token && !on_token(delta)) {
-                    stream_ok = false;
-                    cancel_flag_.store(true);
-                }
-            },
-            [&](const ToolCall& tc) {
-                result.tool_calls.push_back(tc);
-                if (on_tool_call && !on_tool_call(tc)) {
-                    stream_ok = false;
-                    cancel_flag_.store(true);
-                }
-            });
-        return stream_ok && !cancel_flag_.load();
-    };
-
-    auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
-
-    // Vaciar buffers retenidos (sufijos parciales / tool_calls sin cerrar).
-    parser.flush(
-        [&](const std::string& clean) {
-            if (!stream_ok || clean.empty()) return;
-            raw_visible_output += clean;
-            std::string filtered = extract_final_response_text(raw_visible_output);
-            if (filtered.size() <= emitted_chars) return;
-
-            std::string delta = filtered.substr(emitted_chars);
-            emitted_chars = filtered.size();
-            result.answer += delta;
-            if (on_token && !on_token(delta)) {
-                stream_ok = false;
-                cancel_flag_.store(true);
-            }
-        },
-        [&](const ToolCall& tc) {
-            if (!stream_ok) return;
-            result.tool_calls.push_back(tc);
-            if (on_tool_call && !on_tool_call(tc)) {
-                stream_ok = false;
-                cancel_flag_.store(true);
-            }
-        });
-
-    result.cancelled = cancel_flag_.load();
-    if (!llm_result.success && llm_result.text.empty() && !result.cancelled) {
-        std::string err = "\n[Error generando respuesta: " + llm_result.error + "]";
-        result.answer += err;
-        if (on_token) on_token(err);
-    }
-
-    // Recortar espacios extremos, igual que query_streaming.
-    result.answer = extract_final_response_text(result.answer);
-
-    auto end = std::chrono::steady_clock::now();
-    result.total_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
-
-    cleanup_active();
-    return result;
-}
-
 bool AlfredCore::cancel_query(uint64_t request_id) {
-    uint64_t active = active_request_id_.load();
-    if (active == 0) return false;
-    if (request_id != 0 && request_id != active) return false;
-    cancel_flag_.store(true);
-    log_info("Cancelacion solicitada para request_id=" + std::to_string(active));
+    std::lock_guard<std::mutex> lk(requests_mutex_);
+    if (active_cancel_flags_.empty()) return false;
+
+    if (request_id == 0) {
+        // Sin id: cancelar todos los requests activos.
+        for (auto& [id, flag] : active_cancel_flags_) {
+            flag->store(true);
+        }
+        log_info("Cancelacion solicitada para todos los requests activos ("
+                 + std::to_string(active_cancel_flags_.size()) + ")");
+        return true;
+    }
+
+    auto it = active_cancel_flags_.find(request_id);
+    if (it == active_cancel_flags_.end()) return false;
+    it->second->store(true);
+    log_info("Cancelacion solicitada para request_id=" + std::to_string(request_id));
     return true;
 }
 

@@ -194,6 +194,15 @@ public sealed partial class ModelsPage : Page
     {
         if (sender is not Button btn || btn.Tag is not HfGgufFile file) return;
 
+        // Ya hay una descarga en curso: no deshabilitar este boton (quedaria
+        // atascado porque DownloadModelAsync retorna sin invocar onProgress).
+        if (_downloader.IsDownloading)
+        {
+            NotificationService.Instance.ShowWarning(
+                "Ya hay una descarga en curso. Espera a que termine.", "Descarga");
+            return;
+        }
+
         btn.IsEnabled = false;
         btn.Content = "Descargando...";
 
@@ -237,10 +246,12 @@ public sealed partial class ModelsPage : Page
             });
         });
 
-        if (success)
-        {
+        // Reset defensivo: si la descarga fallo sin pasar por un callback que
+        // rehabilite el boton, restaurarlo aqui.
+        if (!success)
+            ResetDownloadUI(btn);
+        else
             await LoadData();
-        }
     }
 
     private void OnCancelDownload(object sender, RoutedEventArgs e)
@@ -279,8 +290,27 @@ public sealed partial class ModelsPage : Page
         }
 
         var models = ModelListHelpers.Deduplicate(await _api.ListModelsAsync());
+        await AnnotateVramFitAsync(models);
         ModelListView.ItemsSource = models;
         EmptyText.Visibility = models.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // Etiqueta cada modelo segun quepa o no en la VRAM libre detectada.
+    // El modelo pesado necesita ~1.15x su tamano en VRAM (pesos + overhead).
+    private async Task AnnotateVramFitAsync(List<ModelInfo> models)
+    {
+        if (_api == null) return;
+        var gpu = await _api.GetGpuStatusAsync();
+        if (gpu == null || !gpu.HasCuda || gpu.VramTotalMb <= 0) return;
+
+        double freeMb = Math.Max(0, gpu.VramTotalMb - gpu.VramUsedMb);
+        foreach (var m in models)
+        {
+            double neededMb = (m.SizeBytes / (1024.0 * 1024.0)) * 1.15;
+            m.VramFit = neededMb <= freeMb ? "Recomendado (cabe en VRAM)"
+                : neededMb <= gpu.VramTotalMb ? "Justo (usa casi toda la VRAM)"
+                : "VRAM insuficiente (correra parcial en CPU)";
+        }
     }
 
     private async void OnChangeModel(object sender, RoutedEventArgs e)
@@ -726,7 +756,7 @@ public sealed partial class ModelsPage : Page
     private void SetConfigMode(bool isAutoTuned)
     {
         _isAutoTuned = isAutoTuned;
-        ConfigModeText.Text = isAutoTuned ? "Recommended" : "Custom";
+        ConfigModeText.Text = isAutoTuned ? "Recomendado" : "Personalizado";
         ConfigModeBadge.Background = isAutoTuned
             ? new SolidColorBrush(Windows.UI.Color.FromArgb(40, 0, 180, 80))
             : new SolidColorBrush(Windows.UI.Color.FromArgb(30, 128, 128, 128));

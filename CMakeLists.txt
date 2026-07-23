@@ -29,7 +29,6 @@ endif()
 # Opciones de compilacion
 # ============================================================================
 option(ALFRED_CUDA        "Habilitar soporte CUDA para inferencia LLM"  ON)
-option(ALFRED_BUILD_LEARN "Compilar modulos de aprendizaje C++"         OFF)
 # Arquitecturas CUDA objetivo: 75=Turing (RTX 20xx), 86=Ampere (RTX 30xx/A-series), 89=Ada (RTX 40xx)
 # Para compilar solo para la GPU local, usar: -DALFRED_CUDA_ARCH=native
 set(ALFRED_CUDA_ARCH "75;86;89" CACHE STRING "Arquitecturas CUDA objetivo para distribucion")
@@ -189,7 +188,6 @@ set(ALFRED_SOURCES
     src/app/db_manager.cpp
     src/app/llm_engine.cpp
     src/app/model_lifecycle.cpp
-    src/app/tool_protocol.cpp
     src/app/alfred_core.cpp
     src/app/conversation_manager.cpp
     src/app/token_accountant.cpp
@@ -250,67 +248,3 @@ install(FILES "${PDFIUM_RUNTIME}"
     DESTINATION bin
     COMPONENT Runtime
 )
-
-# ============================================================================
-# Tests unitarios ligeros (no requieren llama.cpp ni httplib)
-# ============================================================================
-option(ALFRED_BUILD_TESTS "Compilar tests unitarios ligeros" ON)
-
-if(ALFRED_BUILD_TESTS)
-    add_executable(test_tool_protocol
-        tests/test_tool_protocol.cpp
-        src/app/tool_protocol.cpp
-    )
-    target_include_directories(test_tool_protocol PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-    )
-    target_link_libraries(test_tool_protocol PRIVATE
-        nlohmann_json::nlohmann_json
-    )
-    enable_testing()
-    add_test(NAME tool_protocol COMMAND test_tool_protocol)
-endif()
-
-# ============================================================================
-# Modulos de aprendizaje (opcionales, para estudio de C++)
-# ============================================================================
-if(ALFRED_BUILD_LEARN)
-    include_directories(${CMAKE_SOURCE_DIR}/include)
-
-    # Basicos
-    add_executable(learn_variables src/basics/variables.cpp)
-    add_executable(learn_control_flow src/basics/control_flow.cpp)
-    add_executable(learn_functions src/basics/functions.cpp)
-    add_executable(learn_arrays src/basics/arrays.cpp)
-
-    # POO
-    add_executable(learn_classes src/oop/classes.cpp)
-    add_executable(learn_inheritance src/oop/inheritance.cpp)
-    add_executable(learn_polymorphism src/oop/polymorphism.cpp)
-    add_executable(learn_encapsulation src/oop/encapsulation.cpp)
-
-    # Memoria
-    add_executable(learn_pointers src/memory/pointers.cpp)
-    add_executable(learn_references src/memory/references.cpp)
-    add_executable(learn_smart_pointers src/memory/smart_pointers.cpp)
-    add_executable(learn_dynamic_allocation src/memory/dynamic_allocation.cpp)
-
-    # STL
-    add_executable(learn_vectors src/stl/vectors.cpp)
-    add_executable(learn_maps src/stl/maps.cpp)
-    add_executable(learn_iterators src/stl/iterators.cpp)
-    add_executable(learn_algorithms src/stl/algorithms.cpp)
-
-    # Templates
-    add_executable(learn_function_templates src/templates/function_templates.cpp)
-    add_executable(learn_class_templates src/templates/class_templates.cpp)
-
-    # Avanzado
-    add_executable(learn_move_semantics src/advanced/move_semantics.cpp)
-    add_executable(learn_lambdas src/advanced/lambdas.cpp)
-    add_executable(learn_concurrency src/advanced/concurrency.cpp)
-    add_executable(learn_file_io src/advanced/file_io.cpp)
-
-    # Tests
-    add_executable(run_tests tests/test_basics.cpp)
-endif()

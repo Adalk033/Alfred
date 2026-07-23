@@ -10,6 +10,7 @@
 
 #include <string>
 #include <vector>
+#include <mutex>
 
 namespace alfred {
 
@@ -53,8 +54,8 @@ public:
     // Refrescar info de GPU (re-detectar VRAM actual)
     void refresh();
 
-    // Obtener informacion de GPU
-    const GPUInfo& info() const;
+    // Obtener informacion de GPU (copia: refresh() puede mutar en paralelo)
+    GPUInfo info() const;
 
     // Tiene GPU CUDA disponible?
     bool has_cuda() const;
@@ -76,6 +77,11 @@ public:
 
 private:
     GPUManager() = default;
+    void detect_locked();   // cuerpo de detect(); requiere info_mutex_ tomado
+
+    // refresh() (handlers de /models/autotune, change_model) muta gpu_info_
+    // mientras /health lo lee desde otro thread: todo acceso va con lock.
+    mutable std::mutex info_mutex_;
     GPUInfo gpu_info_;
     bool detected_ = false;
 };

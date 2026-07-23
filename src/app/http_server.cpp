@@ -26,8 +26,8 @@ HttpServer::~HttpServer() {
 bool HttpServer::setup(AlfredCore& core) {
     if (!server_) return false;
 
-    // CORS
-    setup_cors();
+    // Pre-routing: autenticacion por token + preflight CORS
+    setup_pre_routing();
 
     // Logging middleware
     setup_logging();
@@ -82,21 +82,33 @@ bool HttpServer::setup(AlfredCore& core) {
     return true;
 }
 
-void HttpServer::setup_cors() {
+void HttpServer::setup_pre_routing() {
+    // Captura por valor del token para el closure.
+    std::string token = auth_token_;
     server_->set_pre_routing_handler(
-        [](const httplib::Request& req, httplib::Response& res) -> httplib::Server::HandlerResponse {
-            // Headers CORS para todas las respuestas
-            res.set_header("Access-Control-Allow-Origin", "*");
+        [token](const httplib::Request& req, httplib::Response& res) -> httplib::Server::HandlerResponse {
+            // Sin CORS con wildcard: la UI usa HttpClient (no navegador) y no
+            // lo necesita. Evitar "Allow-Origin: *" cierra el hueco por el que
+            // cualquier pagina web podia invocar la API local (CSRF).
             res.set_header("Access-Control-Allow-Methods",
                           "GET, POST, PUT, DELETE, OPTIONS, PATCH");
             res.set_header("Access-Control-Allow-Headers",
-                          "Content-Type, Authorization, X-Requested-With, Accept");
-            res.set_header("Access-Control-Max-Age", "86400");
+                          "Content-Type, X-Alfred-Token, Accept");
 
-            // Preflight OPTIONS
+            // Preflight OPTIONS: responder sin exigir token.
             if (req.method == "OPTIONS") {
                 res.status = 204;
                 return httplib::Server::HandlerResponse::Handled;
+            }
+
+            // Autenticacion por token compartido UI<->backend. /health queda
+            // exento para sondeos de disponibilidad.
+            if (!token.empty() && req.path != "/health") {
+                if (req.get_header_value("X-Alfred-Token") != token) {
+                    res.status = 401;
+                    res.set_content(R"({"error":"No autorizado"})", "application/json");
+                    return httplib::Server::HandlerResponse::Handled;
+                }
             }
 
             return httplib::Server::HandlerResponse::Unhandled;
@@ -120,25 +132,37 @@ void HttpServer::setup_logging() {
         });
 }
 
-void HttpServer::start(const std::string& host, int port) {
+bool HttpServer::bind(const std::string& host, int port) {
     if (!server_) {
         log_error("Servidor no inicializado");
+        return false;
+    }
+
+    // bind_to_port reserva el socket de inmediato: si el puerto esta ocupado
+    // falla aqui, antes de que main reporte "listo".
+    int bound = server_->bind_to_port(host, port);
+    if (bound <= 0) {
+        log_error("Error: No se pudo reservar el puerto " +
+                  host + ":" + std::to_string(port) + " (¿en uso?)");
+        return false;
+    }
+
+    log_info("=== Alfred HTTP Server enlazado en http://" + host + ":" +
+             std::to_string(port) + " ===");
+    running_ = true;
+    return true;
+}
+
+void HttpServer::start() {
+    if (!server_ || !running_) {
+        log_error("start() requiere un bind() previo exitoso");
         return;
     }
-
-    log_info("=== Iniciando Alfred HTTP Server ===");
-    log_info("Escuchando en http://" + host + ":" + std::to_string(port));
-    log_info("CORS habilitado para todos los origenes");
-    log_info("Presiona Ctrl+C para detener");
-
-    running_ = true;
-
-    if (!server_->listen(host, port)) {
-        log_error("Error: No se pudo iniciar el servidor en " +
-                  host + ":" + std::to_string(port));
-        log_error("Verifica que el puerto no este en uso");
-        running_ = false;
+    log_info("Escuchando (Ctrl+C para detener)");
+    if (!server_->listen_after_bind()) {
+        log_error("Error durante la escucha del servidor");
     }
+    running_ = false;
 }
 
 void HttpServer::stop() {

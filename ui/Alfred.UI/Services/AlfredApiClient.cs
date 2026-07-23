@@ -17,7 +17,7 @@ public sealed partial class AlfredApiClient : IDisposable
         PropertyNameCaseInsensitive = true
     };
 
-    public AlfredApiClient(string host = "127.0.0.1", int port = 8000)
+    public AlfredApiClient(string host = "127.0.0.1", int port = 8000, string? authToken = null)
     {
         _baseUrl = $"http://{host}:{port}";
         _http = new HttpClient
@@ -25,6 +25,10 @@ public sealed partial class AlfredApiClient : IDisposable
             BaseAddress = new Uri(_baseUrl),
             Timeout = Timeout.InfiniteTimeSpan   // cada metodo controla su propio timeout via CTS
         };
+        // Token de sesion compartido con el backend (X-Alfred-Token). Todas
+        // las peticiones lo llevan por defecto; /health lo ignora.
+        if (!string.IsNullOrEmpty(authToken))
+            _http.DefaultRequestHeaders.Add("X-Alfred-Token", authToken);
     }
 
     // ========================================================================

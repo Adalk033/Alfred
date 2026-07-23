@@ -3,19 +3,6 @@ using System.Net.Http.Headers;
 namespace Alfred.UI.Services;
 
 /// <summary>
-/// Catalogo de modelos GGUF recomendados con URLs de descarga de HuggingFace.
-/// </summary>
-public sealed class RecommendedModel
-{
-    public required string Name { get; init; }
-    public required string FileName { get; init; }
-    public required string Url { get; init; }
-    public required string Type { get; init; }     // "llm"
-    public required string SizeLabel { get; init; } // ej. "~6.5 GB"
-    public required string Description { get; init; }
-}
-
-/// <summary>
 /// Progreso de descarga de un modelo.
 /// </summary>
 public sealed class DownloadProgress
@@ -38,8 +25,6 @@ public sealed class ModelDownloadService : IDisposable
     private readonly string _modelsDir;
     private CancellationTokenSource? _cts;
     private bool _disposed;
-
-    public static readonly List<RecommendedModel> Catalog = [];
 
     public bool IsDownloading { get; private set; }
 
@@ -93,7 +78,6 @@ public sealed class ModelDownloadService : IDisposable
             if (File.Exists(targetPath))
             {
                 progress.IsCompleted = true;
-                progress.Percentage.GetHashCode(); // trigger
                 onProgress(progress);
                 return true;
             }
@@ -103,6 +87,14 @@ public sealed class ModelDownloadService : IDisposable
             using var headResponse = await _http.SendAsync(headRequest, _cts.Token);
             long totalBytes = headResponse.Content.Headers.ContentLength ?? 0;
             progress.TotalBytes = totalBytes;
+
+            // Verificar espacio libre antes de empezar (los GGUF pesan varios GB).
+            if (totalBytes > 0 && !HasEnoughFreeSpace(totalBytes))
+            {
+                progress.Error = "Espacio en disco insuficiente para descargar el modelo.";
+                onProgress(progress);
+                return false;
+            }
 
             // Soporte de reanudacion: verificar descarga parcial
             long existingBytes = 0;
@@ -185,6 +177,26 @@ public sealed class ModelDownloadService : IDisposable
             IsDownloading = false;
             _cts?.Dispose();
             _cts = null;
+        }
+    }
+
+    /// <summary>
+    /// Comprueba que el volumen de destino tenga sitio para el archivo mas un
+    /// margen del 5% (metadatos, archivo temporal .downloading, etc.).
+    /// </summary>
+    private bool HasEnoughFreeSpace(long requiredBytes)
+    {
+        try
+        {
+            string? root = Path.GetPathRoot(Path.GetFullPath(_modelsDir));
+            if (string.IsNullOrEmpty(root)) return true;   // no verificable: no bloquear
+            var drive = new DriveInfo(root);
+            long needed = requiredBytes + requiredBytes / 20;   // +5%
+            return drive.AvailableFreeSpace >= needed;
+        }
+        catch
+        {
+            return true;   // ante cualquier error, no bloquear la descarga
         }
     }
 

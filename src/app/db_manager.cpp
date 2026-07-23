@@ -43,6 +43,7 @@ DBManager& DBManager::instance() {
 }
 
 void DBManager::initialize(const std::string& db_path) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     if (initialized_) return;
     db_path_ = db_path;
 
@@ -260,6 +261,7 @@ void DBManager::run_migrations() {
 // Conversaciones
 // ============================================================================
 std::string DBManager::create_conversation(const std::string& title) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     std::string id = generate_uuid();
     std::string now = current_timestamp();
 
@@ -275,6 +277,7 @@ std::string DBManager::create_conversation(const std::string& title) {
 }
 
 std::optional<ConversationThread> DBManager::get_conversation(const std::string& id) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "SELECT id, title, created_at, updated_at, metadata FROM conversation_threads WHERE id = ?");
     query.bind(1, id);
@@ -292,6 +295,7 @@ std::optional<ConversationThread> DBManager::get_conversation(const std::string&
 }
 
 std::vector<ConversationThread> DBManager::list_conversations(int limit, int offset) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     std::vector<ConversationThread> result;
     SQLite::Statement query(*g_db,
         "SELECT id, title, created_at, updated_at, metadata "
@@ -312,6 +316,7 @@ std::vector<ConversationThread> DBManager::list_conversations(int limit, int off
 }
 
 void DBManager::update_conversation_title(const std::string& id, const std::string& title) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "UPDATE conversation_threads SET title = ?, updated_at = ? WHERE id = ?");
     query.bind(1, title);
@@ -321,12 +326,14 @@ void DBManager::update_conversation_title(const std::string& id, const std::stri
 }
 
 void DBManager::delete_conversation(const std::string& id) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db, "DELETE FROM conversation_threads WHERE id = ?");
     query.bind(1, id);
     query.exec();
 }
 
 int DBManager::delete_conversations(const std::vector<std::string>& ids) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     if (ids.empty()) return 0;
 
     SQLite::Transaction tx(*g_db);
@@ -346,6 +353,7 @@ int DBManager::delete_conversations(const std::vector<std::string>& ids) {
 
 void DBManager::add_message(const std::string& conversation_id, const std::string& role,
                              const std::string& content, const std::string& metadata) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
     std::string enc_content = enc.encrypt_if_enabled(content);
 
@@ -368,6 +376,7 @@ void DBManager::add_message(const std::string& conversation_id, const std::strin
 
 std::vector<ConversationMessage> DBManager::get_messages(const std::string& conversation_id,
                                                           int limit) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
     std::vector<ConversationMessage> result;
 
@@ -394,6 +403,7 @@ std::vector<ConversationMessage> DBManager::get_messages(const std::string& conv
 }
 
 void DBManager::clear_messages(const std::string& conversation_id) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "DELETE FROM conversation_messages WHERE conversation_id = ?");
     query.bind(1, conversation_id);
@@ -401,6 +411,7 @@ void DBManager::clear_messages(const std::string& conversation_id) {
 }
 
 std::vector<ConversationThread> DBManager::search_conversations(const std::string& query_str) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     std::vector<ConversationThread> result;
     SQLite::Statement query(*g_db,
         "SELECT DISTINCT t.id, t.title, t.created_at, t.updated_at, t.metadata "
@@ -426,6 +437,7 @@ std::vector<ConversationThread> DBManager::search_conversations(const std::strin
 }
 
 std::optional<std::string> DBManager::get_conversation_metadata(const std::string& id) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "SELECT metadata FROM conversation_threads WHERE id = ?");
     query.bind(1, id);
@@ -436,6 +448,7 @@ std::optional<std::string> DBManager::get_conversation_metadata(const std::strin
 }
 
 void DBManager::update_conversation_metadata(const std::string& id, const std::string& metadata) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "UPDATE conversation_threads SET metadata = ?, updated_at = ? WHERE id = ?");
     query.bind(1, metadata);
@@ -448,20 +461,23 @@ void DBManager::update_conversation_metadata(const std::string& id, const std::s
 // Memoria key-value
 // ============================================================================
 void DBManager::set_memory(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
+    // La clave se guarda en claro: AES-GCM usa IV aleatorio, asi que una
+    // clave encriptada nunca volveria a coincidir en un WHERE key = ?.
+    // Solo el valor es sensible.
     SQLite::Statement query(*g_db,
         "INSERT OR REPLACE INTO memory (key, value) VALUES (?, ?)");
-    query.bind(1, enc.encrypt_if_enabled(key));
+    query.bind(1, key);
     query.bind(2, enc.encrypt_if_enabled(value));
     query.exec();
 }
 
 std::optional<std::string> DBManager::get_memory(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
-    // Buscar encriptado
-    std::string enc_key = enc.encrypt_if_enabled(key);
     SQLite::Statement query(*g_db, "SELECT value FROM memory WHERE key = ?");
-    query.bind(1, enc_key);
+    query.bind(1, key);
     if (query.executeStep()) {
         return enc.decrypt_if_enabled(query.getColumn(0).getString());
     }
@@ -469,6 +485,7 @@ std::optional<std::string> DBManager::get_memory(const std::string& key) {
 }
 
 std::unordered_map<std::string, std::string> DBManager::get_all_memory() {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
     std::unordered_map<std::string, std::string> result;
     SQLite::Statement query(*g_db, "SELECT key, value FROM memory");
@@ -481,9 +498,9 @@ std::unordered_map<std::string, std::string> DBManager::get_all_memory() {
 }
 
 void DBManager::delete_memory(const std::string& key) {
-    auto& enc = Encryption::instance();
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db, "DELETE FROM memory WHERE key = ?");
-    query.bind(1, enc.encrypt_if_enabled(key));
+    query.bind(1, key);
     query.exec();
 }
 
@@ -491,6 +508,7 @@ void DBManager::delete_memory(const std::string& key) {
 // Configuracion de usuario
 // ============================================================================
 void DBManager::set_user_setting(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
     bool is_sensitive = SENSITIVE_USER_SETTINGS.count(key) > 0;
     std::string stored_value = is_sensitive ? enc.encrypt_if_enabled(value) : value;
@@ -503,6 +521,7 @@ void DBManager::set_user_setting(const std::string& key, const std::string& valu
 }
 
 std::optional<std::string> DBManager::get_user_setting(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
     SQLite::Statement query(*g_db, "SELECT value FROM user_settings WHERE key = ?");
     query.bind(1, key);
@@ -515,6 +534,7 @@ std::optional<std::string> DBManager::get_user_setting(const std::string& key) {
 }
 
 std::unordered_map<std::string, std::string> DBManager::get_all_user_settings() {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     auto& enc = Encryption::instance();
     std::unordered_map<std::string, std::string> result;
     SQLite::Statement query(*g_db, "SELECT key, value FROM user_settings");
@@ -528,6 +548,7 @@ std::unordered_map<std::string, std::string> DBManager::get_all_user_settings() 
 }
 
 void DBManager::delete_user_setting(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db, "DELETE FROM user_settings WHERE key = ?");
     query.bind(1, key);
     query.exec();
@@ -537,6 +558,7 @@ void DBManager::delete_user_setting(const std::string& key) {
 // Configuracion de modelos (NO encriptada)
 // ============================================================================
 void DBManager::set_model_setting(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "INSERT OR REPLACE INTO model_settings (key, value) VALUES (?, ?)");
     query.bind(1, key);
@@ -545,6 +567,7 @@ void DBManager::set_model_setting(const std::string& key, const std::string& val
 }
 
 std::optional<std::string> DBManager::get_model_setting(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db, "SELECT value FROM model_settings WHERE key = ?");
     query.bind(1, key);
     if (query.executeStep()) {
@@ -554,6 +577,7 @@ std::optional<std::string> DBManager::get_model_setting(const std::string& key) 
 }
 
 std::unordered_map<std::string, std::string> DBManager::get_all_model_settings() {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     std::unordered_map<std::string, std::string> result;
     SQLite::Statement query(*g_db, "SELECT key, value FROM model_settings");
     while (query.executeStep()) {
@@ -566,6 +590,7 @@ std::unordered_map<std::string, std::string> DBManager::get_all_model_settings()
 // Rutas de documentos
 // ============================================================================
 int64_t DBManager::add_document_path(const std::string& path) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "INSERT OR IGNORE INTO document_paths (path, added_at) VALUES (?, ?)");
     query.bind(1, path);
@@ -575,6 +600,7 @@ int64_t DBManager::add_document_path(const std::string& path) {
 }
 
 std::vector<DocumentPath> DBManager::get_document_paths() {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     std::vector<DocumentPath> result;
     SQLite::Statement query(*g_db,
         "SELECT id, path, enabled, documents_count, added_at FROM document_paths ORDER BY added_at");
@@ -591,6 +617,7 @@ std::vector<DocumentPath> DBManager::get_document_paths() {
 }
 
 void DBManager::update_document_path(int64_t id, bool enabled) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "UPDATE document_paths SET enabled = ? WHERE id = ?");
     query.bind(1, enabled ? 1 : 0);
@@ -599,6 +626,7 @@ void DBManager::update_document_path(int64_t id, bool enabled) {
 }
 
 void DBManager::delete_document_path(int64_t id) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db, "DELETE FROM document_paths WHERE id = ?");
     query.bind(1, id);
     query.exec();
@@ -609,6 +637,7 @@ void DBManager::delete_document_path(int64_t id) {
 // ============================================================================
 void DBManager::insert_document_meta(const std::string& file_path,
                                       const std::string& file_hash, int chunk_count) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "INSERT OR REPLACE INTO documents_meta (file_path, file_hash, chunk_count, status, indexed_at) "
         "VALUES (?, ?, ?, 'indexed', ?)");
@@ -620,6 +649,7 @@ void DBManager::insert_document_meta(const std::string& file_path,
 }
 
 std::unordered_map<std::string, std::string> DBManager::get_all_document_hashes() {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     std::unordered_map<std::string, std::string> result;
     SQLite::Statement query(*g_db,
         "SELECT file_path, file_hash FROM documents_meta WHERE status = 'indexed'");
@@ -630,12 +660,14 @@ std::unordered_map<std::string, std::string> DBManager::get_all_document_hashes(
 }
 
 void DBManager::delete_document_meta(const std::string& file_path) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db, "DELETE FROM documents_meta WHERE file_path = ?");
     query.bind(1, file_path);
     query.exec();
 }
 
 void DBManager::update_document_status(const std::string& file_path, const std::string& status) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "UPDATE documents_meta SET status = ? WHERE file_path = ?");
     query.bind(1, status);
@@ -644,6 +676,7 @@ void DBManager::update_document_status(const std::string& file_path, const std::
 }
 
 json DBManager::get_document_stats() {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     json stats;
 
     SQLite::Statement total_q(*g_db, "SELECT COUNT(*) FROM documents_meta WHERE status = 'indexed'");
@@ -662,6 +695,7 @@ json DBManager::get_document_stats() {
 // Settings de app
 // ============================================================================
 void DBManager::set_app_setting(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db,
         "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)");
     query.bind(1, key);
@@ -670,6 +704,7 @@ void DBManager::set_app_setting(const std::string& key, const std::string& value
 }
 
 std::optional<std::string> DBManager::get_app_setting(const std::string& key) {
+    std::lock_guard<std::mutex> lock(db_mutex_);
     SQLite::Statement query(*g_db, "SELECT value FROM app_settings WHERE key = ?");
     query.bind(1, key);
     if (query.executeStep()) {

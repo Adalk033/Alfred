@@ -12,11 +12,13 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <unordered_map>
+#include <list>
+#include <optional>
 #include <nlohmann/json.hpp>
 
 #include "alfred/llm_engine.h"
 #include "alfred/model_lifecycle.h"
-#include "alfred/tool_protocol.h"
 
 namespace alfred {
 
@@ -24,9 +26,9 @@ using json = nlohmann::json;
 
 struct QueryResult {
     std::string answer;
-    std::string personal_data;      // JSON de datos personales extraidos
     bool from_cache = false;
     bool cancelled = false;         // true si el usuario cancelo el streaming
+    bool is_error = false;          // true si la generacion fallo (no persistir)
     double total_time_ms = 0.0;
 };
 
@@ -65,35 +67,6 @@ public:
     // activo sin importar id. Devuelve true si habia algo que cancelar.
     bool cancel_query(uint64_t request_id = 0);
 
-    // ------------------------------------------------------------------
-    // Modo agente (Fase 0 del plan VSC+MCP)
-    // ------------------------------------------------------------------
-    using ToolCallStreamCallback = std::function<bool(const ToolCall&)>;
-
-    struct AgentResult {
-        std::string answer;             // texto generado tras filtrar tool_calls
-        std::vector<ToolCall> tool_calls;
-        bool   cancelled    = false;
-        double total_time_ms = 0.0;
-    };
-
-    // Variante agentica de query_streaming. El system prompt se aumenta
-    // con la lista de `tools` y, si vienen, los `tool_results` previos
-    // (continuaciones del bucle agentico). Los tokens generados pasan por
-    // un parser que separa texto visible de `<tool_call>` estructuradas.
-    //
-    // No persiste nada en el conversation manager: el cliente decide cuando
-    // guardar el turno, porque puede haber multiples tool_calls antes de
-    // tener una respuesta final del modelo.
-    AgentResult query_agent_streaming(
-        const std::string&              question,
-        const std::vector<ToolSpec>&    tools,
-        const std::vector<ToolResult>&  tool_results,
-        StartedCallback                 on_started,
-        TokenStreamCallback             on_token,
-        ToolCallStreamCallback          on_tool_call,
-        const std::string&              conversation_id = "");
-
     // Cambiar modelo LLM
     ModelChangeResult change_model(const std::string& model_path);
 
@@ -120,10 +93,31 @@ private:
 
     bool initialized_ = false;
 
-    // Cancelacion de streaming: id incremental del request activo y flag.
+    // Cancelacion de streaming: cada request registra su propio flag de
+    // cancelacion en un mapa (un flag global permitia que un request B
+    // concurrente anulara la cancelacion pendiente de A).
     std::atomic<uint64_t> next_request_id_{1};
-    std::atomic<uint64_t> active_request_id_{0};
-    std::atomic<bool>     cancel_flag_{false};
+    std::mutex requests_mutex_;
+    std::unordered_map<uint64_t, std::shared_ptr<std::atomic<bool>>> active_cancel_flags_;
+
+    // ------------------------------------------------------------------
+    // Cache LRU de respuestas (la que anuncia el README). Solo para queries
+    // sin conversacion (stateless): clave = hash(modelo + pregunta + params).
+    // TTL y capacidad configurables (query_cache_*). max=0 la deshabilita.
+    // ------------------------------------------------------------------
+    struct CacheEntry {
+        std::string answer;
+        std::chrono::steady_clock::time_point stored_at;
+        std::list<size_t>::iterator lru_it;
+    };
+    std::mutex cache_mutex_;
+    std::unordered_map<size_t, CacheEntry> query_cache_;
+    std::list<size_t> query_cache_lru_;
+
+    size_t cache_key(const std::string& question) const;
+    // Devuelve la respuesta cacheada valida (dentro del TTL) o nullopt.
+    std::optional<std::string> cache_lookup(size_t key);
+    void cache_store(size_t key, const std::string& answer);
 
     // Generar respuesta (conocimiento general)
     QueryResult generate_response(const std::string& question,

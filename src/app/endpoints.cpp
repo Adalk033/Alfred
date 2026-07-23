@@ -15,7 +15,6 @@
 #include "alfred/string_utils.h"
 #include "alfred/token_accountant.h"
 #include "alfred/pdf_extractor.h"
-#include "alfred/tool_protocol.h"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -206,8 +205,6 @@ void handle_query(const httplib::Request& req, httplib::Response& res,
 
     json data;
     data["answer"] = result.answer;
-    data["personal_data"] = result.personal_data.empty() ? json(nullptr)
-                            : json::parse(result.personal_data, nullptr, false);
     data["from_cache"] = result.from_cache;
     data["time_ms"] = result.total_time_ms;
     json_ok(res, data);
@@ -292,10 +289,11 @@ static void run_query_stream(const httplib::Request& req,
             QueryResult result = core.query_streaming(
                 captured_full, on_started, on_token, captured_conv_id);
 
-            // Guardar la respuesta completa del asistente en la conversacion
+            // Guardar la respuesta completa del asistente en la conversacion.
+            // Se usa el flag is_error (no un substring "Error", que descartaba
+            // respuestas validas que mencionaran la palabra).
             if (!captured_conv_id.empty() && !result.cancelled &&
-                !result.answer.empty() &&
-                result.answer.find("Error") == std::string::npos) {
+                !result.is_error && !result.answer.empty()) {
                 ConversationManager::instance().add_message(
                     captured_conv_id, "assistant", extract_final_response_text(result.answer));
             }
@@ -351,191 +349,6 @@ void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
 }
 
 // ============================================================================
-// Query agentico (tool-calling)
-// ============================================================================
-
-// Helper: parsea un array de ToolSpec desde JSON. Tolera campos faltantes.
-static std::vector<ToolSpec> parse_tools(const json& arr) {
-    std::vector<ToolSpec> out;
-    if (!arr.is_array()) return out;
-    for (const auto& item : arr) {
-        if (!item.is_object()) continue;
-        ToolSpec t;
-        t.name        = item.value("name", std::string{});
-        if (t.name.empty()) continue;
-        t.description = item.value("description", std::string{});
-        if (item.contains("input_schema")) {
-            t.input_schema = item["input_schema"];
-        } else {
-            t.input_schema = json::object();
-        }
-        out.push_back(std::move(t));
-    }
-    return out;
-}
-
-// Helper: parsea un array de ToolResult desde JSON.
-static std::vector<ToolResult> parse_tool_results(const json& arr) {
-    std::vector<ToolResult> out;
-    if (!arr.is_array()) return out;
-    for (const auto& item : arr) {
-        if (!item.is_object()) continue;
-        ToolResult r;
-        r.id      = item.value("id", std::string{});
-        // content puede venir como string directo o como objeto que serializamos
-        if (item.contains("content")) {
-            const auto& c = item["content"];
-            r.content = c.is_string() ? c.get<std::string>() : c.dump();
-        }
-        r.is_error = item.value("is_error", false);
-        if (r.id.empty() && r.content.empty()) continue;
-        out.push_back(std::move(r));
-    }
-    return out;
-}
-
-void handle_query_agent_stream(const httplib::Request& req, httplib::Response& res,
-                                AlfredCore& core) {
-    log_info("agent_stream: parse_body(begin)");
-    json body;
-    if (!parse_body(req, res, body)) return;
-    log_info("agent_stream: parse_body(done)");
-
-    std::string question = body.value("question", "");
-    std::string conv_id = body.value("conversation_id", "");
-
-    std::vector<ToolSpec> tools = body.contains("tools")
-        ? parse_tools(body["tools"]) : std::vector<ToolSpec>{};
-    std::vector<ToolResult> tool_results = body.contains("tool_results")
-        ? parse_tool_results(body["tool_results"]) : std::vector<ToolResult>{};
-
-    // En continuaciones del loop agentico permitimos question vacia si llegan
-    // tool_results. Primera iteracion: question sigue siendo obligatoria.
-    if (question.empty() && tool_results.empty()) {
-        json_error(res, 400, "Campo 'question' requerido salvo continuaciones con 'tool_results'");
-        return;
-    }
-
-    // Inyectar archivos adjuntos como contexto adicional (mismo formato que /query).
-    std::string attached_context = extract_attached_context(body);
-    std::string full_question = question;
-    if (!question.empty() && !attached_context.empty()) {
-        full_question = "Contexto de archivos adjuntos:\n" + attached_context +
-                        "\n\nPregunta del usuario: " + question;
-    } else if (question.empty() && !attached_context.empty()) {
-        full_question = "Contexto de archivos adjuntos:\n" + attached_context;
-    }
-
-    // Guardar pregunta del usuario al inicio de un turno nuevo (no continuaciones de tool_results)
-    if (!conv_id.empty() && !question.empty() && tool_results.empty()) {
-        ConversationManager::instance().add_message(conv_id, "user", question);
-    }
-
-    log_info("Agent query: " + truncate(question, 80) +
-             " | tools=" + std::to_string(tools.size()) +
-             " | tool_results=" + std::to_string(tool_results.size()) +
-             (conv_id.empty() ? "" : " | conv=" + conv_id));
-    log_info("agent_stream: validate+prepare(done)");
-
-    res.set_header("Cache-Control", "no-cache");
-    res.set_header("Connection", "keep-alive");
-    res.set_header("X-Accel-Buffering", "no");
-
-    // Capturar por valor: el provider chunked sobrevive al stack de este handler.
-    std::string captured_question = full_question;
-    std::string captured_conv_id  = conv_id;
-    auto        captured_tools    = std::move(tools);
-    auto        captured_results  = std::move(tool_results);
-
-    res.set_chunked_content_provider(
-        "text/event-stream",
-        [&core, captured_question, captured_conv_id, captured_tools, captured_results]
-        (size_t /*offset*/, httplib::DataSink& sink) -> bool {
-            log_info("agent_stream: provider(start)");
-            bool stream_alive = true;
-
-            auto write_event = [&sink](const std::string& evt, const json& data) -> bool {
-                if (sink.is_writable && !sink.is_writable()) return false;
-                std::string out = sse_event(evt, data);
-                return sink.write(out.data(), out.size());
-            };
-
-            uint64_t current_request_id = 0;
-
-            auto on_started = [&](uint64_t rid) {
-                log_info("agent_stream: on_started");
-                current_request_id = rid;
-                if (!write_event("start", json{{"request_id", rid}})) {
-                    stream_alive = false;
-                }
-            };
-
-            auto on_token = [&](const std::string& tok) -> bool {
-                if (!stream_alive) return false;
-                stream_alive = write_event("token", json{{"text", tok}});
-                return stream_alive;
-            };
-
-            auto on_tool_call = [&](const ToolCall& tc) -> bool {
-                if (!stream_alive) return false;
-                json data;
-                data["id"]        = tc.id;
-                data["name"]      = tc.name;
-                data["arguments"] = tc.arguments;
-                stream_alive = write_event("tool_call", data);
-                return stream_alive;
-            };
-
-            log_info("agent_stream: query_agent_streaming(begin)");
-            AlfredCore::AgentResult result = core.query_agent_streaming(
-                captured_question, captured_tools, captured_results,
-                on_started, on_token, on_tool_call, captured_conv_id);
-            log_info("agent_stream: query_agent_streaming(done) cancelled=" +
-                     std::string(result.cancelled ? "true" : "false") +
-                     " tool_calls=" + std::to_string(result.tool_calls.size()) +
-                     " request_id=" + std::to_string(current_request_id));
-
-            // Guardar respuesta final del asistente cuando no hay tool_calls pendientes
-            if (!captured_conv_id.empty() && !result.cancelled &&
-                !result.answer.empty() && result.tool_calls.empty()) {
-                ConversationManager::instance().add_message(
-                    captured_conv_id, "assistant", extract_final_response_text(result.answer));
-            }
-
-            json done_payload;
-            done_payload["answer"]     = result.answer;
-            done_payload["cancelled"]  = result.cancelled;
-            done_payload["time_ms"]    = result.total_time_ms;
-            done_payload["tool_calls"] = json::array();
-            for (const auto& tc : result.tool_calls) {
-                done_payload["tool_calls"].push_back({
-                    {"id",        tc.id},
-                    {"name",      tc.name},
-                    {"arguments", tc.arguments},
-                });
-            }
-            done_payload["finish_reason"] = result.cancelled ? "cancelled"
-                : (result.tool_calls.empty() ? "stop" : "tool_calls");
-            if (!captured_conv_id.empty())
-                done_payload["conversation_id"] = captured_conv_id;
-
-            if (stream_alive) {
-                log_info("agent_stream: write_done(begin)");
-                stream_alive = write_event("done", done_payload);
-                log_info("agent_stream: write_done(done) ok=" + std::string(stream_alive ? "true" : "false"));
-            } else {
-                log_warn("agent_stream: skipping done event because stream is not writable");
-            }
-
-            log_info("agent_stream: sink.done(begin)");
-            sink.done();
-            log_info("agent_stream: sink.done(done)");
-            return true;
-        });
-}
-
-
-// ============================================================================
 // Seguridad
 // ============================================================================
 void handle_encryption_status(const httplib::Request& /*req*/, httplib::Response& res) {
@@ -569,18 +382,22 @@ void handle_encryption_setup(const httplib::Request& req, httplib::Response& res
     bool enable = body.value("enabled", false);
     std::string key = body.value("key", "");
 
-    if (enable && key.empty()) {
-        json_error(res, 400, "Se requiere campo 'key' para habilitar encriptacion");
-        return;
-    }
-
     auto& enc = Encryption::instance();
     if (enable) {
-        enc.set_key(key);
+        // La passphrase es opcional: sin ella se usa la clave de archivo
+        // generada al arrancar. Con passphrase, se deriva y persiste.
+        if (!key.empty()) enc.set_key(key);
+        if (!enc.has_key()) {
+            json_error(res, 500, "No hay clave de encriptacion disponible");
+            return;
+        }
         enc.set_enabled(true);
     } else {
         enc.set_enabled(false);
     }
+
+    // Persistir el estado para restaurarlo en el proximo arranque.
+    DBManager::instance().set_app_setting("encryption_enabled", enable ? "1" : "0");
 
     json_ok(res, {{"status", enable ? "enabled" : "disabled"}});
 }
@@ -711,6 +528,34 @@ void handle_gpu_report(const httplib::Request& /*req*/, httplib::Response& res) 
 // ============================================================================
 // Modelos
 // ============================================================================
+
+// Helper: valida que un nombre de modelo no pueda escapar del directorio de
+// modelos. httplib decodifica percent-encoding despues del match de ruta,
+// asi que "..%2f" llega aqui como "../": rechazamos separadores, "..",
+// unidades (:) y nombres vacios.
+static bool is_safe_model_name(const std::string& name) {
+    if (name.empty()) return false;
+    if (name.find('/') != std::string::npos) return false;
+    if (name.find('\\') != std::string::npos) return false;
+    if (name.find("..") != std::string::npos) return false;
+    if (name.find(':') != std::string::npos) return false;
+    return true;
+}
+
+// Helper: true si `candidate` queda dentro de `base` tras canonizar ambas.
+static bool path_within_dir(const std::filesystem::path& candidate,
+                            const std::filesystem::path& base) {
+    std::error_code ec;
+    auto canon_candidate = std::filesystem::weakly_canonical(candidate, ec);
+    if (ec) return false;
+    auto canon_base = std::filesystem::weakly_canonical(base, ec);
+    if (ec) return false;
+    auto rel = canon_candidate.lexically_relative(canon_base);
+    if (rel.empty()) return false;
+    auto first = rel.begin()->string();
+    return first != ".." && first != ".";
+}
+
 void handle_list_models(const httplib::Request& /*req*/, httplib::Response& res) {
     auto& cfg = get_config();
     std::string models_dir = cfg.models_dir;
@@ -743,15 +588,26 @@ void handle_change_model(const httplib::Request& req, httplib::Response& res,
 
     std::string model_path = body.value("model_path", "");
     if (model_path.empty()) {
-        model_path = body.value("model_name", "");
-        if (!model_path.empty()) {
+        std::string model_name = body.value("model_name", "");
+        if (!model_name.empty()) {
+            if (!is_safe_model_name(model_name)) {
+                json_error(res, 400, "Nombre de modelo invalido");
+                return;
+            }
             // Resolver nombre relativo
-            model_path = get_config().models_dir + "/" + model_path;
+            model_path = get_config().models_dir + "/" + model_name;
         }
     }
 
     if (model_path.empty()) {
         json_error(res, 400, "Campo 'model_path' o 'model_name' requerido");
+        return;
+    }
+
+    // Los modelos solo se cargan desde el directorio de modelos: evita que
+    // un request manipulado apunte a rutas arbitrarias del sistema.
+    if (!path_within_dir(model_path, get_config().models_dir)) {
+        json_error(res, 400, "La ruta del modelo debe estar dentro del directorio de modelos");
         return;
     }
 
@@ -790,8 +646,17 @@ void handle_delete_model(const httplib::Request& req, httplib::Response& res,
         return;
     }
 
-    // Construir ruta completa
+    if (!is_safe_model_name(name)) {
+        json_error(res, 400, "Nombre de modelo invalido");
+        return;
+    }
+
+    // Construir ruta completa y verificar que no escape del directorio
     std::string model_path = get_config().models_dir + "/" + name;
+    if (!path_within_dir(model_path, get_config().models_dir)) {
+        json_error(res, 400, "Nombre de modelo invalido");
+        return;
+    }
 
     if (!std::filesystem::exists(model_path)) {
         json_error(res, 404, "Modelo no encontrado: " + name);
@@ -1084,14 +949,6 @@ void handle_autotune(const httplib::Request& req, httplib::Response& res,
     data["hardware"]     = hw;
 
     json_ok(res, data);
-}
-
-// ============================================================================
-// Optimizaciones
-// ============================================================================
-void handle_optimization_stats(const httplib::Request& /*req*/, httplib::Response& res,
-                                AlfredCore& /*core*/) {
-    json_ok(res, json::object());
 }
 
 // ============================================================================
@@ -1419,8 +1276,6 @@ void handle_conversation_query(const httplib::Request& req, httplib::Response& r
 
     json data;
     data["answer"] = result.answer;
-    data["personal_data"] = result.personal_data.empty() ? json(nullptr)
-                            : json::parse(result.personal_data, nullptr, false);
     data["from_cache"] = result.from_cache;
     data["time_ms"] = result.total_time_ms;
     data["conversation_id"] = conv_id;
@@ -1448,9 +1303,6 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Post("/query/cancel", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_query_cancel(req, res, core);
-    });
-    server.Post("/query/agent/stream", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_query_agent_stream(req, res, core);
     });
 
     // Conversaciones
@@ -1550,11 +1402,6 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Get("/models/autotune", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_autotune(req, res, core);
-    });
-
-    // Optimizaciones
-    server.Get("/optimization/stats", [&core](const httplib::Request& req, httplib::Response& res) {
-        handle_optimization_stats(req, res, core);
     });
 
     // Tokens

@@ -24,7 +24,33 @@ public sealed partial class ChatPage : Page
 
     private CancellationTokenSource? _streamCts;
     private long _activeRequestId;
-    private bool _agentMode;
+
+    // Autoscroll inteligente: solo seguir al fondo si el usuario ya esta
+    // cerca del final (no arrastrarlo si subio a leer).
+    private bool _stickToBottom = true;
+    private const double AutoScrollThreshold = 48;
+
+    // Serializa los ContentDialog: abrir un segundo mientras otro esta activo
+    // lanza COMException en WinUI. Un unico timer reutilizado para las
+    // notificaciones evita fugas de DispatcherTimer.
+    private readonly SemaphoreSlim _dialogGate = new(1, 1);
+    private DispatcherTimer? _notificationTimer;
+
+    /// <summary>
+    /// Muestra un ContentDialog garantizando que solo haya uno a la vez.
+    /// </summary>
+    private async Task<ContentDialogResult> ShowDialogSerializedAsync(ContentDialog dialog)
+    {
+        await _dialogGate.WaitAsync();
+        try
+        {
+            return await dialog.ShowAsync();
+        }
+        finally
+        {
+            _dialogGate.Release();
+        }
+    }
 
     private const int MaxAttachedFiles = 5;
     private readonly List<AttachedFileInfo> _attachedFiles = [];
@@ -154,17 +180,52 @@ public sealed partial class ChatPage : Page
 
     private async void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Enter && !_isSending)
-        {
-            e.Handled = true;
+        if (e.Key != VirtualKey.Enter) return;
+
+        // Shift+Enter inserta un salto de linea (AcceptsReturn=True lo maneja);
+        // Enter solo envia.
+        var shift = Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(VirtualKey.Shift);
+        bool shiftDown = shift.HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        if (shiftDown) return;   // dejar que el TextBox inserte la nueva linea
+
+        e.Handled = true;
+        if (!_isSending)
             await SendNewMessage();
-        }
     }
 
     private void OnInputTextChanged(object sender, TextChangedEventArgs e)
     {
         SendButton.IsEnabled = !string.IsNullOrWhiteSpace(InputBox.Text) || _attachedFiles.Count > 0;
         ChatContext.Draft = InputBox.Text ?? "";
+    }
+
+    // Recalcula si el usuario esta pegado al fondo cada vez que cambia la
+    // vista (scroll manual o programatico).
+    private void OnChatScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        double distanceToBottom =
+            ChatScroll.ScrollableHeight - ChatScroll.VerticalOffset;
+        _stickToBottom = distanceToBottom <= AutoScrollThreshold;
+        JumpToBottomButton.Visibility =
+            _stickToBottom ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnJumpToBottom(object sender, RoutedEventArgs e)
+    {
+        _stickToBottom = true;
+        JumpToBottomButton.Visibility = Visibility.Collapsed;
+        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+    }
+
+    // Desplaza al fondo solo si procede seguir (o si se fuerza, p.ej. al
+    // enviar un mensaje nuevo).
+    private void ScrollToBottomIfSticky(bool force = false)
+    {
+        if (force) _stickToBottom = true;
+        if (_stickToBottom)
+            ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
     }
 
     private async Task SendNewMessage()
@@ -198,16 +259,13 @@ public sealed partial class ChatPage : Page
             AttachmentNames = attachmentNames,
             Attachments = attachments,
             Pending = true,
-            UseAgent = _agentMode,
         };
         AppendNewTurn(variant);
 
         await EnsureConversationCreated();
+        _stickToBottom = true;   // al enviar, siempre seguir al fondo
         RebuildAllBubbles();
-        if (variant.UseAgent)
-            await GenerateAgentForActiveVariantAsync(variant, attachments);
-        else
-            await GenerateForActiveVariantAsync(variant, attachments);
+        await GenerateForActiveVariantAsync(variant, attachments);
     }
 
     private async Task EnsureConversationCreated()
@@ -272,12 +330,17 @@ public sealed partial class ChatPage : Page
                             firstToken = false;
                             StopLoadingTips();
                             LoadingIndicator.Visibility = Visibility.Collapsed;
+                            // Limpiar el placeholder "Generando respuesta..."
+                            _liveBubble?.Text.Inlines.Clear();
                         }
                         sb.Append(tok);
                         if (_liveBubble != null)
                         {
-                            _liveBubble.Text.Text = sb.ToString();
-                            ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+                            // Append incremental O(1): agregar un Run por token en
+                            // vez de re-materializar todo el string (era O(n^2)).
+                            _liveBubble.Text.Inlines.Add(
+                                new Microsoft.UI.Xaml.Documents.Run { Text = tok });
+                            ScrollToBottomIfSticky();
                         }
                     });
                 },
@@ -368,7 +431,7 @@ public sealed partial class ChatPage : Page
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = this.XamlRoot
         };
-        var result = await dialog.ShowAsync();
+        var result = await ShowDialogSerializedAsync(dialog);
         if (result != ContentDialogResult.Primary) return;
 
         string newText = (textBox.Text ?? "").Trim();
@@ -381,7 +444,6 @@ public sealed partial class ChatPage : Page
             AttachmentNames = variant.AttachmentNames,
             Attachments = variant.Attachments,
             Pending = true,
-            UseAgent = variant.UseAgent,
         };
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
@@ -393,10 +455,7 @@ public sealed partial class ChatPage : Page
             ShowNotification(InfoBarSeverity.Warning,
                 "No se pudo resincronizar todo el contexto. Se intentara regenerar igualmente.");
         }
-        if (newVariant.UseAgent)
-            await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
-        else
-            await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
+        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
     private async void OnRegenerateAssistant(ChatTurn turn, TurnVariant variant)
@@ -411,7 +470,6 @@ public sealed partial class ChatPage : Page
             AttachmentNames = variant.AttachmentNames,
             Attachments = variant.Attachments,
             Pending = true,
-            UseAgent = variant.UseAgent,
         };
         turn.Variants.Add(newVariant);
         turn.ActiveIndex = turn.Variants.Count - 1;
@@ -423,10 +481,7 @@ public sealed partial class ChatPage : Page
             ShowNotification(InfoBarSeverity.Warning,
                 "No se pudo resincronizar todo el contexto. Se intentara regenerar igualmente.");
         }
-        if (newVariant.UseAgent)
-            await GenerateAgentForActiveVariantAsync(newVariant, newVariant.Attachments);
-        else
-            await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
+        await GenerateForActiveVariantAsync(newVariant, newVariant.Attachments);
     }
 
     private void OnSwitchVariant(ChatTurn turn, int delta)
@@ -659,7 +714,7 @@ public sealed partial class ChatPage : Page
         }
 
         ChatScroll.UpdateLayout();
-        ChatScroll.ChangeView(null, ChatScroll.ScrollableHeight, null);
+        ScrollToBottomIfSticky();
 
         // Re-aplicar busqueda si esta abierta
         if (SearchBar.Visibility == Visibility.Visible &&
@@ -775,13 +830,6 @@ public sealed partial class ChatPage : Page
                 foreach (var element in MarkdownRenderer.Render(mainText))
                     mdPanel.Children.Add(element);
                 stack.Children.Add(mdPanel);
-            }
-
-            // Bloques de tool_call / tool_result (modo agente)
-            if (variant.ToolEvents.Count > 0)
-            {
-                foreach (var ev in variant.ToolEvents)
-                    stack.Children.Add(BuildToolEventExpander(ev));
             }
 
             if (reasoningText != null)
@@ -924,6 +972,7 @@ public sealed partial class ChatPage : Page
             Content = new FontIcon { Glyph = glyph, FontSize = 12 },
         };
         ToolTipService.SetToolTip(btn, tooltip);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, tooltip);
         btn.Click += (_, _) => onClick();
         return btn;
     }
@@ -1003,6 +1052,68 @@ public sealed partial class ChatPage : Page
             args.Handled = true;
             CloseSearchBar();
         }
+        else if (_isSending)
+        {
+            // Esc tambien cancela una generacion en curso.
+            args.Handled = true;
+            OnStopClick(this, new RoutedEventArgs());
+        }
+    }
+
+    // Construye y muestra el flyout de prompts rapidos desde las preferencias.
+    private void OnQuickPromptsOpening(object sender, RoutedEventArgs e)
+    {
+        var flyout = new MenuFlyout();
+        foreach (var prompt in Prefs.QuickPrompts)
+        {
+            var item = new MenuFlyoutItem { Text = prompt };
+            string captured = prompt;
+            item.Click += (_, _) =>
+            {
+                InputBox.Text = captured;
+                InputBox.Focus(FocusState.Programmatic);
+                InputBox.SelectionStart = InputBox.Text.Length;
+            };
+            flyout.Items.Add(item);
+        }
+
+        if (flyout.Items.Count == 0)
+        {
+            flyout.Items.Add(new MenuFlyoutItem
+            {
+                Text = "Sin prompts (configuralos en Ajustes)",
+                IsEnabled = false,
+            });
+        }
+
+        flyout.ShowAt(QuickPromptButton);
+    }
+
+    private void OnFocusInputAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        InputBox.Focus(FocusState.Programmatic);
+        InputBox.SelectAll();
+    }
+
+    private void OnNewConversationAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        StartNewConversation();
+    }
+
+    // Reinicia el estado a una conversacion nueva (sin persistir todavia:
+    // la conversacion se crea al enviar el primer mensaje).
+    private void StartNewConversation()
+    {
+        if (_isSending) return;
+        _conversationId = null;
+        ChatContext.ConversationId = null;
+        _root = null;
+        MessagesPanel.Children.Clear();
+        WelcomePanel.Visibility = Visibility.Visible;
+        InputBox.Text = "";
+        InputBox.Focus(FocusState.Programmatic);
     }
 
     private void OpenSearchBar()
@@ -1216,10 +1327,21 @@ public sealed partial class ChatPage : Page
         }
     }
 
+    // Cap de tamano por archivo: evita cargar en memoria un .txt/.log enorme.
+    private const long MaxAttachedFileBytes = 25 * 1024 * 1024;   // 25 MB
+
     private async Task AddAttachedFileAsync(StorageFile file)
     {
         try
         {
+            var props = await file.GetBasicPropertiesAsync();
+            if ((long)props.Size > MaxAttachedFileBytes)
+            {
+                ShowNotification(InfoBarSeverity.Warning,
+                    $"\"{file.Name}\" supera el limite de {MaxAttachedFileBytes / (1024 * 1024)} MB y no se adjunto.");
+                return;
+            }
+
             string content;
             bool isPdf = file.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
             bool isBinary = BinaryExtensions.Any(ext =>
@@ -1254,11 +1376,10 @@ public sealed partial class ChatPage : Page
                 content = await FileIO.ReadTextAsync(file);
             }
 
-            var basicProps = await file.GetBasicPropertiesAsync();
             _attachedFiles.Add(new AttachedFileInfo
             {
                 Name = file.Name,
-                SizeBytes = (long)basicProps.Size,
+                SizeBytes = (long)props.Size,
                 Content = content
             });
 
@@ -1456,13 +1577,19 @@ public sealed partial class ChatPage : Page
         NotificationBar.Message = message;
         NotificationBar.IsOpen = true;
 
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
-        timer.Tick += (_, _) =>
-        {
-            NotificationBar.IsOpen = false;
-            timer.Stop();
-        };
-        timer.Start();
+        // Reutilizar un unico timer en vez de crear uno por notificacion
+        // (evita DispatcherTimer huerfanos que nunca se disponen).
+        _notificationTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _notificationTimer.Stop();
+        _notificationTimer.Tick -= OnNotificationTimerTick;
+        _notificationTimer.Tick += OnNotificationTimerTick;
+        _notificationTimer.Start();
+    }
+
+    private void OnNotificationTimerTick(object? sender, object e)
+    {
+        NotificationBar.IsOpen = false;
+        _notificationTimer?.Stop();
     }
 
     private static string FormatFileSize(long bytes)
@@ -1496,20 +1623,6 @@ public sealed partial class ChatPage : Page
         public bool Pending { get; set; }
         public bool IsError { get; set; }
         public ChatTurn? NextTurn { get; set; }
-
-        // ---- Modo agente (Fase 3 plan VSC+MCP) ----
-        public bool UseAgent { get; set; }
-        public List<AgentToolEvent> ToolEvents { get; } = new();
-    }
-
-    /// <summary>
-    /// Una invocacion de tool dentro de un turno agentico (par call+result).
-    /// </summary>
-    private sealed class AgentToolEvent
-    {
-        public Models.ToolCall   Call   { get; init; } = null!;
-        public Models.ToolResult? Result { get; set; }
-        public int Iteration { get; init; }
     }
 
     private sealed class LiveAssistantBubble
