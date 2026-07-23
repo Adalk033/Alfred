@@ -5,10 +5,7 @@
     xmlns:pages="using:Alfred.UI.Pages"
     Title="Alfred - Asistente IA Local">
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Grid.KeyboardAccelerators>
-            <KeyboardAccelerator Modifiers="Control" Key="Number188" Invoked="OnSettingsAccelerator" />
-        </Grid.KeyboardAccelerators>
+    <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
