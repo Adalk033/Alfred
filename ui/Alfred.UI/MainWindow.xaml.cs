@@ -15,6 +15,7 @@ public sealed partial class MainWindow : Window
 {
     private const string RECENT_MODELS_KEY = "recent_models";
     private const int RECENT_MODELS_MAX = 5;
+    private const int COMMA_VIRTUAL_KEY_CODE = 0xBC;
 
     private readonly BackendProcessManager _backend;
     private readonly AlfredApiClient _api;
@@ -31,6 +32,17 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Windows.System.VirtualKey no expone las teclas OEM de puntuacion
+        // como miembros del enum, por lo que Ctrl+, debe registrarse en codigo.
+        var settingsAccelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
+        {
+            Modifiers = Windows.System.VirtualKeyModifiers.Control,
+            Key = (Windows.System.VirtualKey)COMMA_VIRTUAL_KEY_CODE,
+        };
+        settingsAccelerator.Invoked += OnSettingsAccelerator;
+        RootGrid.KeyboardAccelerators.Add(settingsAccelerator);
+
         Title = "Alfred - Asistente IA Local";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -384,7 +396,7 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    // Ctrl+, abre Configuracion (Key=Number188 es la tecla de la coma).
+    // Ctrl+, abre Configuracion.
     private void OnSettingsAccelerator(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
         Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
     {
