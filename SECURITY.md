@@ -23,6 +23,11 @@ coincide (solo `/health` queda exento). Además, se eliminó el `CORS *`, de
 modo que una página web abierta en el navegador **no puede** invocar la API
 local (mitigación de CSRF / DNS-rebinding).
 
+Para permitir integraciones de escritorio del mismo usuario, como la extensión
+oficial de VS Code, la UI publica el token de la sesión activa en
+`%LOCALAPPDATA%\Alfred\api-connection.json`. Los navegadores no pueden leer
+este archivo; se reemplaza en cada arranque y se elimina al cerrar Alfred.
+
 ---
 
 ## 2. Cifrado y datos sensibles

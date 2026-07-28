@@ -19,6 +19,7 @@
 
 #include "alfred/llm_engine.h"
 #include "alfred/model_lifecycle.h"
+#include "alfred/tool_protocol.h"
 
 namespace alfred {
 
@@ -66,6 +67,28 @@ public:
     // Cancela un query streaming en curso. Si request_id == 0, cancela el
     // activo sin importar id. Devuelve true si habia algo que cancelar.
     bool cancel_query(uint64_t request_id = 0);
+
+    // Query agentico para clientes que ejecutan tools localmente (por ejemplo,
+    // la extension de VS Code). Alfred solo decide y serializa tool calls; el
+    // cliente conserva el control, sandbox y aprobaciones de cada escritura.
+    using ToolCallStreamCallback = std::function<bool(const ToolCall&)>;
+
+    struct AgentResult {
+        std::string answer;
+        std::vector<ToolCall> tool_calls;
+        bool cancelled = false;
+        bool is_error = false;
+        double total_time_ms = 0.0;
+    };
+
+    AgentResult query_agent_streaming(
+        const std::string& question,
+        const std::vector<ToolSpec>& tools,
+        const std::vector<ToolResult>& tool_results,
+        StartedCallback on_started,
+        TokenStreamCallback on_token,
+        ToolCallStreamCallback on_tool_call,
+        const std::string& conversation_id = "");
 
     // Cambiar modelo LLM
     ModelChangeResult change_model(const std::string& model_path);

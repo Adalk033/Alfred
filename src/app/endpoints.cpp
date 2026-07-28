@@ -15,6 +15,7 @@
 #include "alfred/string_utils.h"
 #include "alfred/token_accountant.h"
 #include "alfred/pdf_extractor.h"
+#include "alfred/tool_protocol.h"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -336,6 +337,172 @@ void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
     data["cancelled"] = cancelled;
     data["request_id"] = request_id;
     json_ok(res, data);
+}
+
+// ============================================================================
+// Query agentico (las tools se ejecutan en el cliente, no en el backend)
+// ============================================================================
+static std::vector<ToolSpec> parse_tools(const json& value) {
+    std::vector<ToolSpec> tools;
+    if (!value.is_array()) return tools;
+    tools.reserve((std::min)(value.size(), static_cast<size_t>(128)));
+    for (const auto& item : value) {
+        if (tools.size() >= 128) break;
+        if (!item.is_object()) continue;
+        ToolSpec tool;
+        tool.name = item.value("name", std::string{});
+        if (tool.name.empty()) continue;
+        tool.description = item.value("description", std::string{});
+        tool.input_schema = item.contains("input_schema")
+            ? item["input_schema"] : json::object();
+        tools.push_back(std::move(tool));
+    }
+    return tools;
+}
+
+static std::vector<ToolResult> parse_tool_results(const json& value) {
+    std::vector<ToolResult> results;
+    if (!value.is_array()) return results;
+    results.reserve((std::min)(value.size(), static_cast<size_t>(128)));
+    for (const auto& item : value) {
+        if (results.size() >= 128) break;
+        if (!item.is_object()) continue;
+        ToolResult result;
+        result.id = item.value("id", std::string{});
+        if (item.contains("content")) {
+            const auto& content = item["content"];
+            result.content =
+                content.is_string() ? content.get<std::string>() : content.dump();
+        }
+        result.is_error = item.value("is_error", false);
+        if (result.id.empty() && result.content.empty()) continue;
+        results.push_back(std::move(result));
+    }
+    return results;
+}
+
+void handle_query_agent_stream(const httplib::Request& req,
+                               httplib::Response& res,
+                               AlfredCore& core) {
+    json body;
+    if (!parse_body(req, res, body)) return;
+
+    const std::string question =
+        body.contains("question") && body["question"].is_string()
+            ? body["question"].get<std::string>() : std::string{};
+    const std::string conversation_id =
+        body.contains("conversation_id") && body["conversation_id"].is_string()
+            ? body["conversation_id"].get<std::string>() : std::string{};
+    auto tools = body.contains("tools")
+        ? parse_tools(body["tools"]) : std::vector<ToolSpec>{};
+    auto tool_results = body.contains("tool_results")
+        ? parse_tool_results(body["tool_results"]) : std::vector<ToolResult>{};
+
+    if (question.empty() && tool_results.empty()) {
+        json_error(res, 400,
+            "Campo 'question' requerido salvo continuaciones con 'tool_results'");
+        return;
+    }
+
+    std::string full_question = question;
+    const std::string attached_context = extract_attached_context(body);
+    if (!attached_context.empty()) {
+        full_question = "Contexto de archivos adjuntos:\n" + attached_context;
+        if (!question.empty())
+            full_question += "\n\nPregunta del usuario: " + question;
+    }
+
+    if (!conversation_id.empty() && !question.empty() && tool_results.empty()) {
+        ConversationManager::instance().add_message(
+            conversation_id, "user", question);
+    }
+
+    log_info("Agent query: " + truncate(question, 80) +
+             " | tools=" + std::to_string(tools.size()) +
+             " | tool_results=" + std::to_string(tool_results.size()));
+
+    res.set_header("Cache-Control", "no-cache");
+    res.set_header("Connection", "keep-alive");
+    res.set_header("X-Accel-Buffering", "no");
+
+    res.set_chunked_content_provider(
+        "text/event-stream",
+        [&core,
+         captured_question = std::move(full_question),
+         captured_conversation_id = conversation_id,
+         captured_tools = std::move(tools),
+         captured_results = std::move(tool_results)]
+        (size_t /*offset*/, httplib::DataSink& sink) -> bool {
+            bool stream_alive = true;
+            auto write_event = [&](const std::string& event,
+                                   const json& data) -> bool {
+                if (sink.is_writable && !sink.is_writable()) return false;
+                const std::string output = sse_event(event, data);
+                return sink.write(output.data(), output.size());
+            };
+
+            auto on_started = [&](uint64_t request_id) {
+                stream_alive =
+                    write_event("start", json{{"request_id", request_id}});
+            };
+            auto on_token = [&](const std::string& token) -> bool {
+                if (!stream_alive) return false;
+                stream_alive = write_event("token", json{{"text", token}});
+                return stream_alive;
+            };
+            auto on_tool_call = [&](const ToolCall& call) -> bool {
+                if (!stream_alive) return false;
+                stream_alive = write_event("tool_call", {
+                    {"id", call.id},
+                    {"name", call.name},
+                    {"arguments", call.arguments},
+                });
+                return stream_alive;
+            };
+
+            const AlfredCore::AgentResult result = core.query_agent_streaming(
+                captured_question,
+                captured_tools,
+                captured_results,
+                on_started,
+                on_token,
+                on_tool_call,
+                captured_conversation_id);
+
+            if (!captured_conversation_id.empty() && !result.cancelled &&
+                !result.is_error && !result.answer.empty() &&
+                result.tool_calls.empty()) {
+                ConversationManager::instance().add_message(
+                    captured_conversation_id,
+                    "assistant",
+                    extract_final_response_text(result.answer));
+            }
+
+            json tool_calls = json::array();
+            for (const auto& call : result.tool_calls) {
+                tool_calls.push_back({
+                    {"id", call.id},
+                    {"name", call.name},
+                    {"arguments", call.arguments},
+                });
+            }
+
+            json done = {
+                {"answer", result.answer},
+                {"cancelled", result.cancelled},
+                {"time_ms", result.total_time_ms},
+                {"tool_calls", std::move(tool_calls)},
+                {"finish_reason", result.cancelled
+                    ? "cancelled"
+                    : (result.tool_calls.empty() ? "stop" : "tool_calls")},
+            };
+            if (!captured_conversation_id.empty())
+                done["conversation_id"] = captured_conversation_id;
+
+            if (stream_alive) write_event("done", done);
+            sink.done();
+            return true;
+        });
 }
 
 // ============================================================================
@@ -1307,6 +1474,9 @@ void register_all_endpoints(httplib::Server& server, AlfredCore& core) {
     });
     server.Post("/query/cancel", [&core](const httplib::Request& req, httplib::Response& res) {
         handle_query_cancel(req, res, core);
+    });
+    server.Post("/query/agent/stream", [&core](const httplib::Request& req, httplib::Response& res) {
+        handle_query_agent_stream(req, res, core);
     });
 
     // Conversaciones

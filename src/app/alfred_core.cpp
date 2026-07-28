@@ -582,6 +582,137 @@ QueryResult AlfredCore::query_streaming(const std::string& question,
     return result;
 }
 
+AlfredCore::AgentResult AlfredCore::query_agent_streaming(
+    const std::string& question,
+    const std::vector<ToolSpec>& tools,
+    const std::vector<ToolResult>& tool_results,
+    StartedCallback on_started,
+    TokenStreamCallback on_token,
+    ToolCallStreamCallback on_tool_call,
+    const std::string& conversation_id) {
+    ensure_model_loaded();
+    ModelLifecycle::Scope scope(lifecycle_);
+
+    uint64_t my_id = next_request_id_.fetch_add(1);
+    auto my_cancel = std::make_shared<std::atomic<bool>>(false);
+    {
+        std::lock_guard<std::mutex> lk(requests_mutex_);
+        active_cancel_flags_[my_id] = my_cancel;
+    }
+
+    if (on_started) on_started(my_id);
+
+    auto cleanup_active = [this, my_id]() {
+        std::lock_guard<std::mutex> lk(requests_mutex_);
+        active_cancel_flags_.erase(my_id);
+    };
+
+    const auto start = std::chrono::steady_clock::now();
+    AgentResult result;
+
+    if (!llm_->is_loaded()) {
+        result.answer = "Error: Modelo LLM no cargado. "
+                        "Coloca un modelo GGUF en la carpeta de modelos.";
+        result.is_error = true;
+        if (on_token) on_token(result.answer);
+        const auto end = std::chrono::steady_clock::now();
+        result.total_time_ms =
+            std::chrono::duration<double, std::milli>(end - start).count();
+        cleanup_active();
+        return result;
+    }
+
+    std::string conversation_context;
+    if (!conversation_id.empty()) {
+        const int context_max = llm_->context_length();
+        const int reserved = get_config().max_tokens;
+        const int safety = 256;
+
+        int system_toks =
+            llm_->count_tokens(resolve_system_prompt(PROMPT_TEMPLATE_NO_DOCUMENTS));
+        int question_toks = llm_->count_tokens(question);
+        if (system_toks < 0) system_toks = 512;
+        if (question_toks < 0)
+            question_toks = static_cast<int>(question.size()) / 4;
+
+        const int history_budget =
+            context_max - reserved - system_toks - question_toks - safety;
+        if (history_budget > 0) {
+            auto messages = ConversationManager::instance()
+                .select_history_within_budget(
+                    conversation_id, *llm_, history_budget);
+            conversation_context =
+                ConversationManager::format_messages_as_context(messages);
+        }
+    }
+
+    std::string agent_context = format_tools_section(tools);
+    if (!conversation_context.empty()) {
+        agent_context += "\n";
+        agent_context += conversation_context;
+    }
+    agent_context += format_tool_results_section(tool_results);
+
+    const std::string effective_question = !question.empty()
+        ? question
+        : "Analyze the tool results above and continue the task. Use another "
+          "tool if needed, otherwise answer the user directly.";
+    const std::string prompt = build_prompt(
+        PROMPT_TEMPLATE_NO_DOCUMENTS, agent_context, effective_question);
+
+    ToolCallParser parser;
+    bool stream_ok = true;
+    std::string raw_visible_output;
+    size_t emitted_chars = 0;
+
+    auto emit_text = [&](const std::string& clean) {
+        if (clean.empty() || !stream_ok) return;
+        raw_visible_output += clean;
+        const std::string filtered =
+            extract_final_response_text(raw_visible_output);
+        if (filtered.size() <= emitted_chars) return;
+
+        const std::string delta = filtered.substr(emitted_chars);
+        emitted_chars = filtered.size();
+        result.answer += delta;
+        if (on_token && !on_token(delta)) {
+            stream_ok = false;
+            my_cancel->store(true);
+        }
+    };
+
+    auto emit_tool_call = [&](const ToolCall& call) {
+        if (!stream_ok) return;
+        result.tool_calls.push_back(call);
+        if (on_tool_call && !on_tool_call(call)) {
+            stream_ok = false;
+            my_cancel->store(true);
+        }
+    };
+
+    auto wrapped_cb = [&](const std::string& token) -> bool {
+        if (my_cancel->load() || !stream_ok) return false;
+        parser.feed(token, emit_text, emit_tool_call);
+        return stream_ok && !my_cancel->load();
+    };
+
+    const auto llm_result = llm_->generate_streaming(prompt, wrapped_cb);
+    parser.flush(emit_text, emit_tool_call);
+
+    result.cancelled = my_cancel->load();
+    if (!llm_result.success && llm_result.text.empty() && !result.cancelled) {
+        result.answer += "Error generando respuesta: " + llm_result.error;
+        result.is_error = true;
+    }
+    result.answer = extract_final_response_text(result.answer);
+
+    const auto end = std::chrono::steady_clock::now();
+    result.total_time_ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+    cleanup_active();
+    return result;
+}
+
 bool AlfredCore::cancel_query(uint64_t request_id) {
     std::lock_guard<std::mutex> lk(requests_mutex_);
     if (active_cancel_flags_.empty()) return false;
