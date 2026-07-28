@@ -14,6 +14,7 @@ Alfred is a local AI assistant for Windows. It combines a native C++20 backend w
 - **Local attachments** with PDF text extraction through PDFium and support for text-based files as prompt context.
 - **VRAM-aware model selection** and configurable generation parameters.
 - **Local API protection** through a random per-session `X-Alfred-Token`; `/health` is the only unauthenticated endpoint and wildcard CORS is disabled.
+- **VS Code agent protocol** through `/query/agent/stream`; tools run inside the extension with workspace sandboxing and user approval rather than inside Alfred.
 - **Optional AES-256-GCM encryption** for newly stored conversation content, memory values, and selected profile fields when the backend is built with OpenSSL.
 
 ## Runtime architecture
@@ -24,7 +25,7 @@ The application needs internet access only when you choose to search for or down
 
 ### MCP removal
 
-Alfred v0.3.0 has no MCP integration, MCP configuration page, or MCP runtime dependency. A legacy `%APPDATA%\Alfred\mcp_servers.json` left by an older build is ignored. It is not removed automatically, so it can be deleted manually after confirming that no older Alfred installation still needs it.
+Alfred v0.3.0 has no MCP server, MCP configuration page, or MCP runtime dependency. The VS Code agent protocol is independent from MCP: Alfred emits structured tool requests, while the extension executes approved workspace operations locally. A legacy `%APPDATA%\Alfred\mcp_servers.json` left by an older build is ignored. It is not removed automatically, so it can be deleted manually after confirming that no older Alfred installation still needs it.
 
 ## End-user requirements
 
@@ -53,6 +54,7 @@ After installation, open **Models**, search for a GGUF repository, or copy an ex
 | `%APPDATA%\Alfred\logs\` | Backend diagnostic logs |
 | `%APPDATA%\Alfred\data\secret.key` | Local encryption key when OpenSSL encryption is available |
 | `%LOCALAPPDATA%\Alfred\preferences.json` | UI theme and interface preferences |
+| `%LOCALAPPDATA%\Alfred\api-connection.json` | Ephemeral local API connection data for trusted desktop integrations; removed when Alfred closes |
 | `%LOCALAPPDATA%\Alfred\logs\ui-crash.log` | UI crash details, when an unhandled error occurs |
 
 Backend logs can include the first 80 characters of a prompt for diagnostics. See [SECURITY.md](SECURITY.md) and the [privacy policy](docs/privacy.html) before using highly sensitive data.

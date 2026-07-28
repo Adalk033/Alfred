@@ -19,6 +19,7 @@ public sealed partial class MainWindow : Window
 
     private readonly BackendProcessManager _backend;
     private readonly AlfredApiClient _api;
+    private readonly ApiConnectionRegistration _apiConnection;
     private readonly DispatcherTimer _healthTimer;
     private readonly DispatcherTimer _tokenTimer;
     private bool _suppressNavigation;
@@ -56,6 +57,8 @@ public sealed partial class MainWindow : Window
         // pagina web local podria invocar la API (CSRF).
         string authToken = Convert.ToHexString(
             System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        _apiConnection = new ApiConnectionRegistration(
+            authToken, "http://127.0.0.1:8000");
         _api = new AlfredApiClient(authToken: authToken);
         _backend = new BackendProcessManager(authToken: authToken);
         _backend.StatusChanged += OnBackendStatusChanged;
@@ -575,5 +578,6 @@ public sealed partial class MainWindow : Window
         NotificationService.Instance.NotificationRequested -= OnNotificationRequested;
         _backend.Dispose();
         _api.Dispose();
+        _apiConnection.Dispose();
     }
 }

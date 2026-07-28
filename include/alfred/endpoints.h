@@ -37,6 +37,10 @@ void handle_conversation_query_stream(const httplib::Request& req, httplib::Resp
 void handle_query_cancel(const httplib::Request& req, httplib::Response& res,
                           AlfredCore& core);
 
+// Query agentico con tools ejecutadas por el cliente.
+void handle_query_agent_stream(const httplib::Request& req, httplib::Response& res,
+                                AlfredCore& core);
+
 // Conversaciones
 void handle_create_conversation(const httplib::Request& req, httplib::Response& res);
 void handle_list_conversations(const httplib::Request& req, httplib::Response& res);
