@@ -66,6 +66,26 @@ set(FETCHCONTENT_QUIET OFF)
 # --- llama.cpp (inferencia LLM + embeddings con CUDA nativo) ---
 # Reemplaza Ollama: carga modelos GGUF de HuggingFace directamente
 set(GGML_CUDA ${ALFRED_CUDA} CACHE BOOL "CUDA en ggml backend" FORCE)
+
+# No optimizar el backend CPU para la maquina que compila el instalador.
+# GGML_NATIVE hace deteccion durante la configuracion y en MSVC puede terminar
+# seleccionando /arch:AVX512. El binario resultante falla con 0xC000001D al
+# ejecutarse en CPUs modernas que no exponen AVX-512 (por ejemplo Intel
+# Alder/Raptor Lake), incluso cuando la inferencia principal usa CUDA.
+#
+# AVX2 es el maximo permitido para el paquete distribuible de Alfred. Tambien
+# fijamos todas las variantes AVX-512 a OFF para que una cache CMake anterior
+# no pueda volver a habilitarlas.
+set(GGML_NATIVE       OFF CACHE BOOL "No generar instrucciones para la CPU de build" FORCE)
+set(GGML_SSE42        ON  CACHE BOOL "ggml: enable SSE 4.2" FORCE)
+set(GGML_AVX          ON  CACHE BOOL "ggml: enable AVX" FORCE)
+set(GGML_AVX2         ON  CACHE BOOL "ggml: enable AVX2" FORCE)
+set(GGML_BMI2         ON  CACHE BOOL "ggml: enable BMI2" FORCE)
+set(GGML_AVX512       OFF CACHE BOOL "ggml: disable AVX512F" FORCE)
+set(GGML_AVX512_VBMI  OFF CACHE BOOL "ggml: disable AVX512-VBMI" FORCE)
+set(GGML_AVX512_VNNI  OFF CACHE BOOL "ggml: disable AVX512-VNNI" FORCE)
+set(GGML_AVX512_BF16  OFF CACHE BOOL "ggml: disable AVX512-BF16" FORCE)
+
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
