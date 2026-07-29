@@ -30,6 +30,7 @@ Alfred v0.3.0 has no MCP server, MCP configuration page, or MCP runtime dependen
 ## End-user requirements
 
 - Windows 10 build 19041 or later, x64.
+- x86-64 processor with AVX2 support. This is required by both packages because the CUDA build still runs model setup, tokenization, and other auxiliary operations on the CPU.
 - Enough RAM and free disk space for the selected GGUF model; requirements vary significantly by model size and quantization.
 - GPU package: NVIDIA RTX 20xx or newer with a compatible, up-to-date driver.
 - CPU package: no NVIDIA GPU is required; generation is slower and still depends on the selected model fitting in system RAM.
